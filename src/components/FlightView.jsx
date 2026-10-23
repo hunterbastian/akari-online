@@ -1,556 +1,921 @@
-import { useRef, useMemo, useEffect, useCallback } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { SYSTEMS, getConnections } from '../../shared/galaxy.js';
-import { SHIPS, MANUFACTURERS } from '../../shared/ships.js';
+import { SHIPS } from '../../shared/ships.js';
+import { collectDeposit, jumpTo, surveyPlanet } from '../store';
+import {
+  describePlanet,
+  flightProfile,
+  generateSystem,
+  hashString,
+  resourceLabel,
+} from '../../shared/universe.js';
+import { floorAt, surfaceLayout, surfaceSky } from '../../shared/surface.js';
+import FlightHUD from './flight/FlightHUD';
+import { Belt, Deposit, Sky, Starfield, Sun, TargetMarker } from './flight/scenery';
+import { GateView, PilotFigure, ShipView, SpaceTraffic, StationView } from './flight/Models';
+import { SurfaceWorld } from './flight/Surface';
+import Planet from './flight/Planet';
 
-// ── Input Manager ─────────────────────────────
+const keys = Object.create(null);
+const tapped = new Set();
+const mouse = { dx: 0, dy: 0 };
 
-const keys = {};
-const mouse = { x: 0, y: 0, locked: false };
+const HOLD = ['Tab', 'KeyR', 'KeyC', 'KeyE', 'KeyF', 'KeyV', 'Space'];
 
-function setupInput(canvas) {
-  const onKeyDown = (e) => { keys[e.code] = true; };
-  const onKeyUp = (e) => { keys[e.code] = false; };
+function bindInput(dom) {
+  const onKeyDown = (e) => {
+    if (!keys[e.code]) tapped.add(e.code);
+    keys[e.code] = true;
+    if (HOLD.includes(e.code)) e.preventDefault();
+  };
+  const onKeyUp = (e) => {
+    keys[e.code] = false;
+  };
   const onMouseMove = (e) => {
-    if (!document.pointerLockElement) return;
-    mouse.x += e.movementX * 0.002;
-    mouse.y += e.movementY * 0.002;
-    mouse.y = Math.max(-1.2, Math.min(1.2, mouse.y));
+    if (document.pointerLockElement !== dom) return;
+    mouse.dx += e.movementX;
+    mouse.dy += e.movementY;
   };
   const onClick = () => {
-    if (!document.pointerLockElement) {
-      canvas.requestPointerLock();
-    }
-  };
-  const onLockChange = () => {
-    mouse.locked = !!document.pointerLockElement;
+    if (document.pointerLockElement !== dom) dom.requestPointerLock();
   };
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
-  canvas.addEventListener('mousemove', onMouseMove);
-  canvas.addEventListener('click', onClick);
-  document.addEventListener('pointerlockchange', onLockChange);
+  dom.addEventListener('mousemove', onMouseMove);
+  dom.addEventListener('click', onClick);
 
   return () => {
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
-    canvas.removeEventListener('mousemove', onMouseMove);
-    canvas.removeEventListener('click', onClick);
-    document.removeEventListener('pointerlockchange', onLockChange);
+    dom.removeEventListener('mousemove', onMouseMove);
+    dom.removeEventListener('click', onClick);
+    for (const code of Object.keys(keys)) delete keys[code];
+    tapped.clear();
+    mouse.dx = 0;
+    mouse.dy = 0;
+    if (document.pointerLockElement === dom) document.exitPointerLock();
   };
 }
 
-// ── Ship Hulls (inline for flight view) ───────
+const _forward = new THREE.Vector3();
+const _desired = new THREE.Vector3();
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _look = new THREE.Matrix4();
+const _quat = new THREE.Quaternion();
+const _up = new THREE.Vector3(0, 1, 0);
+const _target = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _aim = new THREE.Vector3();
+const _out = new THREE.Vector3();
+const _body = new THREE.Vector3();
+const _radial = new THREE.Vector3();
 
-function ShipHull({ manufacturer }) {
-  switch (manufacturer) {
-    case 'vektron':
-      return (
-        <group>
-          <mesh><boxGeometry args={[0.6, 0.2, 0.35]} /><meshStandardMaterial color="#d07030" roughness={0.6} metalness={0.3} /></mesh>
-          <mesh position={[0, -0.1, 0.22]}><boxGeometry args={[0.35, 0.1, 0.12]} /><meshStandardMaterial color="#a05020" /></mesh>
-          <mesh position={[0, -0.1, -0.22]}><boxGeometry args={[0.35, 0.1, 0.12]} /><meshStandardMaterial color="#a05020" /></mesh>
-          <mesh position={[0.18, 0.13, 0]}><boxGeometry args={[0.12, 0.08, 0.12]} /><meshStandardMaterial color="#f0a050" emissive="#f0a050" emissiveIntensity={0.3} /></mesh>
-          <mesh position={[-0.35, 0, 0.08]}><sphereGeometry args={[0.04, 8, 8]} /><meshBasicMaterial color="#ff6030" /></mesh>
-          <mesh position={[-0.35, 0, -0.08]}><sphereGeometry args={[0.04, 8, 8]} /><meshBasicMaterial color="#ff6030" /></mesh>
-        </group>
-      );
-    case 'astra':
-      return (
-        <group>
-          <mesh rotation={[0, 0, Math.PI / 4]}><cylinderGeometry args={[0.01, 0.18, 0.65, 4]} /><meshStandardMaterial color="#3090d0" roughness={0.3} metalness={0.5} /></mesh>
-          <mesh position={[0, 0, 0.18]} rotation={[0, 0, 0.1]}><boxGeometry args={[0.35, 0.02, 0.22]} /><meshStandardMaterial color="#2080c0" /></mesh>
-          <mesh position={[0, 0, -0.18]} rotation={[0, 0, -0.1]}><boxGeometry args={[0.35, 0.02, 0.22]} /><meshStandardMaterial color="#2080c0" /></mesh>
-          <mesh position={[0.28, 0.04, 0]}><sphereGeometry args={[0.05, 8, 8]} /><meshStandardMaterial color="#60c0ff" emissive="#60c0ff" emissiveIntensity={0.4} transparent opacity={0.8} /></mesh>
-          <mesh position={[-0.35, 0, 0]}><sphereGeometry args={[0.04, 8, 8]} /><meshBasicMaterial color="#40a0ff" /></mesh>
-        </group>
-      );
-    case 'phantom':
-      return (
-        <group>
-          <mesh rotation={[Math.PI / 2, 0, 0]}><coneGeometry args={[0.16, 0.65, 3]} /><meshStandardMaterial color="#8030b0" roughness={0.2} metalness={0.6} /></mesh>
-          <mesh position={[-0.08, 0.1, 0]}><boxGeometry args={[0.2, 0.12, 0.015]} /><meshStandardMaterial color="#6020a0" /></mesh>
-          <mesh position={[0.18, 0.02, 0]}><boxGeometry args={[0.12, 0.02, 0.08]} /><meshStandardMaterial color="#d060ff" emissive="#d060ff" emissiveIntensity={0.5} /></mesh>
-          <mesh position={[-0.3, 0, 0.06]}><sphereGeometry args={[0.03, 6, 6]} /><meshBasicMaterial color="#c040ff" /></mesh>
-          <mesh position={[-0.3, 0, -0.06]}><sphereGeometry args={[0.03, 6, 6]} /><meshBasicMaterial color="#c040ff" /></mesh>
-        </group>
-      );
-    case 'ironclad':
-      return (
-        <group>
-          <mesh><boxGeometry args={[0.6, 0.25, 0.4]} /><meshStandardMaterial color="#408040" roughness={0.7} metalness={0.4} /></mesh>
-          <mesh position={[0, 0.16, 0]}><boxGeometry args={[0.45, 0.04, 0.3]} /><meshStandardMaterial color="#306030" /></mesh>
-          <mesh position={[0.08, 0.2, 0]}><cylinderGeometry args={[0.04, 0.06, 0.08, 6]} /><meshStandardMaterial color="#508050" /></mesh>
-          <mesh position={[0.25, 0.2, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.015, 0.015, 0.25, 4]} /><meshStandardMaterial color="#303030" metalness={0.8} /></mesh>
-          <mesh position={[-0.35, 0, 0]}><sphereGeometry args={[0.06, 8, 8]} /><meshBasicMaterial color="#40ff60" /></mesh>
-        </group>
-      );
-    default: // drift
-      return (
-        <group>
-          <mesh><torusGeometry args={[0.22, 0.07, 8, 16]} /><meshStandardMaterial color="#b0b0b0" roughness={0.2} metalness={0.7} /></mesh>
-          <mesh><sphereGeometry args={[0.1, 12, 12]} /><meshStandardMaterial color="#e0e0e0" emissive="#8080ff" emissiveIntensity={0.4} /></mesh>
-          <mesh><sphereGeometry args={[0.06, 8, 8]} /><meshBasicMaterial color="#a0a0ff" transparent opacity={0.6} /></mesh>
-        </group>
-      );
-  }
+function InputBinder() {
+  const dom = useThree((s) => s.gl.domElement);
+  useEffect(() => bindInput(dom), [dom]);
+  return null;
 }
 
-// ── Engine Trail ──────────────────────────────
-
-function EngineTrail({ shipRef, color }) {
-  const trailRef = useRef();
-  const positions = useMemo(() => new Float32Array(60 * 3), []);
-  const trailPoints = useRef([]);
-
-  useFrame(() => {
-    if (!shipRef.current || !trailRef.current) return;
-    const pos = new THREE.Vector3();
-    shipRef.current.getWorldPosition(pos);
-
-    trailPoints.current.push(pos.clone());
-    if (trailPoints.current.length > 60) trailPoints.current.shift();
-
-    const geo = trailRef.current.geometry;
-    const arr = geo.attributes.position.array;
-    for (let i = 0; i < 60; i++) {
-      const p = trailPoints.current[i] || trailPoints.current[trailPoints.current.length - 1] || pos;
-      arr[i * 3] = p.x;
-      arr[i * 3 + 1] = p.y;
-      arr[i * 3 + 2] = p.z;
-    }
-    geo.attributes.position.needsUpdate = true;
+function makeGates(systemId) {
+  const ids = getConnections(systemId);
+  return ids.map((id, index) => {
+    const sys = SYSTEMS.find((s) => s.id === id);
+    const angle = -0.9 + index * ((Math.PI * 2) / Math.max(ids.length, 1));
+    const dist = 390;
+    return {
+      kind: 'gate',
+      id,
+      systemId: id,
+      name: sys?.name || id,
+      position: [Math.cos(angle) * dist, 88, Math.sin(angle) * dist],
+      radius: 14,
+    };
   });
-
-  return (
-    <line ref={trailRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" array={positions} count={60} itemSize={3} />
-      </bufferGeometry>
-      <lineBasicMaterial color={color} transparent opacity={0.4} />
-    </line>
-  );
 }
 
-// ── Player Ship Controller ────────────────────
-
-function PlayerShipController({ ship, onDock }) {
+function Pilot({
+  env,
+  ship,
+  speeds,
+  playerRef,
+  onExitRef,
+  onHud,
+  onSceneRef,
+  targetRef,
+}) {
   const shipRef = useRef();
-  const velocityRef = useRef(new THREE.Vector3());
-  const rotationRef = useRef(new THREE.Euler(0, 0, 0));
-  const { camera } = useThree();
+  const hullRef = useRef();
+  const personRef = useRef();
+  const velocity = useRef(new THREE.Vector3());
+  const footPos = useRef(new THREE.Vector3());
+  const footYaw = useRef(0);
+  const pulsing = useRef(false);
+  const thrustRef = useRef(0);
+  const targetIndex = useRef(env.planets.length ? 1 : 0);
+  const started = useRef(false);
+  const camReady = useRef(false);
+  const bank = useRef(0);
+  const note = useRef({ text: '', until: 0 });
+  const pending = useRef(new Set());
+  const hudClock = useRef(0);
+  const mode = useRef('space');
+  const surfacePlanet = useRef(null);
+  const landed = useRef(false);
+  const onFoot = useRef(false);
+  const exitHold = useRef(0);
+  const portrait = useRef(false);
+  const logged = useRef(new Set());
+  const reported = useRef('');
+  const command = useRef(null);
+  const frame = useRef({ space: null, surface: null, foot: null });
+  const { camera, gl } = useThree();
 
-  const speed = useMemo(() => {
-    const baseSpeed = 2.0;
-    return baseSpeed / (ship.stats.speed || 1);
-  }, [ship]);
+  const bodies = useMemo(() => {
+    const list = [{
+      kind: 'station',
+      name: env.station.name,
+      position: env.station.position,
+      radius: 8,
+    }];
+    for (const planet of env.planets) {
+      list.push({
+        kind: 'planet',
+        id: planet.id,
+        name: planet.name,
+        biome: planet.biome,
+        biomeLabel: planet.biomeLabel,
+        resources: planet.resources,
+        position: planet.position,
+        radius: planet.radius,
+        atmosphere: planet.atmosphere,
+      });
+    }
+    for (const gate of env.gates) list.push(gate);
+    return list;
+  }, [env]);
 
-  const mfrColor = MANUFACTURERS[ship.manufacturer]?.color || '#ffffff';
+  const consume = (code) => {
+    if (!tapped.has(code)) return false;
+    tapped.delete(code);
+    return true;
+  };
 
-  useFrame((_, delta) => {
-    if (!shipRef.current) return;
+  const reportScene = () => {
+    const id = surfacePlanet.current?.id || '';
+    const key = `${mode.current}:${id}`;
+    if (reported.current === key) return;
+    reported.current = key;
+    onSceneRef.current({ mode: mode.current, planetId: id || null });
+  };
+
+  const face = (from, to) => {
+    _look.lookAt(from, to, _up);
+    shipRef.current.quaternion.setFromRotationMatrix(_look);
+  };
+
+  const enterSurface = (planet, altitude, forwardSpeed) => {
+    mode.current = 'surface';
+    surfacePlanet.current = planet;
+    onFoot.current = false;
+    landed.current = false;
+    pulsing.current = false;
+    portrait.current = false;
+    const group = shipRef.current;
+    group.position.set(0, altitude, 34);
+    group.rotation.set(0.52, 0, 0);
+    velocity.current.set(0, -11, -forwardSpeed);
+    if (personRef.current) personRef.current.visible = false;
+      if (!logged.current.has(planet.id)) {
+        logged.current.add(planet.id);
+        surveyPlanet({ id: planet.id, name: planet.name, biomeLabel: planet.biomeLabel });
+        note.current = { text: describePlanet(planet), until: null };
+      }
+    reportScene();
+  };
+
+  const exitSurface = () => {
+    const planet = surfacePlanet.current;
+    const group = shipRef.current;
+    if (!planet || !group) return;
+    _body.set(planet.position[0], planet.position[1], planet.position[2]);
+    _radial.copy(_body).normalize();
+    group.position.copy(_body).addScaledVector(_radial, planet.radius + 12);
+    _aim.copy(group.position).add(_radial);
+    face(group.position, _aim);
+    velocity.current.copy(_radial).multiplyScalar(26);
+    mode.current = 'space';
+    surfacePlanet.current = null;
+    landed.current = false;
+    onFoot.current = false;
+    exitHold.current = 2.4;
+    if (personRef.current) personRef.current.visible = false;
+    reportScene();
+  };
+
+  useEffect(() => {
+    window.__flight = {
+      command(cmd) { command.current = cmd; },
+      snapshot() {
+        const group = shipRef.current;
+        return {
+          ready: true,
+          mode: mode.current,
+          landed: landed.current,
+          onFoot: onFoot.current,
+          position: group ? [group.position.x, group.position.y, group.position.z] : null,
+          speed: Math.round(velocity.current.length()),
+          planet: surfacePlanet.current && {
+            name: surfacePlanet.current.name,
+            biome: surfacePlanet.current.biome,
+            biomeLabel: surfacePlanet.current.biomeLabel,
+          },
+          planets: env.planets.map((planet, index) => ({
+            index,
+            id: planet.id,
+            name: planet.name,
+            biome: planet.biome,
+            biomeLabel: planet.biomeLabel,
+            position: planet.position,
+            radius: planet.radius,
+          })),
+          station: env.station.position,
+          gates: env.gates.map((gate) => ({ name: gate.name, position: gate.position, systemId: gate.systemId })),
+        };
+      },
+    };
+    return () => { delete window.__flight; };
+  }, [env]);
+
+  useFrame((state, delta) => {
+    const group = shipRef.current;
+    if (!group) return;
     const dt = Math.min(delta, 0.05);
+    const now = state.clock.elapsedTime;
+    const view = frame.current;
+    view.space = null;
+    view.surface = null;
+    view.foot = null;
 
-    // Rotation from mouse
-    const targetYaw = -mouse.x;
-    const targetPitch = -mouse.y;
-    rotationRef.current.y = targetYaw;
-    rotationRef.current.x = targetPitch;
-
-    const quat = new THREE.Quaternion().setFromEuler(rotationRef.current);
-    shipRef.current.quaternion.slerp(quat, 5 * dt);
-
-    // Movement
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(shipRef.current.quaternion);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(shipRef.current.quaternion);
-    const up = new THREE.Vector3(0, 1, 0);
-
-    const thrust = new THREE.Vector3();
-    const boost = keys['ShiftLeft'] || keys['ShiftRight'] ? 2.5 : 1;
-
-    if (keys['KeyW'] || keys['ArrowUp']) thrust.add(forward);
-    if (keys['KeyS'] || keys['ArrowDown']) thrust.sub(forward);
-    if (keys['KeyA'] || keys['ArrowLeft']) thrust.sub(right);
-    if (keys['KeyD'] || keys['ArrowRight']) thrust.add(right);
-    if (keys['Space']) thrust.add(up);
-    if (keys['ControlLeft']) thrust.sub(up);
-
-    if (thrust.length() > 0) {
-      thrust.normalize().multiplyScalar(speed * boost * dt);
-      velocityRef.current.add(thrust);
+    if (!started.current) {
+      started.current = true;
+      const spawn = env.spawn;
+      group.position.set(spawn[0], spawn[1], spawn[2]);
+      const first = env.planets[0];
+      if (first) {
+        _target.set(first.position[0], first.position[1], first.position[2]);
+        face(group.position, _target);
+      }
     }
 
-    // Drag
-    velocityRef.current.multiplyScalar(0.96);
+    const cmd = command.current;
+    if (cmd) {
+      command.current = null;
+      portrait.current = false;
+      if (cmd.type === 'portrait') {
+        portrait.current = true;
+        pulsing.current = false;
+        velocity.current.set(0, 0, 0);
+        mode.current = 'space';
+        surfacePlanet.current = null;
+        onFoot.current = false;
+        landed.current = false;
+        reportScene();
+      } else if (cmd.type === 'place') {
+        mode.current = 'space';
+        surfacePlanet.current = null;
+        onFoot.current = false;
+        landed.current = false;
+        pulsing.current = !!cmd.pulse;
+        group.position.set(cmd.position[0], cmd.position[1], cmd.position[2]);
+        _target.set(cmd.look[0], cmd.look[1], cmd.look[2]);
+        face(group.position, _target);
+        velocity.current.set(
+          cmd.velocity?.[0] || 0,
+          cmd.velocity?.[1] || 0,
+          cmd.velocity?.[2] || 0,
+        );
+        exitHold.current = cmd.hold || 0;
+        reportScene();
+        camReady.current = false;
+      } else if (cmd.type === 'descend') {
+        const planet = env.planets[cmd.planetIndex || 0];
+        enterSurface(planet, cmd.y ?? 78, cmd.speed ?? 20);
+        camReady.current = false;
+      } else if (cmd.type === 'settle') {
+        const planet = env.planets[cmd.planetIndex || 0];
+        enterSurface(planet, 8, 0);
+        const x = cmd.x ?? 4;
+        const z = cmd.z ?? -10;
+        group.position.set(x, floorAt(x, z, planet) + 0.4, z);
+        group.rotation.set(0, cmd.yaw ?? 0.15, 0);
+        velocity.current.set(0, 0, 0);
+        landed.current = true;
+        camReady.current = false;
+      }
+    }
 
-    // Apply velocity
-    shipRef.current.position.add(velocityRef.current);
+    if (portrait.current) {
+      _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
+      _out.set(1.15, 0.82, -0.7).applyQuaternion(group.quaternion).setLength(5.5);
+      _cam.copy(group.position).add(_out);
+      camera.position.lerp(_cam, 1 - Math.exp(-6 * dt));
+      camera.lookAt(group.position);
+      camera.fov = THREE.MathUtils.damp(camera.fov, 42, 4, dt);
+      camera.updateProjectionMatrix();
+      thrustRef.current = 0.35;
+      publish(now);
+      return;
+    }
 
-    // Camera follows behind ship
-    const cameraOffset = new THREE.Vector3(0, 0.5, 2).applyQuaternion(shipRef.current.quaternion);
-    const targetCamPos = shipRef.current.position.clone().add(cameraOffset);
-    camera.position.lerp(targetCamPos, 4 * dt);
-    camera.lookAt(shipRef.current.position);
+    if (mode.current === 'surface') flySurface(dt, now);
+    else flySpace(dt, now);
+    publish(now);
+
+    function flySpace(step, time) {
+      if (consume('Tab')) {
+        targetIndex.current = (targetIndex.current + 1) % bodies.length;
+        pulsing.current = false;
+      }
+      if (consume('KeyR')) pulsing.current = !pulsing.current;
+
+      const target = bodies[targetIndex.current] || bodies[0];
+      targetRef.current = target;
+      _target.set(target.position[0], target.position[1], target.position[2]);
+
+      let yaw = 0;
+      let pitch = 0;
+      if (!pulsing.current) {
+        yaw += -mouse.dx * 0.0032;
+        pitch += mouse.dy * 0.0022;
+        if (keys.KeyA || keys.ArrowLeft) yaw += 1.15 * step;
+        if (keys.KeyD || keys.ArrowRight) yaw -= 1.15 * step;
+        group.rotateY(yaw);
+        group.rotateX(pitch);
+        _euler.setFromQuaternion(group.quaternion, 'YXZ');
+        _euler.x = THREE.MathUtils.clamp(_euler.x, -1.05, 1.05);
+        _euler.z = 0;
+        group.quaternion.setFromEuler(_euler);
+        bank.current = THREE.MathUtils.damp(bank.current, THREE.MathUtils.clamp(-yaw * 5.5, -0.42, 0.42), 5, step);
+      } else {
+        _look.lookAt(group.position, _target, _up);
+        _quat.setFromRotationMatrix(_look);
+        group.quaternion.slerp(_quat, 1 - Math.exp(-3.4 * step));
+        bank.current = THREE.MathUtils.damp(bank.current, 0, 4, step);
+      }
+      mouse.dx = 0;
+      mouse.dy = 0;
+      if (hullRef.current) hullRef.current.rotation.z = bank.current;
+
+      _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
+      const boosting = !!(keys.ShiftLeft || keys.ShiftRight);
+      let throttle = 0;
+      if (keys.KeyW || keys.ArrowUp) throttle += 1;
+      if (keys.KeyS || keys.ArrowDown) throttle -= 1;
+      thrustRef.current = pulsing.current ? 1 : Math.max(0, throttle) * (boosting ? 1 : 0.65);
+
+      let speed = 0;
+      if (pulsing.current) speed = speeds.pulse;
+      else if (throttle > 0) speed = boosting ? speeds.boost : speeds.cruise;
+      else if (throttle < 0) speed = -speeds.cruise * 0.45;
+
+      if (pulsing.current || throttle !== 0) {
+        _desired.copy(_forward).multiplyScalar(speed);
+        const rate = pulsing.current ? 1.3 : 2.5;
+        velocity.current.lerp(_desired, 1 - Math.exp(-rate * step));
+      } else {
+        velocity.current.multiplyScalar(Math.exp(-0.32 * step));
+      }
+      if (keys.Space) velocity.current.y += 16 * step;
+      if (keys.ControlLeft || keys.ControlRight) velocity.current.y -= 16 * step;
+
+      group.position.addScaledVector(velocity.current, step);
+
+      const dist = group.position.distanceTo(_target);
+      if (target.kind === 'gate' && pulsing.current && dist < 36) {
+        pulsing.current = false;
+        jumpTo(target.systemId);
+        return;
+      }
+      const stop = target.radius + (target.kind === 'station' ? 18 : 22);
+      if (pulsing.current && target.kind !== 'planet' && target.kind !== 'gate' && dist < stop) {
+        pulsing.current = false;
+        killClosing();
+      }
+
+      const starDist = group.position.length();
+      if (starDist < 12) {
+        group.position.setLength(12);
+        const inward = velocity.current.dot(group.position) / 12;
+        if (inward < 0) velocity.current.addScaledVector(group.position, -inward / 12);
+      }
+
+      let closest = Infinity;
+      let closestPlanet = null;
+      for (const planet of env.planets) {
+        _body.set(planet.position[0], planet.position[1], planet.position[2]);
+        const center = group.position.distanceTo(_body);
+        const altitude = center - planet.radius;
+        if (altitude < closest) {
+          closest = altitude;
+          closestPlanet = planet;
+        }
+      }
+
+      if (exitHold.current > 0) exitHold.current -= step;
+
+      if (closestPlanet) {
+        _body.set(closestPlanet.position[0], closestPlanet.position[1], closestPlanet.position[2]);
+        _radial.copy(group.position).sub(_body);
+        const center = _radial.length() || 0.001;
+        _radial.multiplyScalar(1 / center);
+        const closing = -velocity.current.dot(_radial);
+        const dive = closest < 8 || (closest < 15 && closing > 6);
+        if (exitHold.current <= 0 && dive) {
+          enterSurface(closestPlanet, 96, 22);
+          return;
+        }
+        if (closest < 3) {
+          group.position.copy(_body).addScaledVector(_radial, closestPlanet.radius + 3);
+          const into = velocity.current.dot(_radial);
+          if (into < 0) velocity.current.addScaledVector(_radial, -into);
+        }
+      }
+
+      const docking = group.position.distanceTo(_body.set(
+        env.station.position[0],
+        env.station.position[1],
+        env.station.position[2],
+      )) < 36;
+
+      const collectible = nearestDeposit(env.deposits, 16);
+
+      if (consume('KeyF') && docking) onExitRef.current();
+      if (consume('KeyC') && target.kind === 'planet') {
+        surveyPlanet(target);
+        note.current = { text: describePlanet(target), until: time + 4.5 };
+      }
+      if (consume('KeyE') && collectible) take(collectible, time);
+
+      const camDist = pulsing.current ? 11.2 : boosting ? 9.2 : 7.6;
+      _cam.copy(group.position).addScaledVector(_up, 1.15).addScaledVector(_forward, -camDist);
+      chase(step, camDist === 11.2 ? 68 : boosting ? 60 : 52, 28);
+      view.space = { target, dist, docking, collectible, closest, closestPlanet, time };
+    }
+
+    function flySurface(step, time) {
+      const planet = surfacePlanet.current;
+      if (!planet) return;
+      targetRef.current = null;
+      const layout = surfaceLayout(planet);
+
+      if (onFoot.current) {
+        thrustRef.current = 0;
+        flyOnFoot(step, time, planet, layout);
+        return;
+      }
+
+      let yaw = -mouse.dx * 0.003;
+      const pitch = mouse.dy * 0.0018;
+      if (keys.KeyA || keys.ArrowLeft) yaw += 1.2 * step;
+      if (keys.KeyD || keys.ArrowRight) yaw -= 1.2 * step;
+      group.rotateY(yaw);
+      group.rotateX(pitch);
+      _euler.setFromQuaternion(group.quaternion, 'YXZ');
+      const clearancePreview = group.position.y - floorAt(group.position.x, group.position.z, planet);
+      const pitchCap = clearancePreview < 8 ? 0.42 : 0.85;
+      _euler.x = THREE.MathUtils.clamp(_euler.x, -0.2, pitchCap);
+      if (landed.current) _euler.x = THREE.MathUtils.damp(_euler.x, 0, 6, step);
+      _euler.z = 0;
+      group.quaternion.setFromEuler(_euler);
+      bank.current = THREE.MathUtils.damp(bank.current, THREE.MathUtils.clamp(-yaw * 4.5, -0.35, 0.35), 5, step);
+      mouse.dx = 0;
+      mouse.dy = 0;
+      if (hullRef.current) hullRef.current.rotation.z = bank.current;
+
+      _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
+      const boosting = !!(keys.ShiftLeft || keys.ShiftRight);
+      let throttle = 0;
+      if (keys.KeyW || keys.ArrowUp) throttle += 1;
+      if (keys.KeyS || keys.ArrowDown) throttle -= 1;
+      thrustRef.current = Math.max(0, throttle) * (boosting ? 1 : 0.7);
+
+      const cruise = speeds.cruise * 0.85;
+      let speed = 0;
+      if (throttle > 0) speed = boosting ? cruise * 1.7 : cruise;
+      else if (throttle < 0) speed = -cruise * 0.4;
+
+      if (throttle !== 0) {
+        _desired.copy(_forward).multiplyScalar(speed);
+        velocity.current.lerp(_desired, 1 - Math.exp(-2.4 * step));
+      } else {
+        velocity.current.multiplyScalar(Math.exp(-0.7 * step));
+      }
+
+      if (!landed.current) velocity.current.y -= 7 * step;
+      if (keys.Space) velocity.current.y += 22 * step;
+      if (keys.ControlLeft || keys.ControlRight) velocity.current.y -= 18 * step;
+
+      const groundHere = floorAt(group.position.x, group.position.z, planet);
+      const low = group.position.y - groundHere < 6;
+      if ((keys.KeyW || keys.Space) && low) velocity.current.y += 16 * step;
+      if (boosting && throttle > 0 && low) velocity.current.y += 8 * step;
+      velocity.current.y = THREE.MathUtils.clamp(velocity.current.y, -32, 36);
+
+      group.position.addScaledVector(velocity.current, step);
+
+      const horizontal = Math.hypot(velocity.current.x, velocity.current.z);
+      const cushion = (throttle > 0 || keys.Space || horizontal > 8) ? 2.35 : 0.42;
+      const floor = floorAt(group.position.x, group.position.z, planet) + cushion;
+      if (group.position.y < floor) {
+        group.position.y = floor;
+        if (velocity.current.y < 0) velocity.current.y = 0;
+      }
+
+      const limit = 200;
+      if (Math.abs(group.position.x) > limit) {
+        group.position.x = Math.sign(group.position.x) * limit;
+        velocity.current.x = 0;
+      }
+      if (Math.abs(group.position.z) > limit) {
+        group.position.z = Math.sign(group.position.z) * limit;
+        velocity.current.z = 0;
+      }
+
+      const clearance = group.position.y - floorAt(group.position.x, group.position.z, planet);
+      if (clearance < 1.15 && horizontal < 5 && throttle <= 0 && !keys.Space) {
+        landed.current = true;
+        velocity.current.multiplyScalar(Math.exp(-2.2 * step));
+      } else if (throttle > 0 || keys.Space || clearance > 3.2) {
+        landed.current = false;
+      }
+
+      if (consume('KeyV') && landed.current) {
+        onFoot.current = true;
+        _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
+        footPos.current.copy(group.position).addScaledVector(_forward, 3.4);
+        footPos.current.y = floorAt(footPos.current.x, footPos.current.z, planet);
+        footYaw.current = _euler.y;
+      }
+      if (consume('KeyC')) {
+        surveyPlanet({ id: planet.id, name: planet.name, biomeLabel: planet.biomeLabel });
+        note.current = { text: describePlanet(planet), until: time + 4.5 };
+      }
+
+      const collectible = nearestDeposit(layout.deposits, 11);
+      if (consume('KeyE') && collectible) take(collectible, time);
+
+      if (group.position.y > 118 && velocity.current.y > 1) {
+        exitSurface();
+        return;
+      }
+
+      const camDist = boosting ? 10.5 : 8.4;
+      _cam.copy(group.position).addScaledVector(_up, 2.15).addScaledVector(_forward, -camDist);
+      const camFloor = floorAt(_cam.x, _cam.z, planet) + 1.5;
+      if (_cam.y < camFloor) _cam.y = camFloor;
+      chase(step, 54, 22);
+      view.surface = { planet, collectible, landed: landed.current, clearance, time };
+    }
+
+    function flyOnFoot(step, time, planet, layout) {
+      if (hullRef.current) hullRef.current.rotation.z = THREE.MathUtils.damp(bank.current = 0, 0, 4, step);
+      footYaw.current -= mouse.dx * 0.0032;
+      mouse.dx = 0;
+      mouse.dy = 0;
+      const yaw = footYaw.current;
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw);
+      const rz = -Math.sin(yaw);
+      let mx = 0;
+      let mz = 0;
+      if (keys.KeyW || keys.ArrowUp) { mx += fx; mz += fz; }
+      if (keys.KeyS || keys.ArrowDown) { mx -= fx; mz -= fz; }
+      if (keys.KeyA || keys.ArrowLeft) { mx -= rx; mz -= rz; }
+      if (keys.KeyD || keys.ArrowRight) { mx += rx; mz += rz; }
+      const length = Math.hypot(mx, mz) || 1;
+      const walk = (keys.ShiftLeft || keys.ShiftRight) ? 13 : 7.5;
+      if (mx !== 0 || mz !== 0) {
+        footPos.current.x += (mx / length) * walk * step;
+        footPos.current.z += (mz / length) * walk * step;
+      }
+      footPos.current.x = THREE.MathUtils.clamp(footPos.current.x, -200, 200);
+      footPos.current.z = THREE.MathUtils.clamp(footPos.current.z, -200, 200);
+      footPos.current.y = floorAt(footPos.current.x, footPos.current.z, planet);
+
+      const person = personRef.current;
+      if (person) {
+        person.visible = true;
+        person.position.set(footPos.current.x, footPos.current.y, footPos.current.z);
+        person.rotation.y = yaw;
+      }
+
+      const shipDist = Math.hypot(
+        footPos.current.x - group.position.x,
+        footPos.current.z - group.position.z,
+      );
+      if (consume('KeyV') && shipDist < 6) {
+        onFoot.current = false;
+        if (person) person.visible = false;
+      }
+
+      const collectible = nearestDeposit(layout.deposits, 4.5, footPos.current);
+      if (consume('KeyE') && collectible) take(collectible, time);
+      if (consume('KeyC')) {
+        note.current = { text: describePlanet(planet), until: time + 4.5 };
+      }
+
+      _cam.set(
+        footPos.current.x - fx * 5.4,
+        footPos.current.y + 2.3,
+        footPos.current.z - fz * 5.4,
+      );
+      const camFloor = floorAt(_cam.x, _cam.z, planet) + 1.2;
+      if (_cam.y < camFloor) _cam.y = camFloor;
+      if (!camReady.current) {
+        camera.position.copy(_cam);
+        camReady.current = true;
+      } else {
+        camera.position.lerp(_cam, 1 - Math.exp(-6 * step));
+      }
+      _aim.set(footPos.current.x, footPos.current.y + 1.3, footPos.current.z);
+      camera.lookAt(_aim);
+      camera.fov = THREE.MathUtils.damp(camera.fov, 52, 4, step);
+      camera.updateProjectionMatrix();
+      velocity.current.set((mx / length) * walk, 0, (mz / length) * walk);
+      view.foot = { planet, collectible, shipDist, time };
+    }
+
+    function nearestDeposit(list, range, from = group.position) {
+      let found = null;
+      let best = range;
+      const depleted = playerRef.current.depleted || [];
+      for (const deposit of list) {
+        if (depleted.includes(deposit.id) || pending.current.has(deposit.id)) continue;
+        const pos = deposit.position;
+        const d = from.distanceTo(_body.set(pos[0], pos[1], pos[2]));
+        if (d < best) {
+          best = d;
+          found = deposit;
+        }
+      }
+      return found;
+    }
+
+    function take(deposit, time) {
+      pending.current.add(deposit.id);
+      const got = collectDeposit(deposit);
+      if (!got) pending.current.delete(deposit.id);
+      else note.current = { text: `+${got.amount} ${resourceLabel(deposit.commodityId)}`, until: time + 3.2 };
+    }
+
+    function killClosing() {
+      _out.copy(_target).sub(group.position);
+      if (_out.lengthSq() < 0.0001) return;
+      _out.normalize();
+      const closing = velocity.current.dot(_out);
+      if (closing > 0) velocity.current.addScaledVector(_out, -closing);
+    }
+
+    function chase(step, fov, lookAhead) {
+      if (!camReady.current) {
+        camera.position.copy(_cam);
+        camReady.current = true;
+      } else {
+        camera.position.lerp(_cam, 1 - Math.exp(-5.2 * step));
+      }
+      _aim.copy(group.position).addScaledVector(_forward, lookAhead);
+      camera.lookAt(_aim);
+      camera.fov = THREE.MathUtils.damp(camera.fov, fov, 4, step);
+      camera.updateProjectionMatrix();
+    }
+
+    function publish(time) {
+      hudClock.current += dt;
+      if (hudClock.current < 0.1) return;
+      hudClock.current = 0;
+      if (note.current.text && note.current.until == null) note.current.until = time + 4.2;
+      const text = note.current.until > time ? note.current.text : '';
+      let prompt = '';
+      let targetName = '';
+      let targetDist = '';
+      let atmo = 0;
+      let atmoColor = 'transparent';
+
+      if (mode.current === 'surface') {
+        const planet = surfacePlanet.current;
+        const sky = planet ? surfaceSky(planet) : null;
+        targetName = planet?.name || '';
+        if (onFoot.current) targetDist = 'On foot';
+        else if (landed.current) targetDist = 'Landed';
+        else targetDist = `${Math.max(0, Math.round(group.position.y))} m`;
+        const foot = view.foot;
+        const surface = view.surface;
+        if (foot) {
+          if (foot.shipDist < 6) prompt = 'Board  ·  V';
+          else if (foot.collectible) prompt = 'Collect  ·  E';
+        } else if (surface) {
+          if (surface.collectible) prompt = 'Collect  ·  E';
+          else if (landed.current) prompt = 'Exit  ·  V';
+        }
+        const haze = THREE.MathUtils.clamp((group.position.y - 14) / 96, 0, 0.9);
+        atmo = onFoot.current ? haze * 0.35 : haze;
+        atmoColor = sky?.fog || '#ffffff';
+      } else if (view.space) {
+        const { target, dist, docking, collectible, closest, closestPlanet } = view.space;
+        targetName = target.name;
+        targetDist = `${Math.max(0, Math.round(dist))} u`;
+        if (docking) prompt = 'Dock  ·  F';
+        else if (collectible) prompt = 'Collect  ·  E';
+        else if (target.kind === 'gate' && dist < 110) prompt = 'Pulse to jump';
+        if (closestPlanet) {
+          const band = closestPlanet.radius * 1.55;
+          if (closest < band) {
+            atmo = THREE.MathUtils.clamp((band - closest) / (band * 0.34), 0, 1) * 0.94;
+            atmoColor = closestPlanet.atmosphere;
+          }
+        }
+      }
+
+      onHud({
+        systemName: env.name,
+        targetName,
+        targetDist,
+        speed: Math.round(onFoot.current ? velocity.current.length() : velocity.current.length()),
+        pulse: pulsing.current,
+        note: text,
+        prompt,
+        atmo,
+        atmoColor,
+        locked: document.pointerLockElement === gl.domElement,
+      });
+    }
   });
 
   return (
     <>
-      <group ref={shipRef} position={[0, 0, 0]}>
-        <ShipHull manufacturer={ship.manufacturer} />
+      <group ref={shipRef}>
+        <group ref={hullRef} scale={1.28}>
+          <ShipView manufacturer={ship.manufacturer} thrustRef={thrustRef} pulseRef={pulsing} />
+        </group>
       </group>
-      <EngineTrail shipRef={shipRef} color={mfrColor} />
+      <group ref={personRef} visible={false}>
+        <PilotFigure />
+      </group>
     </>
   );
 }
 
-// ── Space Station ─────────────────────────────
-
-function SpaceStation({ position, name, color, onApproach }) {
-  const ref = useRef();
-  const ringRef = useRef();
-
-  useFrame((_, delta) => {
-    if (ref.current) ref.current.rotation.y += delta * 0.1;
-    if (ringRef.current) ringRef.current.rotation.x += delta * 0.15;
-  });
-
-  return (
-    <group position={position}>
-      {/* Station body */}
-      <group ref={ref}>
-        <mesh>
-          <cylinderGeometry args={[0.4, 0.4, 1.2, 8]} />
-          <meshStandardMaterial color="#333340" roughness={0.7} metalness={0.5} />
-        </mesh>
-        {/* Hab modules */}
-        {[0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((a, i) => (
-          <mesh key={i} position={[Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55]}>
-            <boxGeometry args={[0.25, 0.5, 0.15]} />
-            <meshStandardMaterial color="#444455" roughness={0.6} />
-          </mesh>
-        ))}
-        {/* Lights */}
-        <pointLight position={[0, 0.8, 0]} color={color} intensity={2} distance={5} />
-      </group>
-      {/* Docking ring */}
-      <mesh ref={ringRef}>
-        <torusGeometry args={[0.8, 0.03, 8, 32]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
-      </mesh>
-      {/* Label */}
-      <Billboard position={[0, 1.2, 0]}>
-        <Text fontSize={0.2} color={color} outlineWidth={0.01} outlineColor="#000000" anchorX="center">
-          {name}
-        </Text>
-        <Text fontSize={0.1} color="#888888" outlineWidth={0.005} outlineColor="#000000" anchorX="center" position={[0, -0.2, 0]}>
-          [DOCK: press F]
-        </Text>
-      </Billboard>
-    </group>
-  );
+function initialHud(env) {
+  const planet = env.planets[0];
+  return {
+    systemName: env.name,
+    targetName: planet?.name || env.station.name,
+    targetDist: '',
+    speed: 0,
+    pulse: false,
+    note: '',
+    prompt: '',
+    atmo: 0,
+    atmoColor: 'transparent',
+    locked: false,
+  };
 }
-
-// ── Planet ────────────────────────────────────
-
-function Planet({ position, radius, color, name }) {
-  const ref = useRef();
-  useFrame((_, delta) => {
-    if (ref.current) ref.current.rotation.y += delta * 0.05;
-  });
-
-  return (
-    <group position={position}>
-      {/* Black outline */}
-      <mesh>
-        <sphereGeometry args={[radius + 0.05, 24, 24]} />
-        <meshBasicMaterial color="#000000" />
-      </mesh>
-      <mesh ref={ref}>
-        <sphereGeometry args={[radius, 24, 24]} />
-        <meshStandardMaterial color={color} roughness={0.8} metalness={0.1} />
-      </mesh>
-      {/* Atmosphere */}
-      <mesh>
-        <sphereGeometry args={[radius + 0.08, 24, 24]} />
-        <meshBasicMaterial color={color} transparent opacity={0.08} side={THREE.BackSide} />
-      </mesh>
-      <Billboard position={[0, radius + 0.4, 0]}>
-        <Text fontSize={0.15} color="#666666" outlineWidth={0.005} outlineColor="#000000" anchorX="center">
-          {name}
-        </Text>
-      </Billboard>
-    </group>
-  );
-}
-
-// ── Asteroid Field ────────────────────────────
-
-function AsteroidField({ center, count = 30, radius = 8 }) {
-  const asteroids = useMemo(() => {
-    return Array.from({ length: count }, (_, i) => {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-      const r = radius + (Math.random() - 0.5) * 3;
-      const y = (Math.random() - 0.5) * 2;
-      return {
-        pos: [center[0] + Math.cos(angle) * r, center[1] + y, center[2] + Math.sin(angle) * r],
-        scale: 0.05 + Math.random() * 0.15,
-        rotation: [Math.random() * Math.PI, Math.random() * Math.PI, 0],
-        speed: 0.1 + Math.random() * 0.3,
-      };
-    });
-  }, [center, count, radius]);
-
-  return asteroids.map((a, i) => (
-    <AsteroidRock key={i} {...a} />
-  ));
-}
-
-function AsteroidRock({ pos, scale, rotation, speed }) {
-  const ref = useRef();
-  useFrame((_, delta) => {
-    if (ref.current) {
-      ref.current.rotation.x += delta * speed;
-      ref.current.rotation.z += delta * speed * 0.7;
-    }
-  });
-
-  return (
-    <group position={pos}>
-      <mesh>
-        <dodecahedronGeometry args={[scale + 0.02, 0]} />
-        <meshBasicMaterial color="#000000" />
-      </mesh>
-      <mesh ref={ref} rotation={rotation}>
-        <dodecahedronGeometry args={[scale, 1]} />
-        <meshStandardMaterial color="#5a5040" roughness={0.9} metalness={0.2} />
-      </mesh>
-    </group>
-  );
-}
-
-// ── Space Dust Particles ──────────────────────
-
-function SpaceDust({ count = 300 }) {
-  const positions = useMemo(() => {
-    const arr = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 40;
-      arr[i * 3 + 1] = (Math.random() - 0.5) * 20;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 40;
-    }
-    return arr;
-  }, [count]);
-
-  return (
-    <points>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" array={positions} count={count} itemSize={3} />
-      </bufferGeometry>
-      <pointsMaterial size={0.02} color="#c8c0aa" transparent opacity={0.4} sizeAttenuation />
-    </points>
-  );
-}
-
-// ── HUD Overlay ───────────────────────────────
-
-function FlightHUD({ ship, speed, onExit }) {
-  const mfr = MANUFACTURERS[ship.manufacturer];
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
-      fontFamily: "'Geist', sans-serif",
-    }}>
-      {/* Crosshair */}
-      <div style={{
-        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-        width: 24, height: 24, border: '2px solid rgba(240,192,64,0.5)', borderRadius: '50%',
-      }}>
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: 4, height: 4, background: '#f0c040', borderRadius: '50%',
-        }} />
-      </div>
-
-      {/* Ship info bottom-left */}
-      <div style={{
-        position: 'absolute', bottom: 60, left: 20, pointerEvents: 'auto',
-        background: 'rgba(15,15,25,0.85)', border: '2px solid rgba(240,192,64,0.3)',
-        padding: '12px 16px', borderRadius: 4,
-      }}>
-        <div style={{ fontFamily: "'Bangers', cursive", fontSize: 18, color: mfr?.color || '#fff', letterSpacing: 2 }}>
-          {ship.name}
-        </div>
-        <div style={{ fontSize: 10, color: '#8a8070', textTransform: 'uppercase', letterSpacing: 1 }}>
-          {mfr?.name}
-        </div>
-      </div>
-
-      {/* Controls hint bottom-right */}
-      <div style={{
-        position: 'absolute', bottom: 60, right: 20,
-        background: 'rgba(15,15,25,0.85)', border: '2px solid rgba(240,192,64,0.3)',
-        padding: '10px 14px', borderRadius: 4, fontSize: 11, color: '#8a8070', lineHeight: 1.6,
-      }}>
-        <div><strong style={{ color: '#e8e0d0' }}>WASD</strong> — Fly</div>
-        <div><strong style={{ color: '#e8e0d0' }}>MOUSE</strong> — Look</div>
-        <div><strong style={{ color: '#e8e0d0' }}>SHIFT</strong> — Boost</div>
-        <div><strong style={{ color: '#e8e0d0' }}>SPACE/CTRL</strong> — Up/Down</div>
-        <div><strong style={{ color: '#e8e0d0' }}>F</strong> — Dock at station</div>
-        <div><strong style={{ color: '#e8e0d0' }}>M</strong> — Galaxy map</div>
-      </div>
-
-      {/* Map button top-right */}
-      <button onClick={onExit} style={{
-        position: 'absolute', top: 12, right: 20, pointerEvents: 'auto',
-        padding: '8px 20px', background: '#f0c040', color: '#000', border: '2px solid #000',
-        fontFamily: "'Bangers', cursive", fontSize: 14, letterSpacing: 2, cursor: 'pointer',
-        borderRadius: 3, boxShadow: '2px 2px 0 #000',
-      }}>
-        GALAXY MAP [M]
-      </button>
-
-      {/* Click to fly prompt */}
-      <div style={{
-        position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-        fontSize: 12, color: 'rgba(240,192,64,0.6)', letterSpacing: 1,
-      }}>
-        CLICK TO FLY
-      </div>
-    </div>
-  );
-}
-
-// ── Generate system environment ───────────────
-
-function useSystemEnvironment(systemId) {
-  return useMemo(() => {
-    const sys = SYSTEMS.find(s => s.id === systemId);
-    if (!sys) return { station: null, planets: [], asteroids: false };
-
-    // Seed random from system id for consistency
-    const seed = sys.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    const rand = (i) => {
-      const x = Math.sin(seed * 9301 + i * 49297) * 49297;
-      return x - Math.floor(x);
-    };
-
-    const station = {
-      position: [3 + rand(1) * 2, rand(2) - 0.5, -2 + rand(3) * 4],
-      name: sys.stations[0] || 'Station',
-    };
-
-    const planetCount = 1 + Math.floor(rand(4) * 3);
-    const planets = Array.from({ length: planetCount }, (_, i) => ({
-      position: [
-        (rand(10 + i) - 0.5) * 25,
-        (rand(20 + i) - 0.5) * 4,
-        (rand(30 + i) - 0.5) * 25,
-      ],
-      radius: 0.8 + rand(40 + i) * 2,
-      color: ['#6a4a3a', '#3a5a7a', '#5a6a4a', '#7a5a6a', '#4a6a6a'][i % 5],
-      name: `${sys.name} ${['I', 'II', 'III', 'IV'][i]}`,
-    }));
-
-    const hasAsteroids = sys.type === 'industrial' || sys.type === 'frontier' || sys.type === 'unknown';
-
-    return { station, planets, hasAsteroids, color: sys.color };
-  }, [systemId]);
-}
-
-// ── Flight Scene ──────────────────────────────
-
-function FlightScene({ ship, systemId, onDock }) {
-  const { gl } = useThree();
-  const env = useSystemEnvironment(systemId);
-
-  useEffect(() => {
-    const cleanup = setupInput(gl.domElement);
-    return cleanup;
-  }, [gl]);
-
-  // M key to exit
-  useEffect(() => {
-    // handled by parent via onExit
-  }, []);
-
-  return (
-    <>
-      <ambientLight intensity={0.2} />
-      <directionalLight position={[10, 10, 5]} intensity={1} color="#ffe8d0" />
-      <pointLight position={[-10, -5, -10]} intensity={0.3} color="#4060a0" />
-
-      <SpaceDust count={400} />
-
-      {/* Sun/Star */}
-      <mesh position={[30, 15, -20]}>
-        <sphereGeometry args={[3, 16, 16]} />
-        <meshBasicMaterial color={env.color || '#f0c040'} />
-      </mesh>
-      <pointLight position={[30, 15, -20]} intensity={3} color={env.color || '#f0c040'} distance={100} />
-
-      {/* Station */}
-      {env.station && (
-        <SpaceStation
-          position={env.station.position}
-          name={env.station.name}
-          color={env.color || '#f0c040'}
-        />
-      )}
-
-      {/* Planets */}
-      {env.planets.map((p, i) => (
-        <Planet key={i} {...p} />
-      ))}
-
-      {/* Asteroid field */}
-      {env.hasAsteroids && (
-        <AsteroidField center={[0, 0, 0]} count={40} radius={12} />
-      )}
-
-      {/* Player ship */}
-      <PlayerShipController ship={ship} onDock={onDock} />
-
-      <fog attach="fog" args={['#06060c', 5, 60]} />
-    </>
-  );
-}
-
-// ── Main Export ───────────────────────────────
 
 export default function FlightView({ player, onExit }) {
   const ship = SHIPS[player.ship];
-  if (!ship) return null;
+  const system = SYSTEMS.find((s) => s.id === player.system_id);
+  const env = useMemo(() => {
+    if (!system) return null;
+    const chart = generateSystem(system);
+    return { ...chart, gates: makeGates(system.id) };
+  }, [system]);
+  const speeds = useMemo(() => flightProfile(ship?.stats.speed), [ship]);
+  const [hud, setHud] = useState(() => (env ? initialHud(env) : initialHud({ name: '', station: { name: '' }, planets: [] })));
+  const [logOpen, setLogOpen] = useState(false);
+  const [scene, setScene] = useState(() => ({ mode: 'space', planetId: null, envId: env?.id || '' }));
+  const onExitRef = useRef(onExit);
+  const playerRef = useRef(player);
+  const targetRef = useRef(null);
+  const onSceneRef = useRef(() => {});
+  onExitRef.current = onExit;
+  playerRef.current = player;
 
-  // M key handler
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.code === 'KeyM') {
-        document.exitPointerLock?.();
-        onExit();
+  if (env && scene.envId !== env.id) {
+    setScene({ mode: 'space', planetId: null, envId: env.id });
+  }
+
+  const onHud = useCallback((next) => {
+    setHud((prev) => {
+      for (const key of Object.keys(next)) {
+        if (prev[key] !== next[key]) return { ...prev, ...next };
       }
+      return prev;
+    });
+  }, []);
+
+  const onScene = useCallback((next) => {
+    setScene((prev) => {
+      if (prev.mode === next.mode && prev.planetId === next.planetId) return prev;
+      return { ...prev, mode: next.mode, planetId: next.planetId };
+    });
+  }, []);
+  onSceneRef.current = onScene;
+
+  const leave = useCallback(() => {
+    document.exitPointerLock?.();
+    onExitRef.current();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code === 'KeyM') leave();
+      if (e.code === 'KeyL') setLogOpen((open) => !open);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onExit]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [leave]);
+
+  if (!ship || !env) return null;
+
+  const depleted = player.depleted || [];
+  const ground = scene.mode === 'surface'
+    ? env.planets.find((planet) => planet.id === scene.planetId)
+    : null;
+  const sibling = ground ? env.planets.find((planet) => planet.id !== ground.id) : null;
+  const sky = ground ? surfaceSky(ground) : env.sky;
+  const discoveries = Object.entries(player.discoveries || {});
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div className={`flight-root${hud.pulse ? ' pulsing' : ''}`}>
       <Canvas
-        camera={{ fov: 65, near: 0.01, far: 200, position: [0, 1, 3] }}
-        style={{ width: '100%', height: '100%' }}
-        gl={{ antialias: true, alpha: false }}
+        dpr={[1, 1.5]}
+        camera={{ fov: 52, near: 0.12, far: 7000, position: [0, 8, 140] }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
-          gl.setClearColor('#06060c');
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.0;
+          gl.toneMappingExposure = 1.1;
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
-        <FlightScene ship={ship} systemId={player.system_id} />
+        <color attach="background" args={[sky.top]} />
+        <Suspense fallback={null}>
+          {ground ? (
+            <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} />
+          ) : (
+            <>
+              <hemisphereLight args={['#fff4ea', '#241820', 0.62]} />
+              <ambientLight intensity={0.32} color="#f7f1e8" />
+              <directionalLight position={[28, 46, 18]} intensity={0.85} color="#fff1df" />
+              <Sky sky={env.sky} />
+              <Starfield seed={hashString(env.id)} />
+              <Sun color={env.sky.star} />
+              <StationView position={env.station.position} />
+              <SpaceTraffic />
+              {env.planets.map((planet) => <Planet key={planet.id} planet={planet} />)}
+              {env.gates.map((gate) => <GateView key={gate.id} position={gate.position} />)}
+              <Belt rocks={env.belt} />
+              {env.deposits.filter((d) => !depleted.includes(d.id)).map((d) => (
+                <Deposit key={d.id} position={d.position} />
+              ))}
+            </>
+          )}
+          <InputBinder />
+          <TargetMarker targetRef={targetRef} />
+          <Pilot
+            key={env.id}
+            env={env}
+            ship={ship}
+            speeds={speeds}
+            playerRef={playerRef}
+            onExitRef={onExitRef}
+            onHud={onHud}
+            onSceneRef={onSceneRef}
+            targetRef={targetRef}
+          />
+        </Suspense>
       </Canvas>
-      <FlightHUD ship={ship} onExit={onExit} />
+      <div className="atmo-wash" style={{ opacity: hud.atmo, background: hud.atmoColor }} />
+      {logOpen && (
+        <div className="discovery-log">
+          <strong>Discoveries</strong>
+          {discoveries.length === 0 && <div>Nothing logged yet.</div>}
+          {discoveries.map(([id, entry]) => {
+            const systemName = SYSTEMS.find((item) => item.id === entry.systemId)?.name || '';
+            return (
+              <div key={id}>
+                {entry.name}
+                <span>{entry.biome}{systemName ? ` · ${systemName}` : ''}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <FlightHUD hud={hud} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
     </div>
   );
 }
