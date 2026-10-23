@@ -13,18 +13,18 @@ function LoginScreen() {
 
   return (
     <div className="login-screen">
-      <h1>SPACE ONLINE</h1>
-      <p className="subtitle">explore &middot; trade &middot; conquer</p>
+      <h1>Akari</h1>
+      <p className="subtitle">Online</p>
       <input
         type="text"
-        placeholder="Enter pilot name..."
+        placeholder="Pilot name"
         maxLength={20}
         autoFocus
         value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && handleLaunch()}
       />
-      <button onClick={handleLaunch}>LAUNCH</button>
+      <button onClick={handleLaunch}>Enter</button>
     </div>
   );
 }
