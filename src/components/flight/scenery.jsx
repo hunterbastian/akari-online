@@ -47,7 +47,7 @@ export function Sky({ sky }) {
   return (
     <mesh ref={mesh} rotation={[0, 0.6, 0]} frustumCulled={false}>
       <sphereGeometry args={[700, 48, 32]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} fog={false} />
     </mesh>
   );
 }
@@ -73,7 +73,7 @@ export function Starfield({ seed }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial color="#f6f1e8" size={1.35} sizeAttenuation={false} transparent opacity={0.8} depthWrite={false} />
+      <pointsMaterial color="#f6f1e8" size={1.35} sizeAttenuation={false} transparent opacity={0.8} depthWrite={false} fog={false} />
     </points>
   );
 }
@@ -160,7 +160,12 @@ export function TargetMarker({ targetRef }) {
 
   useFrame(({ camera }, dt) => {
     const target = targetRef.current;
-    if (!target || !group.current) return;
+    if (!group.current) return;
+    if (!target) {
+      group.current.visible = false;
+      return;
+    }
+    group.current.visible = true;
     _markerPos.set(target.position[0], target.position[1], target.position[2]);
     const dist = camera.position.distanceTo(_markerPos);
     const s = THREE.MathUtils.clamp(dist * 0.006, 0.5, 6.5);

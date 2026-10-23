@@ -1,0 +1,12 @@
+{
+  "name": "akari-asset-tools",
+  "private": true,
+  "type": "module",
+  "description": "Draco-compress glTF files exported by build_assets.py",
+  "dependencies": {
+    "@gltf-transform/core": "^4.2.1",
+    "@gltf-transform/extensions": "^4.2.1",
+    "@gltf-transform/functions": "^4.2.1",
+    "draco3dgltf": "^1.5.7"
+  }
+}

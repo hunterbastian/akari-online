@@ -1,6 +1,7 @@
-export default function FlightHUD({ hud, onExit }) {
+export default function FlightHUD({ hud, onExit, onLog }) {
   return (
     <div className="flight-hud">
+      <button type="button" className="hud-text-btn hud-log-btn" onClick={onLog}>Log</button>
       <button type="button" className="hud-text-btn" onClick={onExit}>Map</button>
       <div className="hud-top">{hud.systemName}</div>
       {hud.targetName && (
