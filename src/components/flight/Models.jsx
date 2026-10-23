@@ -16,10 +16,10 @@ const ACCENT = {
 
 const FILES = [
   'ship', 'hauler', 'freighter', 'station', 'gate', 'pilot',
-  'rock_a', 'rock_b', 'crystal', 'tree', 'flora', 'shard', 'spire', 'deposit', 'monolith',
+  'rock_a', 'rock_b', 'crystal', 'tree', 'flora', 'shard', 'spire', 'arch', 'deposit', 'monolith',
 ];
 
-function prepare(source, accent) {
+function prepare(source, accent, shadow = false) {
   const clone = source.clone(true);
   const copies = new Map();
   clone.traverse((node) => {
@@ -39,15 +39,15 @@ function prepare(source, accent) {
       return copies.get(material.uuid);
     });
     node.material = Array.isArray(node.material) ? next : next[0];
-    node.castShadow = false;
-    node.receiveShadow = false;
+    node.castShadow = shadow;
+    node.receiveShadow = shadow;
   });
   return clone;
 }
 
-function useModel(name, accent) {
+function useModel(name, accent, shadow = false) {
   const gltf = useGLTF(`/models/${name}.glb`, DRACO, false);
-  return useMemo(() => prepare(gltf.scene, accent), [gltf, accent]);
+  return useMemo(() => prepare(gltf.scene, accent, shadow), [gltf, accent, shadow]);
 }
 
 export function shipVariant(manufacturer) {
@@ -118,7 +118,7 @@ export function GateView({ position }) {
 }
 
 export function Prop({ kind, position, rotation, scale }) {
-  const scene = useModel(kind);
+  const scene = useModel(kind, undefined, true);
   return <primitive object={scene} position={position} rotation={rotation} scale={scale} />;
 }
 

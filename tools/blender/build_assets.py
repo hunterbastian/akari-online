@@ -608,6 +608,18 @@ def build_deposit():
     clear_scene()
 
 
+def build_arch():
+    parts = []
+    parts.append(box('Left', (-0.95, 0, 1.25), (0.48, 0.42, 2.5), MAT['Rock'], rotation=(0, 0, 0.14)))
+    parts.append(box('Right', (0.95, 0, 1.25), (0.48, 0.42, 2.5), MAT['Rock'], rotation=(0, 0, -0.14)))
+    parts.append(box('Lintel', (0, 0, 2.55), (2.35, 0.5, 0.42), MAT['Rock']))
+    parts.append(box('Key', (0, 0.08, 2.28), (0.32, 0.22, 0.62), MAT['Accent']))
+    obj = join(parts, 'Arch')
+    sit_on_floor(obj)
+    export_glb([obj], 'arch.glb')
+    clear_scene()
+
+
 def build_monolith():
     parts = []
     parts.append(box('Slab', (0, 0, 1.7), (1.15, 0.28, 3.4), MAT['Dark']))
@@ -638,6 +650,7 @@ def main():
     build_flora()
     build_shard()
     build_spire()
+    build_arch()
     build_deposit()
     build_monolith()
     with open(META_PATH, 'w', encoding='utf-8') as handle:

@@ -845,6 +845,7 @@ export default function FlightView({ player, onExit }) {
   const ground = scene.mode === 'surface'
     ? env.planets.find((planet) => planet.id === scene.planetId)
     : null;
+  const sibling = ground ? env.planets.find((planet) => planet.id !== ground.id) : null;
   const sky = ground ? surfaceSky(ground) : env.sky;
   const discoveries = Object.entries(player.discoveries || {});
 
@@ -856,13 +857,15 @@ export default function FlightView({ player, onExit }) {
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.06;
+          gl.toneMappingExposure = 1.1;
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
         <color attach="background" args={[sky.top]} />
         <Suspense fallback={null}>
           {ground ? (
-            <SurfaceWorld planet={ground} depleted={depleted} />
+            <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} />
           ) : (
             <>
               <hemisphereLight args={['#fff4ea', '#241820', 0.62]} />

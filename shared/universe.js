@@ -3,13 +3,14 @@
 
 const SYLLABLES = ['ae', 'ka', 'vel', 'no', 'sy', 'ir', 'um', 'or', 'lu', 'dra', 'xe', 'mi', 'sol', 'qua', 'rin', 'va', 'el', 'na', 'os', 'the'];
 
+// Four ground colors, low to high, plus the rim that wraps the planet from orbit.
 export const BIOMES = [
-  { id: 'lush', label: 'Lush', relief: 0.078, colors: ['#2c6b42', '#7eb85a', '#d5e7a4'], atmosphere: '#b9f3cf', resources: ['food', 'medicine'] },
-  { id: 'ocean', label: 'Ocean', relief: 0.042, colors: ['#1a4f6e', '#3c92ab', '#d7f0ea'], atmosphere: '#b7e4ff', resources: ['food', 'medicine'] },
-  { id: 'desert', label: 'Desert', relief: 0.07, colors: ['#c47848', '#e6b15c', '#f4e3c4'], atmosphere: '#ffe0b5', resources: ['ore', 'fuel'] },
-  { id: 'ice', label: 'Ice', relief: 0.05, colors: ['#3d7ea8', '#9fd4ef', '#f4fbff'], atmosphere: '#e7f6ff', resources: ['ore', 'medicine'] },
-  { id: 'volcanic', label: 'Volcanic', relief: 0.09, colors: ['#2c2624', '#8d4034', '#e07a48'], atmosphere: '#ffb199', resources: ['ore', 'scrap'] },
-  { id: 'anomalous', label: 'Anomalous', relief: 0.08, colors: ['#5b3e78', '#c46bd4', '#f0d2f4'], atmosphere: '#f0d0ff', resources: ['luxuries', 'scrap'] },
+  { id: 'lush', label: 'Lush', relief: 0.05, colors: ['#3d7a4e', '#8aaa58', '#d4c47a', '#f6ead0'], atmosphere: '#f0d2a4', ring: '#e4c98a', moon: '#f6ead4', resources: ['food', 'medicine'] },
+  { id: 'ocean', label: 'Ocean', relief: 0.03, colors: ['#1e6a88', '#3eb0c4', '#c8eee4', '#f6d0b4'], atmosphere: '#f0a888', ring: '#f2d0b6', moon: '#f7e6d6', resources: ['food', 'medicine'] },
+  { id: 'desert', label: 'Desert', relief: 0.042, colors: ['#c45a38', '#e08848', '#f2c98a', '#f8e6c8'], atmosphere: '#2f8f8a', ring: '#e8b48a', moon: '#f4e0c8', resources: ['ore', 'fuel'] },
+  { id: 'ice', label: 'Ice', relief: 0.036, colors: ['#7ecfe2', '#c5eef4', '#f2fafa', '#f6e0d4'], atmosphere: '#f0b5a4', ring: '#f6d8cc', moon: '#f8eee8', resources: ['ore', 'medicine'] },
+  { id: 'volcanic', label: 'Volcanic', relief: 0.058, colors: ['#5c2a22', '#c45a38', '#ee7840', '#f6c4a0'], atmosphere: '#e08868', ring: '#f0a878', moon: '#ead2c2', resources: ['ore', 'scrap'] },
+  { id: 'anomalous', label: 'Anomalous', relief: 0.048, colors: ['#5a3488', '#c070c8', '#f0c0dc', '#f8e6d4'], atmosphere: '#e6b48a', ring: '#e8c8a8', moon: '#f4dce8', resources: ['luxuries', 'scrap'] },
 ];
 
 const LUMINOUS = ['lush', 'ocean', 'desert', 'ice', 'anomalous'];
@@ -124,7 +125,7 @@ export function generateSystem(system) {
       (rng() - 0.5) * dist * 0.05,
       Math.sin(angle) * dist,
     ];
-    const radius = 15 + rng() * 8;
+    const radius = 24 + rng() * 10;
     const id = `${system.id}:${i}`;
     const resources = biome.resources.slice();
     const rings = rng() > 0.64;
@@ -139,6 +140,8 @@ export function generateSystem(system) {
       radius,
       colors: biome.colors,
       atmosphere: biome.atmosphere,
+      ring: biome.ring,
+      moon: biome.moon,
       rings,
       ringTilt: [0.35 + rng() * 0.45, rng() * Math.PI, (rng() - 0.5) * 0.35],
       seed: (hashString(id) % 997) / 97,
