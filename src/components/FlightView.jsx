@@ -879,8 +879,8 @@ function Pilot({
           if (surface.collectible) prompt = 'Collect  ·  E';
           else if (landed.current) prompt = 'Exit  ·  V';
         }
-        const haze = THREE.MathUtils.clamp((group.position.y - 16) / 200, 0, 0.5);
-        atmo = onFoot.current ? haze * 0.15 : haze;
+        const haze = THREE.MathUtils.clamp((group.position.y - 52) / 280, 0, 0.22);
+        atmo = onFoot.current ? haze * 0.04 : haze;
         atmoColor = skyState.fogHex || sky?.fog || '#ffffff';
       } else if (view.space) {
         const { target, dist, docking, collectible, closest, closestPlanet } = view.space;
@@ -1033,13 +1033,13 @@ export default function FlightView({ player, onExit }) {
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMapping = THREE.AgXToneMapping;
-          gl.toneMappingExposure = 1.22;
+          gl.toneMappingExposure = 1.06;
           gl.shadowMap.enabled = true;
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
         <color attach="background" args={[sky.top]} />
-        <Grade lite={lite} />
+        <Grade lite={lite} contact={!!ground} />
         <Suspense fallback={null}>
           {ground ? (
             <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} lite={lite} />

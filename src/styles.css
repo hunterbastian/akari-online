@@ -420,7 +420,7 @@ button, input { font-family: inherit; }
   inset: 0;
   pointer-events: none;
   z-index: 1;
-  background: radial-gradient(ellipse at center, transparent 64%, rgba(12, 10, 16, 0.22) 100%);
+  background: radial-gradient(ellipse at center, transparent 72%, rgba(8, 10, 16, 0.16) 100%);
 }
 
 .flight-root.pulsing::before {

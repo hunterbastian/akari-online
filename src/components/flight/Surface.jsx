@@ -7,8 +7,9 @@ import {
   AtmosphereDome,
   FollowSun,
   SUN_DIR,
+  SkyEnvironment,
   atmosphereOf,
-  tintedFog,
+  dressGround,
 } from './atmosphere.jsx';
 
 const SIZE = 520;
@@ -49,7 +50,7 @@ const waterFragment = `
     vec3 col = mix(uColor, uSky, fres * 0.72);
     col += uSun * spec * 0.7;
     float dist = length(cameraPosition - vWorld);
-    float fogFactor = smoothstep(48.0, 280.0, dist);
+    float fogFactor = smoothstep(160.0, 640.0, dist);
     float sunward = pow(max(dot(normalize(vWorld - cameraPosition), normalize(vec3(0.821, 0.5, 0.303))), 0.0), 1.4);
     col = mix(col, mix(uSky, uSun, sunward * 0.35), fogFactor);
     gl_FragColor = vec4(col, mix(0.82, 0.55, fres));
@@ -63,6 +64,7 @@ function buildTerrain(planet) {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
+  const ao = new Float32Array(pos.count);
   const stops = (planet.colors || []).map((hex) => new THREE.Color(hex));
   while (stops.length < 4) stops.push(stops[stops.length - 1] || new THREE.Color('#d9d3c8'));
   const bands = BANDS[planet.biome] || BANDS.lush;
@@ -79,19 +81,38 @@ function buildTerrain(planet) {
     colors[i * 3 + 1] = chosen.g;
     colors[i * 3 + 2] = chosen.b;
   }
+  const stride = SEGMENTS + 1;
+  for (let i = 0; i < pos.count; i += 1) {
+    const col = i % stride;
+    const row = Math.floor(i / stride);
+    const h = pos.getY(i);
+    let bend = 0;
+    let samples = 0;
+    const take = (c, r) => {
+      if (c < 0 || r < 0 || c >= stride || r > SEGMENTS) return;
+      bend += pos.getY(r * stride + c) - h;
+      samples += 1;
+    };
+    take(col - 1, row);
+    take(col + 1, row);
+    take(col, row - 1);
+    take(col, row + 1);
+    const higher = samples ? Math.max(0, bend / samples) : 0;
+    ao[i] = THREE.MathUtils.clamp(1 - higher * 0.085, 0.5, 1);
+  }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('ao', new THREE.BufferAttribute(ao, 1));
   geo.computeVertexNormals();
   return geo;
 }
 
-function Terrain({ planet, air }) {
+function Terrain({ planet, air, lite }) {
   const geometry = useMemo(() => buildTerrain(planet), [planet]);
-  const material = useMemo(() => tintedFog(new THREE.MeshStandardMaterial({
+  const material = useMemo(() => dressGround(new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.86,
+    roughness: 0.84,
     metalness: 0,
-    flatShading: true,
-  }), air), [air]);
+  }), air, { crease: true, lite }), [air, lite]);
   useEffect(() => () => {
     geometry.dispose();
     material.dispose();
@@ -185,23 +206,24 @@ export function SurfaceWorld({ planet, depleted, sibling, lite = false }) {
 
   return (
     <group>
+      <SkyEnvironment air={air} lite={lite} />
       <AtmosphereDome air={air} lite={lite} />
       <hemisphereLight args={[air.hemiSky, air.hemiGround, air.hemiIntensity]} />
-      <ambientLight intensity={0.16} color={air.horizon} />
+      <ambientLight intensity={0.07} color={air.zenith} />
       <FollowSun air={air} lite={lite} />
       <mesh position={moon}>
         <sphereGeometry args={[18, 20, 14]} />
         <meshBasicMaterial color={air.moon} fog={false} />
       </mesh>
       <HorizonBody radius={168} color={horizonColor} rim={horizonRim} />
-      <Terrain planet={planet} air={air} />
+      <Terrain planet={planet} air={air} lite={lite} />
       {water != null && <Water level={water} air={air} />}
       {layout.props.map((prop, index) => (
-        <Prop key={`${prop.kind}-${index}`} kind={prop.kind} position={prop.position} rotation={prop.rotation} scale={prop.scale} />
+        <Prop key={`${prop.kind}-${index}`} kind={prop.kind} position={prop.position} rotation={prop.rotation} scale={prop.scale} air={air} lite={lite} />
       ))}
-      <Prop kind="monolith" position={layout.monolith.position} rotation={layout.monolith.rotation} scale={layout.monolith.scale} />
+      <Prop kind="monolith" position={layout.monolith.position} rotation={layout.monolith.rotation} scale={layout.monolith.scale} air={air} lite={lite} />
       {deposits.map((deposit) => (
-        <Prop key={deposit.id} kind="deposit" position={deposit.position} rotation={[0, 0.4, 0]} scale={1.35} />
+        <Prop key={deposit.id} kind="deposit" position={deposit.position} rotation={[0, 0.4, 0]} scale={1.35} air={air} lite={lite} />
       ))}
       <AltitudeFog air={air} />
     </group>

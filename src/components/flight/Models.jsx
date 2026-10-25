@@ -3,6 +3,9 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import modelMeta from './modelMeta.json';
+import { dressGround } from './atmosphere.jsx';
+
+const ROCKS = new Set(['rock_a', 'rock_b', 'arch', 'shard', 'spire', 'monolith']);
 
 const DRACO = '/draco/';
 
@@ -19,7 +22,7 @@ const FILES = [
   'rock_a', 'rock_b', 'crystal', 'tree', 'flora', 'shard', 'spire', 'arch', 'deposit', 'monolith',
 ];
 
-function prepare(source, accent, shadow = false) {
+function prepare(source, accent, shadow = false, paint = false) {
   const clone = source.clone(true);
   const copies = new Map();
   clone.traverse((node) => {
@@ -33,6 +36,11 @@ function prepare(source, accent, shadow = false) {
           copy.emissive = copy.color.clone();
           copy.emissiveIntensity = copy.name === 'Engine' ? 2.6 : 1.6;
           copy.toneMapped = false;
+        } else if (paint && copy.isMeshStandardMaterial) {
+          const accentPaint = copy.name === 'Accent';
+          copy.metalness = Math.max(copy.metalness || 0, accentPaint ? 0.1 : 0.28);
+          copy.roughness = Math.min(Math.max(copy.roughness ?? 0.5, 0.24), accentPaint ? 0.55 : 0.42);
+          copy.envMapIntensity = accentPaint ? 0.4 : 0.8;
         }
         copies.set(material.uuid, copy);
       }
@@ -45,9 +53,9 @@ function prepare(source, accent, shadow = false) {
   return clone;
 }
 
-function useModel(name, accent, shadow = false) {
+function useModel(name, accent, shadow = false, paint = false) {
   const gltf = useGLTF(`/models/${name}.glb`, DRACO, false);
-  return useMemo(() => prepare(gltf.scene, accent, shadow), [gltf, accent, shadow]);
+  return useMemo(() => prepare(gltf.scene, accent, shadow, paint), [gltf, accent, shadow, paint]);
 }
 
 export function shipVariant(manufacturer) {
@@ -60,7 +68,7 @@ export function shipAccent(manufacturer) {
 
 export function ShipView({ manufacturer = 'drift', thrustRef, pulseRef }) {
   const variant = shipVariant(manufacturer);
-  const scene = useModel(variant, shipAccent(manufacturer), true);
+  const scene = useModel(variant, shipAccent(manufacturer), true, true);
   const flames = useRef([]);
   const engines = variant === 'hauler' ? modelMeta.hauler.engines : modelMeta.ship.engines;
 
@@ -117,8 +125,17 @@ export function GateView({ position }) {
   );
 }
 
-export function Prop({ kind, position, rotation, scale }) {
+export function Prop({ kind, position, rotation, scale, air, lite = false }) {
   const scene = useModel(kind, undefined, true);
+  useLayoutEffect(() => {
+    if (!air || !ROCKS.has(kind)) return undefined;
+    scene.traverse((node) => {
+      if (!node.isMesh || !node.material?.isMeshStandardMaterial) return;
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach((material) => dressGround(material, air, { lite }));
+    });
+    return undefined;
+  }, [scene, air, kind, lite]);
   return <primitive object={scene} position={position} rotation={rotation} scale={scale} />;
 }
 
