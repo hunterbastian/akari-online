@@ -18,6 +18,8 @@ import { GateView, PilotFigure, ShipView, SpaceTraffic, StationView } from './fl
 import { SurfaceWorld } from './flight/Surface';
 import { createFoot, resetFoot, stepFoot } from './flight/foot';
 import { ensureFootAudio, playJump, playLand, playSlide, playStep } from './flight/footAudio';
+import TouchControls from './flight/TouchControls';
+import { consumeLook, releaseActions, takeEdge, touch } from './flight/touch';
 import Planet from './flight/Planet';
 
 const keys = Object.create(null);
@@ -304,7 +306,14 @@ function Pilot({
             slide: footState.current.slide,
             eye: footState.current.eye,
             roll: footState.current.view?.roll ?? 0,
+            jumps: footState.current.jumps,
           } : null,
+          touch: {
+            enabled: touch.enabled,
+            sprint: touch.sprint,
+            axisX: touch.axisX,
+            axisY: touch.axisY,
+          },
           speed: Math.round(velocity.current.length()),
           planet: surfacePlanet.current && {
             name: surfacePlanet.current.name,
@@ -358,6 +367,7 @@ function Pilot({
       onFoot.current = true;
       footDrive.current = null;
       jumpHeld.current = false;
+      releaseActions();
       mouse.dx = 0;
       mouse.dy = 0;
       if (personRef.current) personRef.current.visible = false;
@@ -428,7 +438,15 @@ function Pilot({
       }
     }
 
+    if (touch.enabled) {
+      const look = consumeLook();
+      mouse.dx += look.x;
+      mouse.dy += look.y;
+    }
+
     if (portrait.current) {
+      mouse.dx = 0;
+      mouse.dy = 0;
       _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
       _out.set(1.15, 0.82, -0.7).applyQuaternion(group.quaternion).setLength(5.5);
       _cam.copy(group.position).add(_out);
@@ -463,6 +481,7 @@ function Pilot({
         pitch += mouse.dy * 0.0022;
         if (keys.KeyA || keys.ArrowLeft) yaw += 1.15 * step;
         if (keys.KeyD || keys.ArrowRight) yaw -= 1.15 * step;
+        if (touch.enabled && Math.abs(touch.axisX) > 0.12) yaw -= touch.axisX * 1.15 * step;
         group.rotateY(yaw);
         group.rotateX(pitch);
         _euler.setFromQuaternion(group.quaternion, 'YXZ');
@@ -481,10 +500,12 @@ function Pilot({
       if (hullRef.current) hullRef.current.rotation.z = bank.current;
 
       _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
-      const boosting = !!(keys.ShiftLeft || keys.ShiftRight);
+      const boosting = !!(keys.ShiftLeft || keys.ShiftRight || (touch.enabled && touch.boostHeld));
       let throttle = 0;
       if (keys.KeyW || keys.ArrowUp) throttle += 1;
       if (keys.KeyS || keys.ArrowDown) throttle -= 1;
+      if (touch.enabled && touch.axisY > 0.12) throttle += touch.axisY;
+      else if (touch.enabled && touch.axisY < -0.12) throttle -= 1;
       thrustRef.current = pulsing.current ? 1 : Math.max(0, throttle) * (boosting ? 1 : 0.65);
 
       let speed = 0;
@@ -499,7 +520,7 @@ function Pilot({
       } else {
         velocity.current.multiplyScalar(Math.exp(-0.32 * step));
       }
-      if (keys.Space) velocity.current.y += 16 * step;
+      if (keys.Space || (touch.enabled && touch.liftHeld)) velocity.current.y += 16 * step;
       if (keys.ControlLeft || keys.ControlRight) velocity.current.y -= 16 * step;
 
       group.position.addScaledVector(velocity.current, step);
@@ -592,6 +613,7 @@ function Pilot({
       const pitch = mouse.dy * 0.0018;
       if (keys.KeyA || keys.ArrowLeft) yaw += 1.2 * step;
       if (keys.KeyD || keys.ArrowRight) yaw -= 1.2 * step;
+      if (touch.enabled && Math.abs(touch.axisX) > 0.12) yaw -= touch.axisX * 1.2 * step;
       group.rotateY(yaw);
       group.rotateX(pitch);
       _euler.setFromQuaternion(group.quaternion, 'YXZ');
@@ -607,10 +629,13 @@ function Pilot({
       if (hullRef.current) hullRef.current.rotation.z = bank.current;
 
       _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
-      const boosting = !!(keys.ShiftLeft || keys.ShiftRight);
+      const boosting = !!(keys.ShiftLeft || keys.ShiftRight || (touch.enabled && touch.boostHeld));
+      const lifting = !!(keys.Space || (touch.enabled && touch.liftHeld));
       let throttle = 0;
       if (keys.KeyW || keys.ArrowUp) throttle += 1;
       if (keys.KeyS || keys.ArrowDown) throttle -= 1;
+      if (touch.enabled && touch.axisY > 0.12) throttle += touch.axisY;
+      else if (touch.enabled && touch.axisY < -0.12) throttle -= 1;
       thrustRef.current = Math.max(0, throttle) * (boosting ? 1 : 0.7);
 
       const cruise = speeds.cruise * 0.85;
@@ -626,19 +651,19 @@ function Pilot({
       }
 
       if (!landed.current) velocity.current.y -= 7 * step;
-      if (keys.Space) velocity.current.y += 22 * step;
+      if (lifting) velocity.current.y += 22 * step;
       if (keys.ControlLeft || keys.ControlRight) velocity.current.y -= 18 * step;
 
       const groundHere = floorAt(group.position.x, group.position.z, planet);
       const low = group.position.y - groundHere < 6;
-      if ((keys.KeyW || keys.Space) && low) velocity.current.y += 16 * step;
+      if ((keys.KeyW || keys.Space || (touch.enabled && (touch.axisY > 0.12 || touch.liftHeld))) && low) velocity.current.y += 16 * step;
       if (boosting && throttle > 0 && low) velocity.current.y += 8 * step;
       velocity.current.y = THREE.MathUtils.clamp(velocity.current.y, -32, 36);
 
       group.position.addScaledVector(velocity.current, step);
 
       const horizontal = Math.hypot(velocity.current.x, velocity.current.z);
-      const cushion = (throttle > 0 || keys.Space || horizontal > 8) ? 2.35 : 0.42;
+      const cushion = (throttle > 0 || lifting || horizontal > 8) ? 2.35 : 0.42;
       const floor = floorAt(group.position.x, group.position.z, planet) + cushion;
       if (group.position.y < floor) {
         group.position.y = floor;
@@ -656,14 +681,15 @@ function Pilot({
       }
 
       const clearance = group.position.y - floorAt(group.position.x, group.position.z, planet);
-      if (clearance < 1.15 && horizontal < 5 && throttle <= 0 && !keys.Space) {
+      if (clearance < 1.15 && horizontal < 5 && throttle <= 0 && !lifting) {
         landed.current = true;
         velocity.current.multiplyScalar(Math.exp(-2.2 * step));
-      } else if (throttle > 0 || keys.Space || clearance > 3.2) {
+      } else if (throttle > 0 || lifting || clearance > 3.2) {
         landed.current = false;
       }
 
-      if (consume('KeyV') && landed.current) beginFoot(planet, _euler.y);
+      const exitShip = consume('KeyV') || (touch.enabled && takeEdge('interactEdge'));
+      if (exitShip && landed.current) beginFoot(planet, _euler.y);
 
       if (!wasLanded.current && landed.current) landDip.current = 0.16;
       wasLanded.current = landed.current;
@@ -697,7 +723,21 @@ function Pilot({
       if (drive) {
         if (drive.jump && !jumpHeld.current) jump = true;
         jumpHeld.current = !!drive.jump;
+      } else if (touch.enabled && takeEdge('jumpEdge')) {
+        jump = true;
       }
+      const touchOn = touch.enabled && !drive;
+      const crouchTouch = touchOn && (touch.crouchHeld || touch.crouchPulse);
+      if (touchOn && !touch.crouchHeld) touch.crouchPulse = false;
+      const keyForward = !!(keys.KeyW || keys.ArrowUp);
+      const keyBack = !!(keys.KeyS || keys.ArrowDown);
+      const keyLeft = !!(keys.KeyA || keys.ArrowLeft);
+      const keyRight = !!(keys.KeyD || keys.ArrowRight);
+      const stickOn = touchOn && (touch.sprint || Math.abs(touch.axisX) > 0.001 || Math.abs(touch.axisY) > 0.001);
+      const axis = stickOn ? {
+        x: THREE.MathUtils.clamp(touch.axisX + (keyRight ? 1 : 0) - (keyLeft ? 1 : 0), -1, 1),
+        y: THREE.MathUtils.clamp(touch.axisY + (keyForward ? 1 : 0) - (keyBack ? 1 : 0), -1, 1),
+      } : null;
       const input = drive ? {
         forward: drive.forward > 0,
         back: drive.forward < 0 || drive.back,
@@ -710,16 +750,17 @@ function Pilot({
         mouseX: 0,
         mouseY: 0,
       } : {
-        forward: !!(keys.KeyW || keys.ArrowUp),
-        back: !!(keys.KeyS || keys.ArrowDown),
-        left: !!(keys.KeyA || keys.ArrowLeft),
-        right: !!(keys.KeyD || keys.ArrowRight),
-        sprint: !!(keys.ShiftLeft || keys.ShiftRight),
-        crouch: !!(keys.ControlLeft || keys.ControlRight),
+        forward: keyForward || (stickOn && (touch.axisY > 0.12 || touch.sprint)),
+        back: keyBack || (stickOn && touch.axisY < -0.12),
+        left: keyLeft || (stickOn && touch.axisX < -0.12),
+        right: keyRight || (stickOn && touch.axisX > 0.12),
+        sprint: !!(keys.ShiftLeft || keys.ShiftRight) || (touchOn && touch.sprint),
+        crouch: !!(keys.ControlLeft || keys.ControlRight) || crouchTouch,
         jump,
-        holdJump: !!keys.Space,
+        holdJump: !!keys.Space || (touchOn && touch.jumpHeld),
         mouseX: mouse.dx,
         mouseY: mouse.dy,
+        axis,
       };
       mouse.dx = 0;
       mouse.dy = 0;
@@ -742,10 +783,12 @@ function Pilot({
       syncMotes(motesRef.current, foot);
 
       const shipDist = Math.hypot(foot.pos.x - group.position.x, foot.pos.z - group.position.z);
-      if (consume('KeyV') && shipDist < 7) {
+      const board = consume('KeyV') || (touch.enabled && takeEdge('interactEdge'));
+      if (board && shipDist < 7) {
         onFoot.current = false;
         footDrive.current = null;
         camReady.current = false;
+        releaseActions();
       }
 
       const collectible = nearestDeposit(layout.deposits, 4.5, foot.pos);
@@ -868,6 +911,9 @@ function Pilot({
         atmoColor,
         locked: document.pointerLockElement === gl.domElement,
         onFoot: onFoot.current,
+        canBoard: !!(onFoot.current && view.foot && view.foot.shipDist < 7),
+        canExit: mode.current === 'surface' && landed.current && !onFoot.current,
+        touch: touch.enabled,
       });
     }
   });
@@ -900,6 +946,9 @@ function initialHud(env) {
     atmoColor: 'transparent',
     locked: false,
     onFoot: false,
+    canBoard: false,
+    canExit: false,
+    touch: false,
   };
 }
 
@@ -1033,6 +1082,7 @@ export default function FlightView({ player, onExit }) {
           })}
         </div>
       )}
+      <TouchControls onFoot={hud.onFoot} canBoard={hud.canBoard} canExit={hud.canExit} />
       <FlightHUD hud={hud} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
     </div>
   );

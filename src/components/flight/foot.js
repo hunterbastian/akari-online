@@ -333,10 +333,17 @@ function substep(foot, dt, input, planet, crouchEdge) {
   _forward.set(-Math.sin(foot.yaw), 0, -Math.cos(foot.yaw));
   _right.set(Math.cos(foot.yaw), 0, -Math.sin(foot.yaw));
   _wish.set(0, 0, 0);
-  if (input.forward) _wish.add(_forward);
-  if (input.back) _wish.sub(_forward);
-  if (input.right) _wish.add(_right);
-  if (input.left) _wish.sub(_right);
+  let analog = 1;
+  if (input.axis) {
+    _wish.addScaledVector(_right, input.axis.x || 0);
+    _wish.addScaledVector(_forward, input.axis.y || 0);
+    analog = Math.min(1, _wish.length());
+  } else {
+    if (input.forward) _wish.add(_forward);
+    if (input.back) _wish.sub(_forward);
+    if (input.right) _wish.add(_right);
+    if (input.left) _wish.sub(_right);
+  }
   const moving = _wish.lengthSq() > 0.0001;
   if (moving) _wish.normalize();
 
@@ -408,6 +415,7 @@ function substep(foot, dt, input, planet, crouchEdge) {
     if (input.crouch || foot.slide > 0) wishSpeed = FOOT.crouchSpeed;
     else if (sprintMove) wishSpeed = FOOT.sprintSpeed;
     else wishSpeed = FOOT.walkSpeed;
+    if (input.axis && !sprintMove) wishSpeed *= analog;
   }
   const airCap = input.sprint || foot.sprintLook ? FOOT.airCap : FOOT.walkSpeed + 0.35;
   moveHorizontal(foot, dt, _wish, moving, wishSpeed, sprintMove, airCap);

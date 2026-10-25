@@ -46,6 +46,7 @@ export default function GameScreen({ state }) {
           Mouse steers. W flies, S brakes, Shift boosts. Tab selects a target, R pulses.
           Fly into a world to land. V steps out: Shift sprints, Space jumps again in the air, Ctrl crouches and slides. Space climbs back to orbit.
           C scans, E collects, L opens the log, F docks.
+          On a phone the left thumb moves and the right thumb looks.
         </p>
 
         <div className="panel-title">Planets</div>
