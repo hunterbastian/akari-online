@@ -559,29 +559,36 @@ function Pilot({
 
       if (exitHold.current > 0) exitHold.current -= step;
 
-      if (closestPlanet) {
-        _body.set(closestPlanet.position[0], closestPlanet.position[1], closestPlanet.position[2]);
-        _radial.copy(group.position).sub(_body);
-        const center = _radial.length() || 0.001;
-        _radial.multiplyScalar(1 / center);
-        const closing = -velocity.current.dot(_radial);
-        const dive = closest < 8 || (closest < 15 && closing > 6);
-        if (exitHold.current <= 0 && dive) {
-          enterSurface(closestPlanet, 96, 22);
-          return;
-        }
-        if (closest < 3) {
-          group.position.copy(_body).addScaledVector(_radial, closestPlanet.radius + 3);
-          const into = velocity.current.dot(_radial);
-          if (into < 0) velocity.current.addScaledVector(_radial, -into);
-        }
-      }
-
       const docking = group.position.distanceTo(_body.set(
         env.station.position[0],
         env.station.position[1],
         env.station.position[2],
       )) < 36;
+
+      // Prompt while the world is still ahead. Descent starts once the haze is the view,
+      // including a slow or stopped approach that used to die outside the old 8-unit gate.
+      const approach = closestPlanet ? Math.max(48, closestPlanet.radius * 2.6) : 0;
+      const committed = closestPlanet ? closestPlanet.radius * 1.15 : 0;
+      const canLand = !!(closestPlanet && closest < approach && exitHold.current <= 0);
+      const landKey = canLand && !docking && consume('KeyF');
+      const landTouch = canLand && touch.enabled && takeEdge('landEdge');
+      if (canLand && (closest < committed || landKey || landTouch)) {
+        enterSurface(closestPlanet, 96, 22);
+        return;
+      }
+      if (!canLand && touch.enabled) takeEdge('landEdge');
+
+      if (closestPlanet) {
+        _body.set(closestPlanet.position[0], closestPlanet.position[1], closestPlanet.position[2]);
+        _radial.copy(group.position).sub(_body);
+        const center = _radial.length() || 0.001;
+        _radial.multiplyScalar(1 / center);
+        if (closest < 3 && exitHold.current > 0) {
+          group.position.copy(_body).addScaledVector(_radial, closestPlanet.radius + 3);
+          const into = velocity.current.dot(_radial);
+          if (into < 0) velocity.current.addScaledVector(_radial, -into);
+        }
+      }
 
       const collectible = nearestDeposit(env.deposits, 16);
 
@@ -595,7 +602,7 @@ function Pilot({
       const camDist = pulsing.current ? 11.2 : boosting ? 9.2 : 7.6;
       _cam.copy(group.position).addScaledVector(_up, 1.15).addScaledVector(_forward, -camDist);
       chase(step, camDist === 11.2 ? 68 : boosting ? 60 : 52, 28);
-      view.space = { target, dist, docking, collectible, closest, closestPlanet, time };
+      view.space = { target, dist, docking, collectible, closest, closestPlanet, canLand, time };
     }
 
     function flySurface(step, time) {
@@ -883,10 +890,11 @@ function Pilot({
         atmo = onFoot.current ? haze * 0.04 : haze;
         atmoColor = skyState.fogHex || sky?.fog || '#ffffff';
       } else if (view.space) {
-        const { target, dist, docking, collectible, closest, closestPlanet } = view.space;
+        const { target, dist, docking, collectible, closest, closestPlanet, canLand } = view.space;
         targetName = target.name;
         targetDist = `${Math.max(0, Math.round(dist))} u`;
         if (docking) prompt = 'Dock  ·  F';
+        else if (canLand) prompt = touch.enabled ? 'Land' : 'Land  ·  F';
         else if (collectible) prompt = 'Collect  ·  E';
         else if (target.kind === 'gate' && dist < 110) prompt = 'Pulse to jump';
         if (closestPlanet) {
@@ -914,6 +922,7 @@ function Pilot({
         onFoot: onFoot.current,
         canBoard: !!(onFoot.current && view.foot && view.foot.shipDist < 7),
         canExit: mode.current === 'surface' && landed.current && !onFoot.current,
+        canLand: mode.current !== 'surface' && !!view.space?.canLand,
         touch: touch.enabled,
       });
     }
@@ -949,6 +958,7 @@ function initialHud(env) {
     onFoot: false,
     canBoard: false,
     canExit: false,
+    canLand: false,
     touch: false,
   };
 }
@@ -1092,7 +1102,7 @@ export default function FlightView({ player, onExit }) {
           })}
         </div>
       )}
-      <TouchControls onFoot={hud.onFoot} canBoard={hud.canBoard} canExit={hud.canExit} />
+      <TouchControls onFoot={hud.onFoot} canBoard={hud.canBoard} canExit={hud.canExit} canLand={hud.canLand} />
       <FlightHUD hud={hud} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
     </div>
   );

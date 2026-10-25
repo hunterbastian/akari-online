@@ -39,7 +39,7 @@ function HoldButton({ className, label, onDown, onUp }) {
   );
 }
 
-export default function TouchControls({ onFoot, canBoard, canExit }) {
+export default function TouchControls({ onFoot, canBoard, canExit, canLand }) {
   const [shown, setShown] = useState(prefersTouch);
   const [portrait, setPortrait] = useState(false);
   const [stickOn, setStickOn] = useState(false);
@@ -190,7 +190,7 @@ export default function TouchControls({ onFoot, canBoard, canExit }) {
 
   if (!shown) return null;
 
-  const action = canBoard ? 'Board' : canExit ? 'Exit' : '';
+  const action = canBoard ? 'Board' : canExit ? 'Exit' : canLand ? 'Land' : '';
 
   return (
     <div
@@ -211,7 +211,8 @@ export default function TouchControls({ onFoot, canBoard, canExit }) {
             className="act"
             label={action}
             onDown={() => {
-              touch.interactEdge = true;
+              if (action === 'Land') touch.landEdge = true;
+              else touch.interactEdge = true;
               tapHaptic(10);
             }}
           />
