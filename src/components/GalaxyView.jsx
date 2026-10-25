@@ -5,18 +5,10 @@ import * as THREE from 'three';
 import { SYSTEMS, JUMP_LANES, getConnections } from '../../shared/galaxy.js';
 import PlayerShip from './ShipModel';
 
-// Scale galaxy coordinates into 3D space
 const SCALE = 0.01;
-const sysPos = (sys) => [
-  (sys.x - 500) * SCALE,
-  (Math.random() * 60 - 30) * SCALE, // slight Y variation for depth
-  (sys.y - 400) * SCALE,
-];
 
-// Precompute stable positions
 const systemPositions = {};
 for (const sys of SYSTEMS) {
-  // Use a seeded-ish offset based on system id for consistent Y
   const hash = sys.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   systemPositions[sys.id] = [
     (sys.x - 500) * SCALE,
@@ -25,150 +17,94 @@ for (const sys of SYSTEMS) {
   ];
 }
 
-function Starfield({ count = 500 }) {
+const NEBULAE = [
+  { pos: [-1.3, 0.1, -0.15], scale: 3.1, color: '#e06a5c', opacity: 0.32 },
+  { pos: [1.45, -0.15, 0.3], scale: 3.3, color: '#b45ea8', opacity: 0.28 },
+  { pos: [0.1, 0.2, -1.45], scale: 2.8, color: '#2a8f86', opacity: 0.26 },
+  { pos: [-0.25, -0.3, 1.2], scale: 2.5, color: '#e6b089', opacity: 0.2 },
+];
+
+function Starfield({ count = 280 }) {
   const positions = useMemo(() => {
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 20;
-      arr[i * 3 + 1] = (Math.random() - 0.5) * 20;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 20;
+      arr[i * 3] = (Math.random() - 0.5) * 18;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 18;
     }
-    return arr;
-  }, [count]);
-
-  const sizes = useMemo(() => {
-    const arr = new Float32Array(count);
-    for (let i = 0; i < count; i++) arr[i] = Math.random() * 0.02 + 0.005;
     return arr;
   }, [count]);
 
   return (
     <points>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" array={positions} count={count} itemSize={3} />
-        <bufferAttribute attach="attributes-size" array={sizes} count={count} itemSize={1} />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.03} color="#c8c0aa" transparent opacity={0.6} sizeAttenuation />
+      <pointsMaterial size={0.018} color="#f3efe7" transparent opacity={0.7} sizeAttenuation depthWrite={false} />
     </points>
   );
 }
 
 function JumpLane({ from, to, isActive }) {
-  const points = useMemo(() => [
-    new THREE.Vector3(...from),
-    new THREE.Vector3(...to),
-  ], [from, to]);
-
+  const points = useMemo(() => [new THREE.Vector3(...from), new THREE.Vector3(...to)], [from, to]);
   return (
-    <>
-      {/* Outer black outline */}
-      <Line
-        points={points}
-        color="#000000"
-        lineWidth={4}
-      />
-      {/* Inner colored line */}
-      <Line
-        points={points}
-        color={isActive ? '#f0c040' : '#3a3528'}
-        lineWidth={isActive ? 2 : 1}
-        dashed
-        dashSize={0.05}
-        gapSize={0.03}
-        transparent
-        opacity={isActive ? 0.7 : 0.3}
-      />
-    </>
+    <Line
+      points={points}
+      color={isActive ? '#e6b089' : '#3c3844'}
+      lineWidth={1}
+      transparent
+      opacity={isActive ? 0.9 : 0.45}
+    />
   );
 }
 
-function SystemNode({ system, isCurrent, isReachable, onClick }) {
+function SystemNode({ system, isCurrent, isReachable }) {
   const meshRef = useRef();
-  const glowRef = useRef();
-  const outlineRef = useRef();
-  const baseSize = isCurrent ? 0.06 : 0.04;
+  const baseSize = isCurrent ? 0.07 : 0.045;
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (meshRef.current && isCurrent) {
-      const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.15;
+      const pulse = 1 + Math.sin(Date.now() * 0.0025) * 0.06;
       meshRef.current.scale.setScalar(pulse);
-      if (outlineRef.current) outlineRef.current.scale.setScalar(pulse);
-    }
-    if (glowRef.current) {
-      glowRef.current.rotation.z += delta * 0.3;
     }
   });
 
-  const color = new THREE.Color(system.color);
   const pos = systemPositions[system.id];
 
   return (
-    <group position={pos} onClick={onClick}>
-      {/* Glow sprite */}
-      {(isCurrent || isReachable) && (
-        <sprite ref={glowRef} scale={[0.3, 0.3, 0.3]}>
-          <spriteMaterial
-            color={system.color}
-            transparent
-            opacity={isCurrent ? 0.3 : 0.15}
-            blending={THREE.AdditiveBlending}
-          />
+    <group position={pos}>
+      {isCurrent && (
+        <sprite scale={[0.28, 0.28, 0.28]}>
+          <spriteMaterial color={system.color} transparent opacity={0.22} blending={THREE.AdditiveBlending} depthWrite={false} />
         </sprite>
       )}
-
-      {/* Black outline sphere */}
-      <mesh ref={outlineRef}>
-        <sphereGeometry args={[baseSize + 0.012, 16, 16]} />
-        <meshBasicMaterial color="#000000" />
-      </mesh>
-
-      {/* Main sphere */}
       <mesh ref={meshRef}>
-        <sphereGeometry args={[baseSize, 16, 16]} />
+        <sphereGeometry args={[baseSize, 20, 16]} />
         <meshStandardMaterial
           color={system.color}
           emissive={system.color}
-          emissiveIntensity={isCurrent ? 0.5 : (isReachable ? 0.2 : 0.05)}
+          emissiveIntensity={isCurrent ? 0.55 : isReachable ? 0.22 : 0.05}
           transparent
-          opacity={isCurrent ? 1 : (isReachable ? 0.85 : 0.35)}
-          roughness={0.4}
-          metalness={0.1}
+          opacity={isCurrent ? 1 : isReachable ? 0.92 : 0.38}
+          roughness={0.45}
         />
       </mesh>
-
-      {/* Cel-shade highlight */}
-      <mesh position={[-baseSize * 0.2, baseSize * 0.25, baseSize * 0.3]}>
-        <sphereGeometry args={[baseSize * 0.35, 8, 8]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.15} />
-      </mesh>
-
-      {/* Label */}
-      <Billboard position={[0, -baseSize - 0.04, 0]}>
+      <Billboard position={[0, -baseSize - 0.045, 0]}>
         <Text
-          fontSize={0.03}
-          color={isCurrent ? '#ffffff' : (isReachable ? '#cccccc' : '#666666')}
+          fontSize={0.028}
+          color={isCurrent ? '#f4efe6' : isReachable ? '#d9d3c8' : '#7d786f'}
           anchorX="center"
           anchorY="top"
-          font="/fonts/Geist-Bold.woff"
-          outlineWidth={0.003}
-          outlineColor="#000000"
+          outlineWidth={0.0015}
+          outlineColor="#121016"
         >
           {system.name}
         </Text>
       </Billboard>
-
-      {/* "YOU ARE HERE" label */}
       {isCurrent && (
         <Billboard position={[0, baseSize + 0.04, 0]}>
-          <Text
-            fontSize={0.025}
-            color="#f0c040"
-            anchorX="center"
-            anchorY="bottom"
-            outlineWidth={0.002}
-            outlineColor="#000000"
-          >
-            YOU ARE HERE
+          <Text fontSize={0.02} color="#e6b089" anchorX="center" anchorY="bottom" outlineWidth={0.0012} outlineColor="#121016">
+            Here
           </Text>
         </Billboard>
       )}
@@ -181,16 +117,17 @@ function GalaxyScene({ player }) {
 
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <pointLight position={[5, 5, 5]} intensity={0.8} />
-
-      <Starfield count={800} />
-
-      {/* Jump Lanes */}
+      <ambientLight intensity={0.85} />
+      <Starfield />
+      {NEBULAE.map((cloud) => (
+        <mesh key={cloud.color + cloud.pos.join()} position={cloud.pos}>
+          <sphereGeometry args={[cloud.scale, 28, 18]} />
+          <meshBasicMaterial color={cloud.color} transparent opacity={cloud.opacity} depthWrite={false} />
+        </mesh>
+      ))}
       {JUMP_LANES.map(([aId, bId]) => {
-        const isActive =
-          (aId === player.system_id && connections.includes(bId)) ||
-          (bId === player.system_id && connections.includes(aId));
+        const isActive = (aId === player.system_id && connections.includes(bId))
+          || (bId === player.system_id && connections.includes(aId));
         return (
           <JumpLane
             key={`${aId}-${bId}`}
@@ -200,8 +137,6 @@ function GalaxyScene({ player }) {
           />
         );
       })}
-
-      {/* System Nodes */}
       {SYSTEMS.map(sys => (
         <SystemNode
           key={sys.id}
@@ -210,49 +145,40 @@ function GalaxyScene({ player }) {
           isReachable={connections.includes(sys.id)}
         />
       ))}
-
-      {/* Player Ship */}
-      <PlayerShip
-        shipId={player.ship}
-        systemPosition={systemPositions[player.system_id]}
-      />
-
-      {/* Nebula fog */}
-      <fog attach="fog" args={['#06060c', 3, 12]} />
+      <PlayerShip shipId={player.ship} systemPosition={systemPositions[player.system_id]} />
+      <fog attach="fog" args={['#16121c', 12, 28]} />
     </>
   );
 }
 
-export default function GalaxyView({ player, currentSystem }) {
+export default function GalaxyView({ player }) {
   const cameraPos = useMemo(() => {
     const pos = systemPositions[player.system_id];
-    return [pos[0] + 0.5, pos[1] + 0.8, pos[2] + 1.2];
+    return [pos[0] + 0.4, pos[1] + 0.7, pos[2] + 1.15];
   }, [player.system_id]);
 
-  const target = useMemo(() => {
-    return systemPositions[player.system_id];
-  }, [player.system_id]);
+  const target = systemPositions[player.system_id];
 
   return (
     <Canvas
-      camera={{ position: cameraPos, fov: 50, near: 0.01, far: 50 }}
+      camera={{ position: cameraPos, fov: 48, near: 0.01, far: 50 }}
       style={{ width: '100%', height: '100%' }}
       gl={{ antialias: true, alpha: false }}
       onCreated={({ gl }) => {
-        gl.setClearColor('#06060c');
+        gl.setClearColor('#121016');
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.2;
+        gl.toneMappingExposure = 1.05;
       }}
     >
       <GalaxyScene player={player} />
       <OrbitControls
         target={target}
         enableDamping
-        dampingFactor={0.05}
-        minDistance={0.3}
-        maxDistance={5}
+        dampingFactor={0.08}
+        minDistance={0.35}
+        maxDistance={4.5}
         autoRotate
-        autoRotateSpeed={0.3}
+        autoRotateSpeed={0.22}
       />
     </Canvas>
   );

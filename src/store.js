@@ -116,7 +116,12 @@ export function login(name) {
   let player, marketPrices;
 
   if (save?.player) {
-    player = { ...save.player, name };
+    player = {
+      ...save.player,
+      name,
+      discoveries: save.player.discoveries || {},
+      depleted: Array.isArray(save.player.depleted) ? save.player.depleted : [],
+    };
     marketPrices = save.marketPrices || generateAllMarkets();
   } else {
     player = {
@@ -126,12 +131,14 @@ export function login(name) {
       system_id: 'sol',
       cargo: {},
       ship: 'starter',
+      discoveries: {},
+      depleted: [],
     };
     marketPrices = generateAllMarkets();
   }
 
   setState({ screen: 'game', player, marketPrices, chatMessages: [
-    { name: 'SYSTEM', text: `Welcome to Space Online, ${name}.` },
+    { name: 'SYSTEM', text: `Welcome, ${name}.` },
   ]});
   saveGame();
 }
@@ -224,6 +231,55 @@ export function buyShip(shipId) {
   setState({ player: { ...player, credits: player.credits - cost, ship: shipId } });
   saveGame();
   showToast(`New ship: ${ship.name}!`);
+}
+
+export function surveyPlanet(planet) {
+  const player = state.player;
+  if (!player || !planet?.id) return;
+  if (player.discoveries?.[planet.id]) return;
+  setState({
+    player: {
+      ...player,
+      discoveries: {
+        ...(player.discoveries || {}),
+        [planet.id]: {
+          name: planet.name,
+          biome: planet.biomeLabel,
+          systemId: player.system_id,
+        },
+      },
+    },
+  });
+  saveGame();
+}
+
+export function collectDeposit(deposit) {
+  const player = state.player;
+  if (!player || !deposit) return null;
+  const depleted = player.depleted || [];
+  if (depleted.includes(deposit.id)) return null;
+
+  const capacity = getCargoCapacity(player.ship);
+  const used = getCargoUsed(player.cargo);
+  const amount = deposit.amount || 1;
+  if (used + amount > capacity) {
+    showToast('Cargo full');
+    return null;
+  }
+
+  const commodity = COMMODITIES.find(c => c.id === deposit.commodityId);
+  setState({
+    player: {
+      ...player,
+      cargo: {
+        ...player.cargo,
+        [deposit.commodityId]: (player.cargo[deposit.commodityId] || 0) + amount,
+      },
+      depleted: [...depleted, deposit.id],
+    },
+  });
+  saveGame();
+  return { name: commodity?.name || 'Resource', amount };
 }
 
 export function sendChat(text) {

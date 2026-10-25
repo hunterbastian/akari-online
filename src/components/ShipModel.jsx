@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import { Billboard, Text } from '@react-three/drei';
 import { SHIPS, MANUFACTURERS } from '../../shared/ships.js';
 
 // Procedural ship meshes per manufacturer
