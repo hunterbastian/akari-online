@@ -10,7 +10,7 @@ export default function FlightHUD({ hud, onExit, onLog }) {
           {hud.targetDist && <span>{hud.targetDist}</span>}
         </div>
       )}
-      {!hud.locked && <div className="hud-lock">Click to fly</div>}
+      {!hud.locked && <div className="hud-lock">{hud.onFoot ? 'Click to look' : 'Click to fly'}</div>}
       <div className="hud-reticle" />
       <div className="hud-bottom">
         {(hud.prompt || hud.note) && <div className="hud-note">{hud.prompt || hud.note}</div>}

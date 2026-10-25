@@ -44,7 +44,7 @@ export default function GameScreen({ state }) {
         <button className="launch-btn" onClick={() => setViewMode('flight')}>Undock</button>
         <p className="hint">
           Mouse steers. W flies, S brakes, Shift boosts. Tab selects a target, R pulses.
-          Fly into a world to land, V steps outside, Space climbs back to orbit.
+          Fly into a world to land. V steps out: Shift sprints, Space jumps again in the air, Ctrl crouches and slides. Space climbs back to orbit.
           C scans, E collects, L opens the log, F docks.
         </p>
 

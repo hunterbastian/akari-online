@@ -16,16 +16,19 @@ import FlightHUD from './flight/FlightHUD';
 import { Belt, Deposit, Sky, Starfield, Sun, TargetMarker } from './flight/scenery';
 import { GateView, PilotFigure, ShipView, SpaceTraffic, StationView } from './flight/Models';
 import { SurfaceWorld } from './flight/Surface';
+import { createFoot, resetFoot, stepFoot } from './flight/foot';
+import { ensureFootAudio, playJump, playLand, playSlide, playStep } from './flight/footAudio';
 import Planet from './flight/Planet';
 
 const keys = Object.create(null);
 const tapped = new Set();
 const mouse = { dx: 0, dy: 0 };
 
-const HOLD = ['Tab', 'KeyR', 'KeyC', 'KeyE', 'KeyF', 'KeyV', 'Space'];
+const HOLD = ['Tab', 'KeyR', 'KeyC', 'KeyE', 'KeyF', 'KeyV', 'Space', 'ControlLeft', 'ControlRight'];
 
 function bindInput(dom) {
   const onKeyDown = (e) => {
+    ensureFootAudio();
     if (!keys[e.code]) tapped.add(e.code);
     keys[e.code] = true;
     if (HOLD.includes(e.code)) e.preventDefault();
@@ -39,6 +42,7 @@ function bindInput(dom) {
     mouse.dy += e.movementY;
   };
   const onClick = () => {
+    ensureFootAudio();
     if (document.pointerLockElement !== dom) dom.requestPointerLock();
   };
 
@@ -72,6 +76,34 @@ const _aim = new THREE.Vector3();
 const _out = new THREE.Vector3();
 const _body = new THREE.Vector3();
 const _radial = new THREE.Vector3();
+
+function syncMotes(points, foot) {
+  if (!points) return;
+  const pos = points.geometry.attributes.position.array;
+  const col = points.geometry.attributes.color.array;
+  let n = 0;
+  for (const m of foot.motes) {
+    if (!m.alive) continue;
+    const fade = Math.max(0, m.life / m.max);
+    pos[n * 3] = m.x;
+    pos[n * 3 + 1] = m.y;
+    pos[n * 3 + 2] = m.z;
+    if (m.kind === 'puff') {
+      col[n * 3] = fade;
+      col[n * 3 + 1] = 0.78 * fade;
+      col[n * 3 + 2] = 0.55 * fade;
+    } else {
+      col[n * 3] = 0.95 * fade;
+      col[n * 3 + 1] = 0.9 * fade;
+      col[n * 3 + 2] = 0.82 * fade;
+    }
+    n += 1;
+  }
+  points.geometry.setDrawRange(0, n);
+  points.geometry.attributes.position.needsUpdate = true;
+  points.geometry.attributes.color.needsUpdate = true;
+  points.visible = n > 0;
+}
 
 function InputBinder() {
   const dom = useThree((s) => s.gl.domElement);
@@ -130,8 +162,42 @@ function Pilot({
   const logged = useRef(new Set());
   const reported = useRef('');
   const command = useRef(null);
+  const footState = useRef(null);
+  const footDrive = useRef(null);
+  const jumpHeld = useRef(false);
+  const landDip = useRef(0);
+  const wasLanded = useRef(false);
   const frame = useRef({ space: null, surface: null, foot: null });
-  const { camera, gl } = useThree();
+  const { camera, gl, scene } = useThree();
+  const motesRef = useRef(null);
+
+  useEffect(() => {
+    const count = 40;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    geo.setDrawRange(0, 0);
+    const mat = new THREE.PointsMaterial({
+      size: 0.26,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    points.visible = false;
+    points.renderOrder = 2;
+    scene.add(points);
+    motesRef.current = points;
+    return () => {
+      scene.remove(points);
+      geo.dispose();
+      mat.dispose();
+      motesRef.current = null;
+    };
+  }, [scene]);
 
   const bodies = useMemo(() => {
     const list = [{
@@ -184,9 +250,12 @@ function Pilot({
     pulsing.current = false;
     portrait.current = false;
     const group = shipRef.current;
-    group.position.set(0, altitude, 34);
-    group.rotation.set(0.52, 0, 0);
-    velocity.current.set(0, -11, -forwardSpeed);
+    group.position.set(0, Math.max(altitude, 100), 52);
+    group.rotation.set(0.4, 0, 0);
+    velocity.current.set(0, -12, -Math.max(forwardSpeed, 24));
+    camReady.current = false;
+    landDip.current = 0;
+    wasLanded.current = false;
     if (personRef.current) personRef.current.visible = false;
       if (!logged.current.has(planet.id)) {
         logged.current.add(planet.id);
@@ -226,6 +295,16 @@ function Pilot({
           landed: landed.current,
           onFoot: onFoot.current,
           position: group ? [group.position.x, group.position.y, group.position.z] : null,
+          foot: footState.current && onFoot.current ? {
+            position: [footState.current.pos.x, footState.current.pos.y, footState.current.pos.z],
+            yaw: footState.current.yaw,
+            pitch: footState.current.pitch,
+            fov: footState.current.view?.fov ?? footState.current.fov,
+            grounded: footState.current.grounded,
+            slide: footState.current.slide,
+            eye: footState.current.eye,
+            roll: footState.current.view?.roll ?? 0,
+          } : null,
           speed: Math.round(velocity.current.length()),
           planet: surfacePlanet.current && {
             name: surfacePlanet.current.name,
@@ -269,6 +348,20 @@ function Pilot({
         face(group.position, _target);
       }
     }
+
+    const beginFoot = (planet, yaw) => {
+      if (!footState.current) footState.current = createFoot();
+      const foot = footState.current;
+      const x = group.position.x - Math.sin(yaw) * 2.6;
+      const z = group.position.z - Math.cos(yaw) * 2.6;
+      resetFoot(foot, x, floorAt(x, z, planet), z, yaw, camera.fov);
+      onFoot.current = true;
+      footDrive.current = null;
+      jumpHeld.current = false;
+      mouse.dx = 0;
+      mouse.dy = 0;
+      if (personRef.current) personRef.current.visible = false;
+    };
 
     const cmd = command.current;
     if (cmd) {
@@ -314,6 +407,24 @@ function Pilot({
         velocity.current.set(0, 0, 0);
         landed.current = true;
         camReady.current = false;
+      } else if (cmd.type === 'disembark') {
+        const planet = surfacePlanet.current;
+        if (planet && landed.current) {
+          _euler.setFromQuaternion(group.quaternion, 'YXZ');
+          beginFoot(planet, cmd.yaw ?? _euler.y);
+        }
+      } else if (cmd.type === 'drive' && footState.current) {
+        footDrive.current = {
+          forward: cmd.forward || 0,
+          back: !!cmd.back,
+          left: !!cmd.left,
+          right: !!cmd.right,
+          sprint: !!cmd.sprint,
+          crouch: !!cmd.crouch,
+          jump: !!cmd.jump,
+        };
+        if (cmd.yaw != null) footState.current.yaw = cmd.yaw;
+        if (cmd.pitch != null) footState.current.pitch = cmd.pitch;
       }
     }
 
@@ -552,13 +663,10 @@ function Pilot({
         landed.current = false;
       }
 
-      if (consume('KeyV') && landed.current) {
-        onFoot.current = true;
-        _forward.set(0, 0, -1).applyQuaternion(group.quaternion);
-        footPos.current.copy(group.position).addScaledVector(_forward, 3.4);
-        footPos.current.y = floorAt(footPos.current.x, footPos.current.z, planet);
-        footYaw.current = _euler.y;
-      }
+      if (consume('KeyV') && landed.current) beginFoot(planet, _euler.y);
+
+      if (!wasLanded.current && landed.current) landDip.current = 0.16;
+      wasLanded.current = landed.current;
       if (consume('KeyC')) {
         surveyPlanet({ id: planet.id, name: planet.name, biomeLabel: planet.biomeLabel });
         note.current = { text: describePlanet(planet), until: time + 4.5 };
@@ -581,71 +689,72 @@ function Pilot({
     }
 
     function flyOnFoot(step, time, planet, layout) {
+      const foot = footState.current;
+      if (!foot) return;
       if (hullRef.current) hullRef.current.rotation.z = THREE.MathUtils.damp(bank.current = 0, 0, 4, step);
-      footYaw.current -= mouse.dx * 0.0032;
+      const drive = footDrive.current;
+      let jump = consume('Space');
+      if (drive) {
+        if (drive.jump && !jumpHeld.current) jump = true;
+        jumpHeld.current = !!drive.jump;
+      }
+      const input = drive ? {
+        forward: drive.forward > 0,
+        back: drive.forward < 0 || drive.back,
+        left: !!drive.left,
+        right: !!drive.right,
+        sprint: !!drive.sprint,
+        crouch: !!drive.crouch,
+        jump,
+        holdJump: !!drive.jump,
+        mouseX: 0,
+        mouseY: 0,
+      } : {
+        forward: !!(keys.KeyW || keys.ArrowUp),
+        back: !!(keys.KeyS || keys.ArrowDown),
+        left: !!(keys.KeyA || keys.ArrowLeft),
+        right: !!(keys.KeyD || keys.ArrowRight),
+        sprint: !!(keys.ShiftLeft || keys.ShiftRight),
+        crouch: !!(keys.ControlLeft || keys.ControlRight),
+        jump,
+        holdJump: !!keys.Space,
+        mouseX: mouse.dx,
+        mouseY: mouse.dy,
+      };
       mouse.dx = 0;
       mouse.dy = 0;
-      const yaw = footYaw.current;
-      const fx = -Math.sin(yaw);
-      const fz = -Math.cos(yaw);
-      const rx = Math.cos(yaw);
-      const rz = -Math.sin(yaw);
-      let mx = 0;
-      let mz = 0;
-      if (keys.KeyW || keys.ArrowUp) { mx += fx; mz += fz; }
-      if (keys.KeyS || keys.ArrowDown) { mx -= fx; mz -= fz; }
-      if (keys.KeyA || keys.ArrowLeft) { mx -= rx; mz -= rz; }
-      if (keys.KeyD || keys.ArrowRight) { mx += rx; mz += rz; }
-      const length = Math.hypot(mx, mz) || 1;
-      const walk = (keys.ShiftLeft || keys.ShiftRight) ? 13 : 7.5;
-      if (mx !== 0 || mz !== 0) {
-        footPos.current.x += (mx / length) * walk * step;
-        footPos.current.z += (mz / length) * walk * step;
+      const moved = stepFoot(foot, step, input, planet);
+      for (const ev of moved.events) {
+        if (ev.type === 'step') playStep(ev.speed);
+        else if (ev.type === 'jump') playJump(false);
+        else if (ev.type === 'double') playJump(true);
+        else if (ev.type === 'land') playLand(ev.impact);
       }
-      footPos.current.x = THREE.MathUtils.clamp(footPos.current.x, -200, 200);
-      footPos.current.z = THREE.MathUtils.clamp(footPos.current.z, -200, 200);
-      footPos.current.y = floorAt(footPos.current.x, footPos.current.z, planet);
+      playSlide(foot.slide > 0, moved.speed);
 
-      const person = personRef.current;
-      if (person) {
-        person.visible = true;
-        person.position.set(footPos.current.x, footPos.current.y, footPos.current.z);
-        person.rotation.y = yaw;
-      }
+      const look = foot.view;
+      camera.position.set(foot.pos.x + look.ox, foot.pos.y + look.oy, foot.pos.z + look.oz);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.set(foot.pitch + look.pitch, foot.yaw, look.roll);
+      camera.fov = look.fov;
+      camera.updateProjectionMatrix();
+      camReady.current = true;
+      syncMotes(motesRef.current, foot);
 
-      const shipDist = Math.hypot(
-        footPos.current.x - group.position.x,
-        footPos.current.z - group.position.z,
-      );
-      if (consume('KeyV') && shipDist < 6) {
+      const shipDist = Math.hypot(foot.pos.x - group.position.x, foot.pos.z - group.position.z);
+      if (consume('KeyV') && shipDist < 7) {
         onFoot.current = false;
-        if (person) person.visible = false;
+        footDrive.current = null;
+        camReady.current = false;
       }
 
-      const collectible = nearestDeposit(layout.deposits, 4.5, footPos.current);
+      const collectible = nearestDeposit(layout.deposits, 4.5, foot.pos);
       if (consume('KeyE') && collectible) take(collectible, time);
       if (consume('KeyC')) {
         note.current = { text: describePlanet(planet), until: time + 4.5 };
       }
 
-      _cam.set(
-        footPos.current.x - fx * 5.4,
-        footPos.current.y + 2.3,
-        footPos.current.z - fz * 5.4,
-      );
-      const camFloor = floorAt(_cam.x, _cam.z, planet) + 1.2;
-      if (_cam.y < camFloor) _cam.y = camFloor;
-      if (!camReady.current) {
-        camera.position.copy(_cam);
-        camReady.current = true;
-      } else {
-        camera.position.lerp(_cam, 1 - Math.exp(-6 * step));
-      }
-      _aim.set(footPos.current.x, footPos.current.y + 1.3, footPos.current.z);
-      camera.lookAt(_aim);
-      camera.fov = THREE.MathUtils.damp(camera.fov, 52, 4, step);
-      camera.updateProjectionMatrix();
-      velocity.current.set((mx / length) * walk, 0, (mz / length) * walk);
+      velocity.current.set(foot.vel.x, foot.vel.y, foot.vel.z);
       view.foot = { planet, collectible, shipDist, time };
     }
 
@@ -687,6 +796,10 @@ function Pilot({
       } else {
         camera.position.lerp(_cam, 1 - Math.exp(-5.2 * step));
       }
+      if (landDip.current > 0.001) {
+        _cam.y -= landDip.current;
+        landDip.current *= Math.exp(-7 * step);
+      }
       _aim.copy(group.position).addScaledVector(_forward, lookAhead);
       camera.lookAt(_aim);
       camera.fov = THREE.MathUtils.damp(camera.fov, fov, 4, step);
@@ -694,6 +807,7 @@ function Pilot({
     }
 
     function publish(time) {
+      if (motesRef.current && !onFoot.current) motesRef.current.visible = false;
       hudClock.current += dt;
       if (hudClock.current < 0.1) return;
       hudClock.current = 0;
@@ -721,7 +835,7 @@ function Pilot({
           if (surface.collectible) prompt = 'Collect  ·  E';
           else if (landed.current) prompt = 'Exit  ·  V';
         }
-        const haze = THREE.MathUtils.clamp((group.position.y - 14) / 96, 0, 0.9);
+        const haze = THREE.MathUtils.clamp((group.position.y - 18) / 220, 0, 0.35);
         atmo = onFoot.current ? haze * 0.35 : haze;
         atmoColor = sky?.fog || '#ffffff';
       } else if (view.space) {
@@ -744,13 +858,16 @@ function Pilot({
         systemName: env.name,
         targetName,
         targetDist,
-        speed: Math.round(onFoot.current ? velocity.current.length() : velocity.current.length()),
+        speed: Math.round(onFoot.current
+          ? Math.hypot(velocity.current.x, velocity.current.z)
+          : velocity.current.length()),
         pulse: pulsing.current,
         note: text,
         prompt,
         atmo,
         atmoColor,
         locked: document.pointerLockElement === gl.domElement,
+        onFoot: onFoot.current,
       });
     }
   });
@@ -782,6 +899,7 @@ function initialHud(env) {
     atmo: 0,
     atmoColor: 'transparent',
     locked: false,
+    onFoot: false,
   };
 }
 
