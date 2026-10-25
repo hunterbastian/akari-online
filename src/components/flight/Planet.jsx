@@ -54,6 +54,7 @@ const atmosphereFragment = `
     vec3 viewDir = normalize(cameraPosition - vWorld);
     float fres = pow(1.0 - clamp(dot(normalize(vNormal), viewDir), 0.0, 1.0), uPower);
     gl_FragColor = vec4(uColor, fres * uStrength);
+    #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `;

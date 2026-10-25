@@ -60,7 +60,7 @@ export function shipAccent(manufacturer) {
 
 export function ShipView({ manufacturer = 'drift', thrustRef, pulseRef }) {
   const variant = shipVariant(manufacturer);
-  const scene = useModel(variant, shipAccent(manufacturer));
+  const scene = useModel(variant, shipAccent(manufacturer), true);
   const flames = useRef([]);
   const engines = variant === 'hauler' ? modelMeta.hauler.engines : modelMeta.ship.engines;
 

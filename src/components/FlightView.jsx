@@ -12,6 +12,7 @@ import {
   resourceLabel,
 } from '../../shared/universe.js';
 import { floorAt, surfaceLayout, surfaceSky } from '../../shared/surface.js';
+import { Grade, graphicsLite, skyState } from './flight/atmosphere.jsx';
 import FlightHUD from './flight/FlightHUD';
 import { Belt, Deposit, Sky, Starfield, Sun, TargetMarker } from './flight/scenery';
 import { GateView, PilotFigure, ShipView, SpaceTraffic, StationView } from './flight/Models';
@@ -878,9 +879,9 @@ function Pilot({
           if (surface.collectible) prompt = 'Collect  ·  E';
           else if (landed.current) prompt = 'Exit  ·  V';
         }
-        const haze = THREE.MathUtils.clamp((group.position.y - 18) / 220, 0, 0.35);
-        atmo = onFoot.current ? haze * 0.35 : haze;
-        atmoColor = sky?.fog || '#ffffff';
+        const haze = THREE.MathUtils.clamp((group.position.y - 16) / 200, 0, 0.5);
+        atmo = onFoot.current ? haze * 0.15 : haze;
+        atmoColor = skyState.fogHex || sky?.fog || '#ffffff';
       } else if (view.space) {
         const { target, dist, docking, collectible, closest, closestPlanet } = view.space;
         targetName = target.name;
@@ -953,6 +954,13 @@ function initialHud(env) {
 }
 
 export default function FlightView({ player, onExit }) {
+  const [lite, setLite] = useState(graphicsLite);
+  useEffect(() => {
+    const update = () => setLite(graphicsLite());
+    const coarse = window.matchMedia('(pointer: coarse)');
+    coarse.addEventListener?.('change', update);
+    return () => coarse.removeEventListener?.('change', update);
+  }, []);
   const ship = SHIPS[player.ship];
   const system = SYSTEMS.find((s) => s.id === player.system_id);
   const env = useMemo(() => {
@@ -1019,25 +1027,27 @@ export default function FlightView({ player, onExit }) {
   return (
     <div className={`flight-root${hud.pulse ? ' pulsing' : ''}`}>
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={lite ? [1, 1] : [1, 1.5]}
         camera={{ fov: 52, near: 0.12, far: 7000, position: [0, 8, 140] }}
-        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        gl={{ antialias: !lite, alpha: false, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.1;
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.AgXToneMapping;
+          gl.toneMappingExposure = 1.22;
           gl.shadowMap.enabled = true;
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
         <color attach="background" args={[sky.top]} />
+        <Grade lite={lite} />
         <Suspense fallback={null}>
           {ground ? (
-            <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} />
+            <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} lite={lite} />
           ) : (
             <>
-              <hemisphereLight args={['#fff4ea', '#241820', 0.62]} />
-              <ambientLight intensity={0.32} color="#f7f1e8" />
-              <directionalLight position={[28, 46, 18]} intensity={0.85} color="#fff1df" />
+              <hemisphereLight args={[env.sky.bottom, env.sky.top, 0.58]} />
+              <ambientLight intensity={0.2} color={env.sky.mid} />
+              <directionalLight position={[28, 46, 18]} intensity={1.15} color={env.sky.star} />
               <Sky sky={env.sky} />
               <Starfield seed={hashString(env.id)} />
               <Sun color={env.sky.star} />

@@ -1,8 +1,15 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { heightAt, surfaceLayout, surfaceSky, waterLevel } from '../../../shared/surface.js';
-import { Sky } from './scenery';
+import { heightAt, surfaceLayout, waterLevel } from '../../../shared/surface.js';
 import { Prop } from './Models';
+import {
+  AltitudeFog,
+  AtmosphereDome,
+  FollowSun,
+  SUN_DIR,
+  atmosphereOf,
+  tintedFog,
+} from './atmosphere.jsx';
 
 const SIZE = 520;
 const SEGMENTS = 72;
@@ -15,36 +22,6 @@ const BANDS = {
   volcanic: [-6, 4, 14],
   anomalous: [-4, 2, 10],
 };
-
-const terrainVertex = `
-  attribute vec3 color;
-  varying vec3 vColor;
-  varying vec3 vWorld;
-  void main() {
-    vColor = color;
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vWorld = world.xyz;
-    gl_Position = projectionMatrix * viewMatrix * world;
-  }
-`;
-
-const terrainFragment = `
-  varying vec3 vColor;
-  varying vec3 vWorld;
-  void main() {
-    vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-    if (n.y < 0.0) n = -n;
-    vec3 key = normalize(vec3(0.78, 0.55, 0.3));
-    vec3 fill = normalize(vec3(-0.55, 0.4, -0.45));
-    float sun = clamp(dot(n, key), 0.0, 1.0);
-    float sky = clamp(dot(n, fill), 0.0, 1.0);
-    vec3 col = vColor * (0.58 + 0.42 * sun);
-    col += vec3(1.0, 0.72, 0.48) * sun * 0.05;
-    col += vColor * vec3(0.62, 0.78, 0.95) * sky * 0.12;
-    gl_FragColor = vec4(col, 1.0);
-    #include <colorspace_fragment>
-  }
-`;
 
 const waterVertex = `
   varying vec3 vWorld;
@@ -66,11 +43,15 @@ const waterFragment = `
     vec3 viewDir = normalize(cameraPosition - vWorld);
     float facing = clamp(dot(vec3(0.0, 1.0, 0.0), viewDir), 0.0, 1.0);
     float fres = pow(1.0 - facing, 2.0);
-    vec3 sunDir = normalize(vec3(0.72, 0.62, 0.28));
+    vec3 sunDir = normalize(vec3(0.821, 0.5, 0.303));
     vec3 halfDir = normalize(sunDir + viewDir);
     float spec = pow(max(halfDir.y, 0.0), 64.0);
     vec3 col = mix(uColor, uSky, fres * 0.72);
     col += uSun * spec * 0.7;
+    float dist = length(cameraPosition - vWorld);
+    float fogFactor = smoothstep(48.0, 280.0, dist);
+    float sunward = pow(max(dot(normalize(vWorld - cameraPosition), normalize(vec3(0.821, 0.5, 0.303))), 0.0), 1.4);
+    col = mix(col, mix(uSky, uSun, sunward * 0.35), fogFactor);
     gl_FragColor = vec4(col, mix(0.82, 0.55, fres));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -103,31 +84,33 @@ function buildTerrain(planet) {
   return geo;
 }
 
-function Terrain({ planet }) {
+function Terrain({ planet, air }) {
   const geometry = useMemo(() => buildTerrain(planet), [planet]);
-  const material = useMemo(() => new THREE.ShaderMaterial({
-    vertexShader: terrainVertex,
-    fragmentShader: terrainFragment,
-  }), []);
+  const material = useMemo(() => tintedFog(new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.86,
+    metalness: 0,
+    flatShading: true,
+  }), air), [air]);
   useEffect(() => () => {
     geometry.dispose();
     material.dispose();
   }, [geometry, material]);
-  return <mesh geometry={geometry} material={material} />;
+  return <mesh geometry={geometry} material={material} castShadow receiveShadow />;
 }
 
-function Water({ level, sky }) {
+function Water({ level, air }) {
   const material = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
-      uColor: { value: new THREE.Color(sky.water) },
-      uSky: { value: new THREE.Color(sky.bottom) },
-      uSun: { value: new THREE.Color(sky.sun || '#ffd8b0') },
+      uColor: { value: air.water },
+      uSky: { value: air.horizon },
+      uSun: { value: air.sun },
     },
     vertexShader: waterVertex,
     fragmentShader: waterFragment,
     transparent: true,
     depthWrite: false,
-  }), [sky]);
+  }), [air]);
   useEffect(() => () => material.dispose(), [material]);
 
   return (
@@ -160,6 +143,7 @@ const horizonFragment = `
     float fres = pow(1.0 - clamp(dot(n, normalize(cameraPosition - vWorld)), 0.0, 1.0), 2.6);
     col += uRim * fres * 0.45;
     gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `;
@@ -173,7 +157,6 @@ function HorizonBody({ radius, color, rim }) {
     },
     vertexShader: horizonVertex,
     fragmentShader: horizonFragment,
-    toneMapped: false,
     fog: false,
   }), [color, rim]);
   useEffect(() => () => material.dispose(), [material]);
@@ -187,57 +170,32 @@ function HorizonBody({ radius, color, rim }) {
   );
 }
 
-export function SurfaceWorld({ planet, depleted, sibling }) {
-  const sky = surfaceSky(planet);
+export function SurfaceWorld({ planet, depleted, sibling, lite = false }) {
+  const air = useMemo(() => atmosphereOf(planet), [planet]);
   const water = waterLevel(planet);
   const layout = useMemo(() => surfaceLayout(planet), [planet]);
   const deposits = layout.deposits.filter((deposit) => !depleted.includes(deposit.id));
   const horizonColor = sibling?.colors?.[1] || '#d06a42';
   const horizonRim = sibling?.atmosphere || '#f0b5a4';
+  const moon = useMemo(() => {
+    const placed = SUN_DIR.clone().multiplyScalar(-460);
+    placed.y = Math.abs(placed.y) + 150;
+    return placed;
+  }, []);
 
   return (
     <group>
-      <Sky sky={sky} />
-      <hemisphereLight args={[sky.mid, '#243044', 0.42]} />
-      <ambientLight intensity={0.18} color={sky.bottom} />
-      <directionalLight
-        position={[140, 110, 54]}
-        intensity={1.7}
-        color={sky.sun || '#ffd8b0'}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-near={20}
-        shadow-camera-far={340}
-        shadow-camera-left={-110}
-        shadow-camera-right={110}
-        shadow-camera-top={110}
-        shadow-camera-bottom={-110}
-        shadow-bias={-0.0006}
-        shadow-normalBias={0.08}
-      />
-      <directionalLight position={[-90, 36, -48]} intensity={0.4} color="#7eafd4" />
-      <group position={[460, 280, 170]}>
-        <mesh>
-          <sphereGeometry args={[26, 24, 16]} />
-          <meshBasicMaterial color="#fff6ea" toneMapped={false} fog={false} />
-        </mesh>
-        <mesh>
-          <sphereGeometry args={[78, 20, 14]} />
-          <meshBasicMaterial color={sky.sun || '#ffd2b0'} transparent opacity={0.28} depthWrite={false} toneMapped={false} fog={false} />
-        </mesh>
-        <mesh>
-          <sphereGeometry args={[140, 16, 12]} />
-          <meshBasicMaterial color={sky.sun || '#ffd2b0'} transparent opacity={0.1} depthWrite={false} toneMapped={false} fog={false} />
-        </mesh>
-      </group>
-      <mesh position={[-340, 210, -260]}>
-        <sphereGeometry args={[22, 20, 14]} />
-        <meshBasicMaterial color={sky.moon || '#f6eee6'} toneMapped={false} fog={false} />
+      <AtmosphereDome air={air} lite={lite} />
+      <hemisphereLight args={[air.hemiSky, air.hemiGround, air.hemiIntensity]} />
+      <ambientLight intensity={0.16} color={air.horizon} />
+      <FollowSun air={air} lite={lite} />
+      <mesh position={moon}>
+        <sphereGeometry args={[18, 20, 14]} />
+        <meshBasicMaterial color={air.moon} fog={false} />
       </mesh>
       <HorizonBody radius={168} color={horizonColor} rim={horizonRim} />
-      <Terrain planet={planet} />
-      {water != null && <Water level={water} sky={sky} />}
+      <Terrain planet={planet} air={air} />
+      {water != null && <Water level={water} air={air} />}
       {layout.props.map((prop, index) => (
         <Prop key={`${prop.kind}-${index}`} kind={prop.kind} position={prop.position} rotation={prop.rotation} scale={prop.scale} />
       ))}
@@ -245,7 +203,7 @@ export function SurfaceWorld({ planet, depleted, sibling }) {
       {deposits.map((deposit) => (
         <Prop key={deposit.id} kind="deposit" position={deposit.position} rotation={[0, 0.4, 0]} scale={1.35} />
       ))}
-      <fog attach="fog" args={[sky.fog, 120, 360]} />
+      <AltitudeFog air={air} />
     </group>
   );
 }
