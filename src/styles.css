@@ -839,6 +839,11 @@ button, input { font-family: inherit; }
   bottom: 104px;
 }
 
+.touch-btn.scan {
+  right: 122px;
+  bottom: 100px;
+}
+
 .touch-btn.held {
   background: rgba(243, 239, 231, 0.16);
   border-color: rgba(230, 176, 137, 0.85);

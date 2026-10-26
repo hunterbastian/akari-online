@@ -191,3 +191,97 @@ export function describePlanet(planet) {
   const labels = planet.resources.map(resourceLabel);
   return `${planet.biomeLabel} · ${labels.join(', ')}`;
 }
+
+// Altitude, in radii, at which a world can be scanned. Wider than the land gate
+// so the scan prompt has a band of its own, and still true inside that gate.
+export const SCAN_RANGE = 5.5;
+export const FIRST_DISCOVERY = 400;
+export const POI_BONUS = 150;
+
+const SCAN_BASE = {
+  lush: 800,
+  ocean: 900,
+  desert: 1100,
+  ice: 1000,
+  volcanic: 1300,
+  anomalous: 1500,
+};
+
+const SITE_NAMES = {
+  ice: ['Shelf', 'Crevasse', 'Spur'],
+  desert: ['Dune', 'Mesa', 'Wash'],
+  volcanic: ['Vent', 'Flow', 'Rim'],
+  ocean: ['Atoll', 'Shelf', 'Cove'],
+  lush: ['Grove', 'Ridge', 'Pool'],
+  anomalous: ['Spire', 'Well', 'Arc'],
+};
+
+const SITE_SURFACE = [
+  [0, -16],
+  [-18, -34],
+  [22, -6],
+];
+
+const pointsCache = new Map();
+
+export function scanWorth(biome) {
+  return (SCAN_BASE[biome] ?? 900) + FIRST_DISCOVERY;
+}
+
+function sunVector(id) {
+  const hash = hashString(`${id}:sun`);
+  const azimuth = ((hash & 65535) / 65535) * Math.PI * 2;
+  const elevation = (20 + ((hash >>> 16) % 41)) * (Math.PI / 180);
+  const flat = Math.cos(elevation);
+  return [Math.sin(azimuth) * flat, Math.sin(elevation), Math.cos(azimuth) * flat];
+}
+
+function cross3(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function norm3(v) {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+// Three fixed sites. Orbit pins sit on the lit limb the approach camera sees.
+// Surface pins sit on the descent patch, one of them ahead of the ship.
+export function interestPoints(planet) {
+  const cached = pointsCache.get(planet.id);
+  if (cached) return cached;
+
+  const sun = sunVector(planet.id);
+  let side = cross3(sun, [0, 1, 0]);
+  if (Math.hypot(side[0], side[1], side[2]) < 1e-4) side = [1, 0, 0];
+  side = norm3(side);
+  const lift = norm3(cross3(side, sun));
+  const names = SITE_NAMES[planet.biome] || SITE_NAMES.lush;
+  const spreads = [
+    [1, 0.05],
+    [0.86, 0.32],
+    [0.88, -0.26],
+  ];
+  const reach = planet.radius * 1.305;
+  const points = names.map((name, i) => {
+    const [sx, ly] = spreads[i];
+    const dir = norm3([
+      side[0] * sx + lift[0] * ly,
+      side[1] * sx + lift[1] * ly,
+      side[2] * sx + lift[2] * ly,
+    ]);
+    const [x, z] = SITE_SURFACE[i];
+    return {
+      id: `${planet.id}:site:${i}`,
+      name,
+      surface: [x, z],
+      orbit: [dir[0] * reach, dir[1] * reach, dir[2] * reach],
+    };
+  });
+  pointsCache.set(planet.id, points);
+  return points;
+}

@@ -66,6 +66,27 @@ export function playStep(speed) {
   burst(audio, { freq: 140 + speed * 28, to: 90, q: 0.8, vol, dur: 0.07, type: 'lowpass' });
 }
 
+export function playScan() {
+  const audio = context();
+  if (!audio) return;
+  if (audio.state === 'suspended') audio.resume().catch(() => {});
+  if (audio.state !== 'running') return;
+  const t = audio.currentTime;
+  const osc = audio.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(280, t);
+  osc.frequency.exponentialRampToValueAtTime(920, t + 0.22);
+  const gain = audio.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.04, t + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+  osc.connect(gain);
+  gain.connect(audio.destination);
+  osc.start(t);
+  osc.stop(t + 0.44);
+  burst(audio, { freq: 160, to: 70, q: 0.7, vol: 0.028, dur: 0.32, type: 'lowpass' });
+}
+
 export function playJump(doubleJump) {
   const audio = context();
   if (!audio || audio.state !== 'running') return;

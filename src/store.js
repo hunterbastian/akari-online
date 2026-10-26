@@ -3,6 +3,7 @@
 
 import { SYSTEMS, COMMODITIES, getConnections } from '../shared/galaxy.js';
 import { SHIPS, SHIP_DEALERS, getCargoCapacity, getCargoUsed } from '../shared/ships.js';
+import { POI_BONUS, interestPoints, scanWorth } from '../shared/universe.js';
 
 const SAVE_KEY = 'space-online-save';
 let listeners = new Set();
@@ -121,6 +122,7 @@ export function login(name) {
       name,
       discoveries: save.player.discoveries || {},
       depleted: Array.isArray(save.player.depleted) ? save.player.depleted : [],
+      exploration: save.player.exploration || {},
     };
     marketPrices = save.marketPrices || generateAllMarkets();
   } else {
@@ -133,6 +135,7 @@ export function login(name) {
       ship: 'starter',
       discoveries: {},
       depleted: [],
+      exploration: {},
     };
     marketPrices = generateAllMarkets();
   }
@@ -251,6 +254,77 @@ export function surveyPlanet(planet) {
     },
   });
   saveGame();
+}
+
+export function unsoldExploration(player = state.player) {
+  if (!player?.exploration) return 0;
+  let sum = 0;
+  for (const row of Object.values(player.exploration)) {
+    if (row?.scanned && !row.sold) sum += row.value || 0;
+  }
+  return sum;
+}
+
+export function scanPlanet(planet) {
+  const player = state.player;
+  if (!player || !planet?.id) return null;
+  const exploration = { ...(player.exploration || {}) };
+  const existing = exploration[planet.id];
+  const sites = interestPoints(planet);
+  if (existing?.scanned) {
+    return { fresh: false, name: planet.name, biome: planet.biomeLabel, value: 0, sites: sites.length };
+  }
+  const value = scanWorth(planet.biome);
+  exploration[planet.id] = { scanned: true, sold: false, value, sites: [] };
+  const discoveries = { ...(player.discoveries || {}) };
+  if (!discoveries[planet.id]) {
+    discoveries[planet.id] = {
+      name: planet.name,
+      biome: planet.biomeLabel,
+      systemId: player.system_id,
+    };
+  }
+  setState({ player: { ...player, discoveries, exploration } });
+  saveGame();
+  return { fresh: true, name: planet.name, biome: planet.biomeLabel, value, sites: sites.length };
+}
+
+export function visitInterest(planetId, siteId) {
+  const player = state.player;
+  const row = player?.exploration?.[planetId];
+  if (!row?.scanned || row.sold || !siteId) return 0;
+  if ((row.sites || []).includes(siteId)) return 0;
+  const exploration = {
+    ...player.exploration,
+    [planetId]: {
+      ...row,
+      value: (row.value || 0) + POI_BONUS,
+      sites: [...(row.sites || []), siteId],
+    },
+  };
+  setState({ player: { ...player, exploration } });
+  saveGame();
+  return POI_BONUS;
+}
+
+export function sellExploration() {
+  const player = state.player;
+  if (!player) return 0;
+  const total = unsoldExploration(player);
+  if (total <= 0) {
+    showToast('No exploration data.');
+    return 0;
+  }
+  const exploration = {};
+  for (const [id, row] of Object.entries(player.exploration || {})) {
+    exploration[id] = row?.scanned && !row.sold ? { ...row, sold: true, value: 0 } : row;
+  }
+  setState({
+    player: { ...player, credits: player.credits + total, exploration },
+  });
+  saveGame();
+  showToast('Sale complete');
+  return total;
 }
 
 export function collectDeposit(deposit) {
