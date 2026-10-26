@@ -79,6 +79,7 @@ const _aim = new THREE.Vector3();
 const _out = new THREE.Vector3();
 const _body = new THREE.Vector3();
 const _radial = new THREE.Vector3();
+const _ndc = new THREE.Vector3();
 
 function syncMotes(points, foot) {
   if (!points) return;
@@ -140,6 +141,7 @@ function Pilot({
   onHud,
   onSceneRef,
   targetRef,
+  bracketRef,
 }) {
   const shipRef = useRef();
   const hullRef = useRef();
@@ -465,13 +467,40 @@ function Pilot({
       camera.fov = THREE.MathUtils.damp(camera.fov, 42, 4, dt);
       camera.updateProjectionMatrix();
       thrustRef.current = 0.35;
+      placeBracket();
       publish(now);
       return;
     }
 
     if (mode.current === 'surface') flySurface(dt, now);
     else flySpace(dt, now);
+    placeBracket();
     publish(now);
+
+    function placeBracket() {
+      const el = bracketRef?.current;
+      if (!el) return;
+      const target = mode.current === 'space' ? targetRef.current : null;
+      if (!target?.position) {
+        el.style.opacity = '0';
+        return;
+      }
+      _ndc.set(target.position[0], target.position[1], target.position[2]);
+      const ahead = _ndc.applyMatrix4(camera.matrixWorldInverse).z < 0;
+      _ndc.set(target.position[0], target.position[1], target.position[2]).project(camera);
+      const framed = ahead && Math.abs(_ndc.x) < 0.9 && Math.abs(_ndc.y) < 0.82;
+      const centered = Math.abs(_ndc.x) < 0.07 && Math.abs(_ndc.y) < 0.07;
+      if (!framed || centered) {
+        el.style.opacity = '0';
+        return;
+      }
+      const width = gl.domElement.clientWidth || 1;
+      const height = gl.domElement.clientHeight || 1;
+      const x = (_ndc.x * 0.5 + 0.5) * width;
+      const y = (-_ndc.y * 0.5 + 0.5) * height;
+      el.style.opacity = '0.8';
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    }
 
     function flySpace(step, time) {
       if (consume('Tab')) {
@@ -874,6 +903,9 @@ function Pilot({
       if (note.current.text && note.current.until == null) note.current.until = time + 4.2;
       const text = note.current.until > time ? note.current.text : '';
       let prompt = '';
+      let promptKey = '';
+      let phase = 'space';
+      let readout = '';
       let targetName = '';
       let targetDist = '';
       let atmo = 0;
@@ -882,18 +914,28 @@ function Pilot({
       if (mode.current === 'surface') {
         const planet = surfacePlanet.current;
         const sky = planet ? surfaceSky(planet) : null;
+        phase = onFoot.current ? 'foot' : landed.current ? 'landed' : 'descent';
         targetName = planet?.name || '';
-        if (onFoot.current) targetDist = 'On foot';
-        else if (landed.current) targetDist = 'Landed';
-        else targetDist = `${Math.max(0, Math.round(group.position.y))} m`;
+        if (phase === 'descent') readout = `${Math.max(0, Math.round(group.position.y))} m`;
+        targetDist = readout;
         const foot = view.foot;
         const surface = view.surface;
         if (foot) {
-          if (foot.shipDist < 6) prompt = 'Board  ·  V';
-          else if (foot.collectible) prompt = 'Collect  ·  E';
+          if (foot.shipDist < 6) {
+            prompt = 'Board';
+            promptKey = 'V';
+          } else if (foot.collectible) {
+            prompt = 'Collect';
+            promptKey = 'E';
+          }
         } else if (surface) {
-          if (surface.collectible) prompt = 'Collect  ·  E';
-          else if (landed.current) prompt = 'Exit  ·  V';
+          if (surface.collectible) {
+            prompt = 'Collect';
+            promptKey = 'E';
+          } else if (landed.current) {
+            prompt = 'Exit';
+            promptKey = 'V';
+          }
         }
         const haze = THREE.MathUtils.clamp((group.position.y - 52) / 280, 0, 0.22);
         atmo = onFoot.current ? haze * 0.04 : haze;
@@ -901,11 +943,20 @@ function Pilot({
       } else if (view.space) {
         const { target, dist, docking, collectible, closest, closestPlanet, canLand } = view.space;
         targetName = target.name;
-        targetDist = `${Math.max(0, Math.round(dist))} u`;
-        if (docking) prompt = 'Dock  ·  F';
-        else if (canLand) prompt = touch.enabled ? 'Land' : 'Land  ·  F';
-        else if (collectible) prompt = 'Collect  ·  E';
-        else if (target.kind === 'gate' && dist < 110) prompt = 'Pulse to jump';
+        readout = `${Math.max(0, Math.round(dist))} u`;
+        targetDist = readout;
+        if (docking) {
+          prompt = 'Dock';
+          promptKey = 'F';
+        } else if (canLand) {
+          prompt = 'Land';
+          promptKey = 'F';
+        } else if (collectible) {
+          prompt = 'Collect';
+          promptKey = 'E';
+        } else if (target.kind === 'gate' && dist < 110) {
+          prompt = 'Pulse to jump';
+        }
         if (closestPlanet) {
           const band = closestPlanet.radius * 1.55;
           if (closest < band) {
@@ -919,6 +970,9 @@ function Pilot({
         systemName: env.name,
         targetName,
         targetDist,
+        readout,
+        phase,
+        promptKey,
         speed: Math.round(onFoot.current
           ? Math.hypot(velocity.current.x, velocity.current.z)
           : velocity.current.length()),
@@ -957,6 +1011,9 @@ function initialHud(env) {
     systemName: env.name,
     targetName: planet?.name || env.station.name,
     targetDist: '',
+    readout: '',
+    phase: 'space',
+    promptKey: '',
     speed: 0,
     pulse: false,
     note: '',
@@ -973,6 +1030,7 @@ function initialHud(env) {
 }
 
 export default function FlightView({ player, onExit }) {
+  const bracketRef = useRef(null);
   const [lite, setLite] = useState(graphicsLite);
   useEffect(() => {
     const update = () => setLite(graphicsLite());
@@ -1092,6 +1150,7 @@ export default function FlightView({ player, onExit }) {
             onHud={onHud}
             onSceneRef={onSceneRef}
             targetRef={targetRef}
+            bracketRef={bracketRef}
           />
         </Suspense>
       </Canvas>
@@ -1112,7 +1171,7 @@ export default function FlightView({ player, onExit }) {
         </div>
       )}
       <TouchControls onFoot={hud.onFoot} canBoard={hud.canBoard} canExit={hud.canExit} canLand={hud.canLand} />
-      <FlightHUD hud={hud} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
+      <FlightHUD hud={hud} bracketRef={bracketRef} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
     </div>
   );
 }
