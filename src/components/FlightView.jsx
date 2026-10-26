@@ -362,9 +362,18 @@ function Pilot({
     const beginFoot = (planet, yaw) => {
       if (!footState.current) footState.current = createFoot();
       const foot = footState.current;
-      const x = group.position.x - Math.sin(yaw) * 2.6;
-      const z = group.position.z - Math.cos(yaw) * 2.6;
-      resetFoot(foot, x, floorAt(x, z, planet), z, yaw, camera.fov);
+      const sun = skyState.sunDir;
+      const lookYaw = Math.atan2(-sun.x, -sun.z);
+      const lookPitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(sun.y, -1, 1)), 0.22, 0.95);
+      // Stand just beside the hull, on the sun's side, close enough that boarding still reads.
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
+      const across = sun.x * rightX + sun.z * rightZ;
+      const side = across < 0 ? -1 : 1;
+      const x = group.position.x + rightX * side * 5.2;
+      const z = group.position.z + rightZ * side * 5.2;
+      resetFoot(foot, x, floorAt(x, z, planet), z, lookYaw, camera.fov);
+      foot.pitch = lookPitch;
       onFoot.current = true;
       footDrive.current = null;
       jumpHeld.current = false;
