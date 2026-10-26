@@ -24,6 +24,7 @@ export const touch = {
   crouchHeld: false,
   crouchPulse: false,
   interactEdge: false,
+  landEdge: false,
   boostHeld: false,
   liftHeld: false,
 };
@@ -98,6 +99,7 @@ export function releaseActions() {
   touch.crouchHeld = false;
   touch.crouchPulse = false;
   touch.interactEdge = false;
+  touch.landEdge = false;
   touch.boostHeld = false;
   touch.liftHeld = false;
 }
