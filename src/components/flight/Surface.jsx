@@ -10,6 +10,7 @@ import {
   SkyEnvironment,
   atmosphereOf,
   dressGround,
+  skyState,
 } from './atmosphere.jsx';
 
 const SIZE = 520;
@@ -39,19 +40,20 @@ const waterFragment = `
   uniform vec3 uColor;
   uniform vec3 uSky;
   uniform vec3 uSun;
+  uniform vec3 uSunDir;
   varying vec3 vWorld;
   void main() {
     vec3 viewDir = normalize(cameraPosition - vWorld);
     float facing = clamp(dot(vec3(0.0, 1.0, 0.0), viewDir), 0.0, 1.0);
     float fres = pow(1.0 - facing, 2.0);
-    vec3 sunDir = normalize(vec3(0.821, 0.5, 0.303));
+    vec3 sunDir = normalize(uSunDir);
     vec3 halfDir = normalize(sunDir + viewDir);
     float spec = pow(max(halfDir.y, 0.0), 64.0);
     vec3 col = mix(uColor, uSky, fres * 0.72);
     col += uSun * spec * 0.7;
     float dist = length(cameraPosition - vWorld);
     float fogFactor = smoothstep(160.0, 640.0, dist);
-    float sunward = pow(max(dot(normalize(vWorld - cameraPosition), normalize(vec3(0.821, 0.5, 0.303))), 0.0), 1.4);
+    float sunward = pow(max(dot(normalize(vWorld - cameraPosition), sunDir), 0.0), 1.4);
     col = mix(col, mix(uSky, uSun, sunward * 0.35), fogFactor);
     gl_FragColor = vec4(col, mix(0.82, 0.55, fres));
     #include <tonemapping_fragment>
@@ -126,6 +128,7 @@ function Water({ level, air }) {
       uColor: { value: air.water },
       uSky: { value: air.horizon },
       uSun: { value: air.sun },
+      uSunDir: { value: air.sunDir },
     },
     vertexShader: waterVertex,
     fragmentShader: waterFragment,
@@ -193,16 +196,19 @@ function HorizonBody({ radius, color, rim }) {
 
 export function SurfaceWorld({ planet, depleted, sibling, lite = false }) {
   const air = useMemo(() => atmosphereOf(planet), [planet]);
+  SUN_DIR.copy(air.sunDir);
+  skyState.sunDir.copy(air.sunDir);
+  skyState.fogHex = `#${air.fog.getHexString()}`;
   const water = waterLevel(planet);
   const layout = useMemo(() => surfaceLayout(planet), [planet]);
   const deposits = layout.deposits.filter((deposit) => !depleted.includes(deposit.id));
   const horizonColor = sibling?.colors?.[1] || '#d06a42';
   const horizonRim = sibling?.atmosphere || '#f0b5a4';
   const moon = useMemo(() => {
-    const placed = SUN_DIR.clone().multiplyScalar(-460);
+    const placed = air.sunDir.clone().multiplyScalar(-460);
     placed.y = Math.abs(placed.y) + 150;
     return placed;
-  }, []);
+  }, [air]);
 
   return (
     <group>

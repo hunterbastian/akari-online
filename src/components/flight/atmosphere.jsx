@@ -9,10 +9,22 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { hashString } from '../../../shared/universe.js';
 import { surfaceSky } from '../../../shared/surface.js';
 
-// Same compass as the previous sun, so a look toward it still finds the light.
+// Shared stand-in. Each world copies its own daytime sun into this before drawing.
 export const SUN_DIR = new THREE.Vector3(0.821, 0.5, 0.303).normalize();
 
-export const skyState = { fogHex: '' };
+export const skyState = {
+  fogHex: '',
+  sunDir: SUN_DIR.clone(),
+};
+
+// Daytime only: elevation stays between 20° and 60°, azimuth is the planet's own.
+export function sunDirection(id, target = new THREE.Vector3()) {
+  const hash = hashString(`${id || 'world'}:sun`);
+  const azimuth = ((hash & 65535) / 65535) * Math.PI * 2;
+  const elevation = (20 + ((hash >>> 16) % 41)) * (Math.PI / 180);
+  const flat = Math.cos(elevation);
+  return target.set(Math.sin(azimuth) * flat, Math.sin(elevation), Math.cos(azimuth) * flat);
+}
 
 const REACH = {
   lush: 620,
@@ -91,6 +103,7 @@ export function atmosphereOf(planet) {
     fogFar: REACH[planet.biome] || 560,
     sunIntensity: 3.7,
     hemiIntensity: 0.55,
+    sunDir: sunDirection(planet.id),
   };
 }
 
@@ -118,7 +131,6 @@ const domeFragment = `
   uniform vec3 uSunDir;
   uniform float uAltitude;
   uniform float uTime;
-  uniform float uCloud;
   uniform mat4 uInvProj;
   uniform mat4 uCamWorld;
   uniform vec2 uResolution;
@@ -151,22 +163,19 @@ const domeFragment = `
     sky += uSun * mie * 1.15;
     sky += uSun * wide * 0.22;
 
-    vec2 cuv = dir.xz / max(up, 0.16);
-    float drift = uTime * 0.018;
-    float n = uCloud > 0.5
-      ? vnoise(cuv * 1.15 + vec2(drift, drift * 0.35))
-      : hash12(floor(cuv * 1.35 + vec2(drift * 8.0, 0.0)));
-    if (uCloud > 0.5) n += vnoise(cuv * 2.35 - vec2(drift * 0.8, drift * 0.2)) * 0.5;
-    float cumulus = smoothstep(0.56, 0.78, n);
-    float rim = smoothstep(0.5, 0.64, n) * (1.0 - smoothstep(0.74, 0.9, n));
-    vec3 shade = uZenith * 0.7 + vec3(0.05, 0.06, 0.08);
-    vec3 lit = mix(vec3(0.72, 0.75, 0.8), uSun, 0.22 + rim * pow(max(mu, 0.0), 2.0) * 0.55);
-    vec3 cloud = mix(shade, lit, 0.5 + 0.4 * pow(max(mu, 0.0), 6.0));
-    float mask = cumulus * smoothstep(0.03, 0.2, up) * (1.0 - smoothstep(0.993, 0.9993, mu));
-    sky = mix(sky, cloud, mask * 0.72);
-    float cir = uCloud > 0.5 ? smoothstep(0.7, 0.88, vnoise(vec2(dir.x * 7.0 + drift * 0.25, dir.z * 1.5))) : 0.0;
-    cir *= smoothstep(0.28, 0.52, up) * (1.0 - smoothstep(0.84, 0.98, up));
-    sky = mix(sky, vec3(0.94, 0.96, 0.99), cir * (uCloud > 0.5 ? 0.32 : 0.16));
+    /*CLOUD*/
+    float body = smoothstep(0.2, 0.62, n);
+    float rim = smoothstep(0.16, 0.38, n) * (1.0 - smoothstep(0.52, 0.84, n));
+    float shade = clamp(0.18 + (n - nShade) * 1.7, 0.0, 1.0);
+    float sunLit = pow(max(mu, 0.0), 1.15);
+    vec3 shadowCol = uZenith * 0.38 + vec3(0.08, 0.09, 0.11);
+    vec3 litCol = mix(vec3(0.9, 0.92, 0.95), uSun, 0.32);
+    vec3 cloud = mix(shadowCol, litCol, shade * 0.72 + sunLit * 0.2 + 0.06);
+    cloud = mix(cloud, litCol, rim * (0.28 + sunLit * 0.6));
+    float mask = body * smoothstep(0.02, 0.2, up) * (1.0 - smoothstep(0.992, 0.9992, mu));
+    sky = mix(sky, cloud, mask * 0.78);
+    cir *= smoothstep(0.22, 0.5, up) * (1.0 - smoothstep(0.8, 0.97, up)) * (1.0 - body * 0.65);
+    sky = mix(sky, vec3(0.95, 0.96, 0.99), cir * 0.36);
 
     float disc = smoothstep(0.9985, 0.99955, mu);
     sky += vec3(1.0, 0.93, 0.8) * disc * 12.0;
@@ -188,6 +197,31 @@ const domeFragment = `
   }
 `;
 
+const cloudPhone = `
+    vec2 cuv = dir.xz / (abs(dir.y) + 0.5);
+    float drift = uTime * 0.008;
+    vec2 scroll = vec2(drift, drift * 0.16);
+    float n = vnoise(cuv * 0.62 + scroll);
+    float nShade = vnoise(cuv * 0.62 + scroll + uSunDir.xz * 0.16);
+    float cir = sin(dir.x * 6.5 + dir.z * 1.4 + drift * 1.8) * sin(dir.z * 5.0 - dir.x * 0.8);
+    cir = smoothstep(0.4, 0.8, cir * 0.5 + 0.5);
+`;
+
+const cloudDesktop = `
+    vec2 cuv = dir.xz / (abs(dir.y) + 0.5);
+    float drift = uTime * 0.008;
+    vec2 scroll = vec2(drift, drift * 0.16);
+    vec2 warp = vec2(
+      vnoise(cuv * 0.85 + vec2(1.7, 0.4)),
+      vnoise(cuv * 0.85 + vec2(4.2, 2.6))
+    );
+    vec2 puffed = cuv + (warp - 0.5) * 0.62;
+    float n = vnoise(puffed * 0.55 + scroll);
+    n += vnoise(puffed * 1.2 - scroll * 0.7) * 0.42;
+    float nShade = vnoise(puffed * 0.55 + scroll + uSunDir.xz * 0.18);
+    float cir = smoothstep(0.5, 0.82, vnoise(vec2(dir.x * 3.6 + dir.z * 0.7 + drift * 0.25, dir.y * 7.5)));
+`;
+
 const _draw = new THREE.Vector2();
 
 export function AtmosphereDome({ air, lite = false }) {
@@ -199,16 +233,15 @@ export function AtmosphereDome({ air, lite = false }) {
       uHorizon: { value: air.horizon },
       uFog: { value: air.fog },
       uSun: { value: air.sun },
-      uSunDir: { value: SUN_DIR },
+      uSunDir: { value: air.sunDir },
       uAltitude: { value: 0 },
       uTime: { value: 0 },
-      uCloud: { value: lite ? 0 : 1 },
       uInvProj: { value: new THREE.Matrix4() },
       uCamWorld: { value: new THREE.Matrix4() },
       uResolution: { value: new THREE.Vector2(1280, 720) },
     },
     vertexShader: domeVertex,
-    fragmentShader: domeFragment,
+    fragmentShader: domeFragment.replace('/*CLOUD*/', lite ? cloudPhone : cloudDesktop),
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
@@ -256,7 +289,8 @@ export function FollowSun({ air, lite }) {
     const z = camera.position.z;
     const y = Math.min(camera.position.y, 12);
     target.current.position.set(x, y, z);
-    light.current.position.set(x + SUN_DIR.x * 96, y + SUN_DIR.y * 96, z + SUN_DIR.z * 96);
+    const sun = air.sunDir;
+    light.current.position.set(x + sun.x * 96, y + sun.y * 96, z + sun.z * 96);
   });
 
   return (
@@ -389,7 +423,7 @@ export function Grade({ lite, contact = false }) {
       return;
     }
     camera.updateMatrixWorld();
-    _sun.copy(camera.position).addScaledVector(SUN_DIR, 40);
+    _sun.copy(camera.position).addScaledVector(skyState.sunDir, 40);
     _sunView.copy(_sun).applyMatrix4(camera.matrixWorldInverse);
     _sun.project(camera);
     const visible = _sunView.z < 0 && Math.abs(_sun.x) < 1.12 && Math.abs(_sun.y) < 1.12;
@@ -416,8 +450,8 @@ export function SkyEnvironment({ air, lite = false }) {
     gradient.addColorStop(1, css(air.horizon));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 256, 128);
-    const u = (Math.atan2(SUN_DIR.z, SUN_DIR.x) / (Math.PI * 2) + 1) % 1;
-    const v = Math.acos(THREE.MathUtils.clamp(SUN_DIR.y, -1, 1)) / Math.PI;
+    const u = (Math.atan2(air.sunDir.z, air.sunDir.x) / (Math.PI * 2) + 1) % 1;
+    const v = Math.acos(THREE.MathUtils.clamp(air.sunDir.y, -1, 1)) / Math.PI;
     const glow = ctx.createRadialGradient(u * 256, v * 128, 2, u * 256, v * 128, 46);
     glow.addColorStop(0, '#fff3d4');
     glow.addColorStop(1, 'rgba(255,255,255,0)');
@@ -454,7 +488,7 @@ const FOG_CHUNK = `#ifdef USE_FOG
 
 export function dressGround(material, air, { crease = false, lite = false } = {}) {
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSunDir = { value: SUN_DIR };
+    shader.uniforms.uSunDir = { value: air.sunDir };
     shader.uniforms.uFogSun = { value: air.fogSun };
     shader.uniforms.uFogBase = { value: air.fog };
     shader.vertexShader = `
