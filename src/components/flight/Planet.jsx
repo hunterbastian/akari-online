@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { graphicsLite, sunDirection } from './atmosphere.jsx';
+import { OrbitMarks } from './Interests';
 
 // From far away the world is a few big colors and a thick rim. Up close the
 // same sphere breaks into weather, coastlines, and a soft sun-lit halo.
@@ -227,7 +228,7 @@ function palette(planet) {
   return stops;
 }
 
-export default function Planet({ planet }) {
+export default function Planet({ planet, marks = false }) {
   const spin = useRef();
   const lite = graphicsLite();
   const geometry = useMemo(
@@ -296,6 +297,7 @@ export default function Planet({ planet }) {
   return (
     <group position={planet.position}>
       <mesh ref={spin} geometry={geometry} material={material} />
+      {marks && <OrbitMarks planet={planet} />}
       <mesh material={atmo} renderOrder={2}>
         <sphereGeometry args={[planet.radius * 1.28, lite ? 36 : 48, lite ? 24 : 32]} />
       </mesh>

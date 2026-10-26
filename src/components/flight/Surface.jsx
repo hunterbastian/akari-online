@@ -12,6 +12,7 @@ import {
   dressGround,
   skyState,
 } from './atmosphere.jsx';
+import { SurfaceMarks } from './Interests';
 
 const SIZE = 520;
 const SEGMENTS = 72;
@@ -194,7 +195,7 @@ function HorizonBody({ radius, color, rim }) {
   );
 }
 
-export function SurfaceWorld({ planet, depleted, sibling, lite = false }) {
+export function SurfaceWorld({ planet, depleted, sibling, lite = false, scanned = false }) {
   const air = useMemo(() => atmosphereOf(planet), [planet]);
   SUN_DIR.copy(air.sunDir);
   skyState.sunDir.copy(air.sunDir);
@@ -231,6 +232,7 @@ export function SurfaceWorld({ planet, depleted, sibling, lite = false }) {
       {deposits.map((deposit) => (
         <Prop key={deposit.id} kind="deposit" position={deposit.position} rotation={[0, 0.4, 0]} scale={1.35} air={air} lite={lite} />
       ))}
+      {scanned && <SurfaceMarks planet={planet} />}
       <AltitudeFog air={air} />
     </group>
   );

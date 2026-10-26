@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef } from 'react';
 import { SYSTEMS, getConnections, COMMODITIES } from '../../shared/galaxy.js';
 import { SHIPS, MANUFACTURERS, RARITY_COLORS, getCargoCapacity, getCargoUsed } from '../../shared/ships.js';
-import { jumpTo, buyCommodity, sellCommodity, buyShip, sendChat, getCurrentSystem, getAvailableShips, getSystemMarket } from '../store';
+import { jumpTo, buyCommodity, sellCommodity, buyShip, sendChat, sellExploration, unsoldExploration, getCurrentSystem, getAvailableShips, getSystemMarket } from '../store';
 import { generateSystem } from '../../shared/universe.js';
 import GalaxyView from './GalaxyView';
 import FlightView from './FlightView';
@@ -78,6 +78,18 @@ export default function GameScreen({ state }) {
 
       <div className="panel right">
         <div className="panel-title">Market</div>
+        {unsoldExploration(player) > 0 && (
+          <div className="market-row" data-kind="exploration">
+            <div>
+              <div className="commodity-name">Exploration data</div>
+              <div className="supply">Unsold surveys</div>
+            </div>
+            <div className="price">&cent;{unsoldExploration(player).toLocaleString('en-US')}</div>
+            <div className="trade-btns">
+              <button className="trade-btn sell" onClick={() => sellExploration()}>Sell</button>
+            </div>
+          </div>
+        )}
         {COMMODITIES.map(c => {
           const row = market[c.id];
           if (!row) return null;

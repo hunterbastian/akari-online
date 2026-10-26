@@ -39,7 +39,7 @@ function HoldButton({ className, label, onDown, onUp }) {
   );
 }
 
-export default function TouchControls({ onFoot, canBoard, canExit, canLand }) {
+export default function TouchControls({ onFoot, canBoard, canExit, canLand, canScan }) {
   const [shown, setShown] = useState(prefersTouch);
   const [portrait, setPortrait] = useState(false);
   const [stickOn, setStickOn] = useState(false);
@@ -206,6 +206,16 @@ export default function TouchControls({ onFoot, canBoard, canExit, canLand }) {
         <div ref={knobRef} className="touch-knob" />
       </div>
       <div className="touch-arc">
+        {canScan && !onFoot && (
+          <HoldButton
+            className="scan"
+            label="Scan"
+            onDown={() => {
+              touch.scanEdge = true;
+              tapHaptic(8);
+            }}
+          />
+        )}
         {action && (
           <HoldButton
             className="act"

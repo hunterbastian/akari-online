@@ -3,12 +3,14 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { SYSTEMS, getConnections } from '../../shared/galaxy.js';
 import { SHIPS } from '../../shared/ships.js';
-import { collectDeposit, jumpTo, surveyPlanet } from '../store';
+import { collectDeposit, jumpTo, scanPlanet as recordScan, surveyPlanet, unsoldExploration, visitInterest } from '../store';
 import {
+  SCAN_RANGE,
   describePlanet,
   flightProfile,
   generateSystem,
   hashString,
+  interestPoints,
   resourceLabel,
 } from '../../shared/universe.js';
 import { floorAt, surfaceLayout, surfaceSky } from '../../shared/surface.js';
@@ -18,7 +20,8 @@ import { Belt, Deposit, Sky, Starfield, Sun, TargetMarker } from './flight/scene
 import { GateView, PilotFigure, ShipView, SpaceTraffic, StationView } from './flight/Models';
 import { SurfaceWorld } from './flight/Surface';
 import { createFoot, resetFoot, stepFoot } from './flight/foot';
-import { ensureFootAudio, playJump, playLand, playSlide, playStep } from './flight/footAudio';
+import { ensureFootAudio, playJump, playLand, playScan, playSlide, playStep } from './flight/footAudio';
+import { ScanPulse } from './flight/Interests';
 import TouchControls from './flight/TouchControls';
 import { consumeLook, releaseActions, takeEdge, touch } from './flight/touch';
 import Planet from './flight/Planet';
@@ -142,6 +145,7 @@ function Pilot({
   onSceneRef,
   targetRef,
   bracketRef,
+  scanPulse,
 }) {
   const shipRef = useRef();
   const hullRef = useRef();
@@ -173,6 +177,8 @@ function Pilot({
   const landDip = useRef(0);
   const wasLanded = useRef(false);
   const frame = useRef({ space: null, surface: null, foot: null });
+  const clockNow = useRef(0);
+  const presented = useRef({ prompt: '', note: '' });
   const { camera, gl, scene } = useThree();
   const motesRef = useRef(null);
 
@@ -332,6 +338,11 @@ function Pilot({
             position: planet.position,
             radius: planet.radius,
           })),
+          credits: playerRef.current?.credits ?? 0,
+          unsold: unsoldExploration(playerRef.current),
+          note: note.current?.until > clockNow.current ? note.current.text : '',
+          prompt: presented.current.prompt,
+          exploration: playerRef.current?.exploration || {},
           station: env.station.position,
           gates: env.gates.map((gate) => ({ name: gate.name, position: gate.position, systemId: gate.systemId })),
         };
@@ -345,6 +356,7 @@ function Pilot({
     if (!group) return;
     const dt = Math.min(delta, 0.05);
     const now = state.clock.elapsedTime;
+    clockNow.current = now;
     const view = frame.current;
     view.space = null;
     view.surface = null;
@@ -398,6 +410,10 @@ function Pilot({
         onFoot.current = false;
         landed.current = false;
         reportScene();
+      } else if (cmd.type === 'pulse') {
+        scanPulse.current.hold = cmd.age == null ? null : cmd.age;
+        scanPulse.current.start = now;
+        scanPulse.current.origin.copy(group.position);
       } else if (cmd.type === 'place') {
         mode.current = 'space';
         surfacePlanet.current = null;
@@ -630,17 +646,55 @@ function Pilot({
 
       const collectible = nearestDeposit(env.deposits, 16);
 
-      if (consume('KeyF') && docking) onExitRef.current();
-      if (consume('KeyC') && target.kind === 'planet') {
-        surveyPlanet(target);
-        note.current = { text: describePlanet(target), until: time + 4.5 };
+      let scanBody = null;
+      if (target.kind === 'planet') {
+        const aimed = env.planets.find((planet) => planet.id === target.id);
+        if (aimed) {
+          _body.set(aimed.position[0], aimed.position[1], aimed.position[2]);
+          const aimedAlt = group.position.distanceTo(_body) - aimed.radius;
+          if (aimedAlt < aimed.radius * SCAN_RANGE) scanBody = aimed;
+        }
       }
+      if (!scanBody && closestPlanet && closest < closestPlanet.radius * SCAN_RANGE) scanBody = closestPlanet;
+
+      const honk = (consume('KeyC') || (touch.enabled && takeEdge('scanEdge'))) && scanBody;
+      if (honk) {
+        playScan();
+        scanPulse.current.hold = null;
+        scanPulse.current.start = time;
+        scanPulse.current.origin.copy(group.position);
+        const result = recordScan(scanBody);
+        if (result?.fresh) {
+          note.current = {
+            text: `${result.name} · ${result.biome} · ${result.sites} sites · ¢${result.value.toLocaleString('en-US')}`,
+            until: time + 4.6,
+          };
+        } else if (result) {
+          note.current = { text: `${result.name} already logged`, until: time + 3.4 };
+        }
+      } else if (touch.enabled && !scanBody) {
+        takeEdge('scanEdge');
+      }
+
+      if (consume('KeyF') && docking) onExitRef.current();
       if (consume('KeyE') && collectible) take(collectible, time);
 
       const camDist = pulsing.current ? 11.2 : boosting ? 9.2 : 7.6;
       _cam.copy(group.position).addScaledVector(_up, 1.15).addScaledVector(_forward, -camDist);
       chase(step, camDist === 11.2 ? 68 : boosting ? 60 : 52, 28);
-      view.space = { target, dist, docking, collectible, closest, closestPlanet, canLand, time };
+      const scanned = !!(scanBody && playerRef.current?.exploration?.[scanBody.id]?.scanned);
+      view.space = {
+        target,
+        dist,
+        docking,
+        collectible,
+        closest,
+        closestPlanet,
+        canLand,
+        canScan: !!scanBody,
+        scanned,
+        time,
+      };
     }
 
     function flySurface(step, time) {
@@ -842,6 +896,19 @@ function Pilot({
       if (consume('KeyC')) {
         note.current = { text: describePlanet(planet), until: time + 4.5 };
       }
+      const chart = playerRef.current?.exploration?.[planet.id];
+      if (chart?.scanned && !chart.sold) {
+        for (const site of interestPoints(planet)) {
+          if ((chart.sites || []).includes(site.id)) continue;
+          const dx = foot.pos.x - site.surface[0];
+          const dz = foot.pos.z - site.surface[2];
+          if (dx * dx + dz * dz < 64) {
+            const bonus = visitInterest(planet.id, site.id);
+            if (bonus) note.current = { text: `${site.name} · +¢${bonus}`, until: time + 3.2 };
+            break;
+          }
+        }
+      }
 
       velocity.current.set(foot.vel.x, foot.vel.y, foot.vel.z);
       view.foot = { planet, collectible, shipDist, time };
@@ -941,13 +1008,16 @@ function Pilot({
         atmo = onFoot.current ? haze * 0.04 : haze;
         atmoColor = skyState.fogHex || sky?.fog || '#ffffff';
       } else if (view.space) {
-        const { target, dist, docking, collectible, closest, closestPlanet, canLand } = view.space;
+        const { target, dist, docking, collectible, closest, closestPlanet, canLand, canScan, scanned } = view.space;
         targetName = target.name;
         readout = `${Math.max(0, Math.round(dist))} u`;
         targetDist = readout;
         if (docking) {
           prompt = 'Dock';
           promptKey = 'F';
+        } else if (canScan && !scanned) {
+          prompt = 'Scan';
+          promptKey = 'C';
         } else if (canLand) {
           prompt = 'Land';
           promptKey = 'F';
@@ -966,6 +1036,7 @@ function Pilot({
         }
       }
 
+      presented.current = { prompt, note: text };
       onHud({
         systemName: env.name,
         targetName,
@@ -986,6 +1057,7 @@ function Pilot({
         canBoard: !!(onFoot.current && view.foot && view.foot.shipDist < 7),
         canExit: mode.current === 'surface' && landed.current && !onFoot.current,
         canLand: mode.current !== 'surface' && !!view.space?.canLand,
+        canScan: mode.current !== 'surface' && !!view.space?.canScan,
         touch: touch.enabled,
       });
     }
@@ -1025,12 +1097,14 @@ function initialHud(env) {
     canBoard: false,
     canExit: false,
     canLand: false,
+    canScan: false,
     touch: false,
   };
 }
 
 export default function FlightView({ player, onExit }) {
   const bracketRef = useRef(null);
+  const scanPulse = useRef({ start: -10, hold: null, origin: new THREE.Vector3() });
   const [lite, setLite] = useState(graphicsLite);
   useEffect(() => {
     const update = () => setLite(graphicsLite());
@@ -1119,7 +1193,13 @@ export default function FlightView({ player, onExit }) {
         <Grade lite={lite} contact={!!ground} />
         <Suspense fallback={null}>
           {ground ? (
-            <SurfaceWorld planet={ground} depleted={depleted} sibling={sibling} lite={lite} />
+            <SurfaceWorld
+              planet={ground}
+              depleted={depleted}
+              sibling={sibling}
+              lite={lite}
+              scanned={!!player.exploration?.[ground.id]?.scanned}
+            />
           ) : (
             <>
               <hemisphereLight args={[env.sky.bottom, env.sky.top, 0.58]} />
@@ -1130,7 +1210,9 @@ export default function FlightView({ player, onExit }) {
               <Sun color={env.sky.star} />
               <StationView position={env.station.position} />
               <SpaceTraffic />
-              {env.planets.map((planet) => <Planet key={planet.id} planet={planet} />)}
+              {env.planets.map((planet) => (
+                <Planet key={planet.id} planet={planet} marks={!!player.exploration?.[planet.id]?.scanned} />
+              ))}
               {env.gates.map((gate) => <GateView key={gate.id} position={gate.position} />)}
               <Belt rocks={env.belt} />
               {env.deposits.filter((d) => !depleted.includes(d.id)).map((d) => (
@@ -1140,6 +1222,7 @@ export default function FlightView({ player, onExit }) {
           )}
           <InputBinder />
           <TargetMarker targetRef={targetRef} />
+          <ScanPulse pulseRef={scanPulse} />
           <Pilot
             key={env.id}
             env={env}
@@ -1151,6 +1234,7 @@ export default function FlightView({ player, onExit }) {
             onSceneRef={onSceneRef}
             targetRef={targetRef}
             bracketRef={bracketRef}
+            scanPulse={scanPulse}
           />
         </Suspense>
       </Canvas>
@@ -1161,16 +1245,24 @@ export default function FlightView({ player, onExit }) {
           {discoveries.length === 0 && <div>Nothing logged yet.</div>}
           {discoveries.map(([id, entry]) => {
             const systemName = SYSTEMS.find((item) => item.id === entry.systemId)?.name || '';
+            const row = player.exploration?.[id];
+            const worth = row?.scanned && !row.sold && row.value ? ` · ¢${row.value.toLocaleString('en-US')}` : '';
             return (
               <div key={id}>
                 {entry.name}
-                <span>{entry.biome}{systemName ? ` · ${systemName}` : ''}</span>
+                <span>{entry.biome}{systemName ? ` · ${systemName}` : ''}{worth}</span>
               </div>
             );
           })}
         </div>
       )}
-      <TouchControls onFoot={hud.onFoot} canBoard={hud.canBoard} canExit={hud.canExit} canLand={hud.canLand} />
+      <TouchControls
+        onFoot={hud.onFoot}
+        canBoard={hud.canBoard}
+        canExit={hud.canExit}
+        canLand={hud.canLand}
+        canScan={hud.canScan}
+      />
       <FlightHUD hud={hud} bracketRef={bracketRef} onExit={leave} onLog={() => setLogOpen((open) => !open)} />
     </div>
   );
