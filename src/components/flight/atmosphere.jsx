@@ -332,6 +332,7 @@ const GradeShader = {
     tDiffuse: { value: null },
     uSunUv: { value: new THREE.Vector2(0.5, 1.4) },
     uFlare: { value: 0 },
+    uOrbit: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -344,22 +345,37 @@ const GradeShader = {
     uniform sampler2D tDiffuse;
     uniform vec2 uSunUv;
     uniform float uFlare;
+    uniform float uOrbit;
     varying vec2 vUv;
     void main() {
       vec3 c = texture2D(tDiffuse, vUv).rgb;
-      float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      c = mix(vec3(luma), c, 1.08);
-      c = clamp((c - 0.5) * 1.05 + 0.5, 0.0, 1.0);
-      luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      float tone = smoothstep(0.18, 0.72, luma);
-      c *= mix(vec3(0.86, 0.93, 1.08), vec3(1.07, 1.03, 0.92), tone);
-      vec2 d = vUv - uSunUv;
-      vec2 g = vUv - (vec2(1.0) - uSunUv);
-      float glare = exp(-dot(d, d) * 14.0) * uFlare;
-      float ghost = exp(-dot(g, g) * 46.0) * uFlare;
-      c += vec3(1.0, 0.9, 0.72) * (glare * 0.16 + ghost * 0.05);
-      float edge = smoothstep(0.38, 0.92, distance(vUv, vec2(0.5)));
-      c *= mix(1.0, 0.86, edge);
+      if (uOrbit > 0.5) {
+        float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(luma), c, 0.84);
+        float tone = smoothstep(0.08, 0.55, luma);
+        c = mix(c * vec3(0.82, 0.94, 0.98), c * vec3(1.08, 0.96, 0.82), tone);
+        vec2 d = vUv - uSunUv;
+        float glare = exp(-dot(d, d) * 5.5) * uFlare;
+        c += vec3(1.0, 0.86, 0.62) * glare * 0.22;
+        float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        c += (grain - 0.5) * 0.028;
+        float vig = smoothstep(0.95, 0.28, length(vUv - vec2(0.5)));
+        c *= mix(0.76, 1.0, vig);
+      } else {
+        float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(luma), c, 1.08);
+        c = clamp((c - 0.5) * 1.05 + 0.5, 0.0, 1.0);
+        luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        float tone = smoothstep(0.18, 0.72, luma);
+        c *= mix(vec3(0.86, 0.93, 1.08), vec3(1.07, 1.03, 0.92), tone);
+        vec2 d = vUv - uSunUv;
+        vec2 g = vUv - (vec2(1.0) - uSunUv);
+        float glare = exp(-dot(d, d) * 14.0) * uFlare;
+        float ghost = exp(-dot(g, g) * 46.0) * uFlare;
+        c += vec3(1.0, 0.9, 0.72) * (glare * 0.16 + ghost * 0.05);
+        float edge = smoothstep(0.38, 0.92, distance(vUv, vec2(0.5)));
+        c *= mix(1.0, 0.86, edge);
+      }
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }
   `,
@@ -392,7 +408,12 @@ export function Grade({ lite, contact = false }) {
       effect.addPass(ssao);
     }
     if (!lite) {
-      bloom = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.18, 0.46, 0.9);
+      bloom = new UnrealBloomPass(
+        new THREE.Vector2(size.width, size.height),
+        contact ? 0.18 : 0.12,
+        contact ? 0.46 : 0.5,
+        contact ? 0.9 : 0.92,
+      );
       effect.addPass(bloom);
     }
     const pass = new ShaderPass(GradeShader);
@@ -423,12 +444,15 @@ export function Grade({ lite, contact = false }) {
       return;
     }
     camera.updateMatrixWorld();
-    _sun.copy(camera.position).addScaledVector(skyState.sunDir, 40);
+    const orbit = !contact;
+    pass.uniforms.uOrbit.value = orbit ? 1 : 0;
+    if (orbit) _sun.set(0, 0, 0);
+    else _sun.copy(camera.position).addScaledVector(skyState.sunDir, 40);
     _sunView.copy(_sun).applyMatrix4(camera.matrixWorldInverse);
     _sun.project(camera);
-    const visible = _sunView.z < 0 && Math.abs(_sun.x) < 1.12 && Math.abs(_sun.y) < 1.12;
+    const visible = _sunView.z < 0 && Math.abs(_sun.x) < 1.15 && Math.abs(_sun.y) < 1.15;
     pass.uniforms.uSunUv.value.set(_sun.x * 0.5 + 0.5, _sun.y * 0.5 + 0.5);
-    pass.uniforms.uFlare.value = visible && !lite && contact ? 1 : 0;
+    pass.uniforms.uFlare.value = visible && !lite && (contact || orbit) ? (orbit ? 0.65 : 1) : 0;
     effect.render();
   }, 1);
 

@@ -147,14 +147,14 @@ function planetFragment(lite) {
     vec3 lightDir = normalize(uSunDir);
     vec3 viewDir = normalize(cameraPosition - vWorld);
     float ndl = dot(worldN, lightDir);
-    float day = smoothstep(-0.03, 0.08, ndl);
-    float wrap = smoothstep(-0.12, 0.45, ndl);
-    vec3 lit = albedo * (0.48 + 0.52 * wrap);
-    vec3 night = mix(albedo * 0.17, uAtmo * 0.12, 0.18);
+    float day = smoothstep(-0.32, 0.46, ndl);
+    float wrap = smoothstep(-0.4, 0.7, ndl);
+    vec3 lit = albedo * (0.58 + 0.42 * wrap);
+    vec3 night = mix(albedo * 0.24, uAtmo * 0.14, 0.2);
     vec3 color = mix(night, lit, day);
-    float term = exp(-ndl * ndl * 120.0);
-    color = mix(color, color * vec3(1.0, 0.72, 0.46), term * 0.45);
-    color += vec3(1.0, 0.34, 0.08) * crack * 0.32;
+    float term = exp(-ndl * ndl * 7.5);
+    color = mix(color, color * vec3(1.08, 0.86, 0.58), term * 0.38);
+    color += vec3(1.0, 0.42, 0.16) * crack * 0.2;
 
     vec3 halfDir = normalize(lightDir + viewDir);
     float ndh = max(dot(worldN, halfDir), 0.0);
@@ -162,23 +162,24 @@ function planetFragment(lite) {
     color += vec3(1.0, 0.97, 0.92) * glint * specMask * smoothstep(-0.02, 0.22, ndl);
 
     ${lite ? `
-    float band = sin(nrm.y * 3.4 + uSeed * 1.7 + uTime * 0.02);
-    float cloud = smoothstep(0.28, 0.82, band * 0.5 + 0.5);
+    float band = sin(nrm.y * 2.6 + uSeed * 1.4 + uTime * 0.015);
+    float cloud = smoothstep(0.2, 0.86, band * 0.5 + 0.5);
     ` : `
-    float band = sin(nrm.y * 3.1 + uSeed * 1.7 + shape * 1.4 + uTime * 0.015);
-    float cn = vnoise(nrm * 2.4 + vec3(uTime * 0.012, uSeed, 0.4));
-    float cloud = smoothstep(0.32, 0.8, band * 0.5 + 0.5);
-    cloud = clamp(cloud * 0.82 + smoothstep(0.5, 0.78, cn) * 0.4, 0.0, 1.0);
+    float band = sin(nrm.y * 2.4 + uSeed * 1.4 + shape * 1.6 + uTime * 0.012);
+    float cn = vnoise(nrm * 1.8 + vec3(uTime * 0.01, uSeed, 0.4));
+    float cloud = smoothstep(0.18, 0.88, band * 0.5 + 0.5);
+    cloud = clamp(cloud * 0.7 + smoothstep(0.42, 0.8, cn) * 0.55, 0.0, 1.0);
     `}
-    vec3 cloudCol = mix(vec3(0.96, 0.97, 0.99), uAtmo, 0.08);
-    float cloudVis = mix(0.12, 1.0, smoothstep(-0.08, 0.22, ndl));
-    color = mix(color, cloudCol * mix(0.34, 1.0, day), clamp(cloud * cloudAmt, 0.0, 0.4) * cloudVis);
+    vec3 cloudCol = mix(vec3(0.93, 0.9, 0.82), uAtmo, 0.16);
+    float cloudVis = mix(0.2, 1.0, smoothstep(-0.25, 0.35, ndl));
+    color = mix(color, cloudCol * mix(0.4, 1.0, day), clamp(cloud * cloudAmt, 0.0, 0.36) * cloudVis);
 
-    float fres = pow(1.0 - clamp(dot(worldN, viewDir), 0.0, 1.0), 3.4);
-    color += uAtmo * fres * mix(0.04, 0.16, day);
+    float fres = pow(1.0 - clamp(dot(worldN, viewDir), 0.0, 1.0), 2.2);
+    color += uAtmo * fres * mix(0.06, 0.28, day);
 
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    color = mix(vec3(luma), color, 1.24);
+    color = mix(vec3(luma), color, 0.86);
+    color = mix(color * vec3(0.9, 0.97, 1.0), color * vec3(1.03, 0.98, 0.92), smoothstep(0.16, 0.7, luma));
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -206,14 +207,14 @@ const atmosphereFragment = `
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 n = normalize(vNormal);
     float ndotv = clamp(dot(n, viewDir), 0.0, 1.0);
-    float rim = pow(1.0 - ndotv, 2.7);
-    float halo = pow(1.0 - ndotv, 1.7);
+    float rim = pow(1.0 - ndotv, 1.55);
+    float halo = pow(1.0 - ndotv, 1.05);
     float ndl = dot(n, normalize(uSunDir));
-    float day = smoothstep(-0.15, 0.4, ndl);
-    float term = exp(-ndl * ndl * 26.0);
-    vec3 col = uColor * mix(0.55, 1.35, day);
-    col += vec3(1.0, 0.7, 0.42) * term * rim;
-    float alpha = (halo * 0.22 + rim * 0.95) * mix(0.42, 1.0, day);
+    float day = smoothstep(-0.4, 0.62, ndl);
+    float term = exp(-ndl * ndl * 5.5);
+    vec3 col = uColor * mix(0.42, 1.05, day);
+    col += vec3(1.0, 0.8, 0.5) * term * halo * 0.65;
+    float alpha = (halo * 0.32 + rim * 0.58) * mix(0.28, 0.82, day);
     gl_FragColor = vec4(col, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -296,7 +297,7 @@ export default function Planet({ planet }) {
     <group position={planet.position}>
       <mesh ref={spin} geometry={geometry} material={material} />
       <mesh material={atmo} renderOrder={2}>
-        <sphereGeometry args={[planet.radius * 1.2, lite ? 36 : 48, lite ? 24 : 32]} />
+        <sphereGeometry args={[planet.radius * 1.28, lite ? 36 : 48, lite ? 24 : 32]} />
       </mesh>
       {planet.rings && (
         <group rotation={planet.ringTilt}>

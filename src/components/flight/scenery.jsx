@@ -3,31 +3,48 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mulberry32 } from '../../../shared/universe.js';
 
+function gradeStop(hex, toward, mix, sat) {
+  const color = new THREE.Color(hex);
+  color.lerp(new THREE.Color(toward), mix);
+  const hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  hsl.s = Math.min(0.38, hsl.s * sat);
+  hsl.l = THREE.MathUtils.clamp(hsl.l, 0.14, 0.56);
+  color.setHSL(hsl.h, hsl.s, hsl.l);
+  return `#${color.getHexString()}`;
+}
+
 function makeSkyTexture(sky) {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, sky.top);
-  gradient.addColorStop(0.46, sky.mid);
-  gradient.addColorStop(1, sky.bottom);
+  gradient.addColorStop(0, gradeStop(sky.top, '#163e46', 0.84, 0.5));
+  gradient.addColorStop(0.34, gradeStop(sky.mid, '#6e8e86', 0.62, 0.45));
+  gradient.addColorStop(0.68, gradeStop(sky.bottom, '#e4c196', 0.4, 0.5));
+  gradient.addColorStop(1, gradeStop(sky.top, '#1d4c52', 0.7, 0.5));
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.globalCompositeOperation = 'screen';
-  const blob = ctx.createRadialGradient(360, 90, 8, 360, 100, 180);
-  blob.addColorStop(0, sky.mid);
-  blob.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = blob;
+  const sun = ctx.createRadialGradient(760, 150, 12, 720, 190, 460);
+  sun.addColorStop(0, 'rgba(255, 214, 156, 0.32)');
+  sun.addColorStop(0.4, 'rgba(214, 160, 108, 0.1)');
+  sun.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sun;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const blob2 = ctx.createRadialGradient(120, 170, 6, 130, 175, 150);
-  blob2.addColorStop(0, sky.bottom);
-  blob2.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = blob2;
+  const dust = ctx.createRadialGradient(200, 340, 16, 240, 310, 380);
+  dust.addColorStop(0, 'rgba(110, 168, 164, 0.38)');
+  dust.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = dust;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const veil = ctx.createRadialGradient(500, 250, 30, 520, 240, 520);
+  veil.addColorStop(0, 'rgba(232, 198, 154, 0.14)');
+  veil.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = veil;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -55,7 +72,7 @@ export function Sky({ sky }) {
 export function Starfield({ seed }) {
   const positions = useMemo(() => {
     const rng = mulberry32(seed ^ 0x9e3779b9);
-    const count = 420;
+    const count = 150;
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const r = 1600 + rng() * 700;
@@ -73,7 +90,7 @@ export function Starfield({ seed }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial color="#f6f1e8" size={1.35} sizeAttenuation={false} transparent opacity={0.8} depthWrite={false} fog={false} />
+      <pointsMaterial color="#efe6d4" size={1.05} sizeAttenuation={false} transparent opacity={0.42} depthWrite={false} fog={false} toneMapped={false} />
     </points>
   );
 }
@@ -82,12 +99,16 @@ export function Sun({ color }) {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[4.6, 32, 20]} />
-        <meshBasicMaterial color="#fff8f0" toneMapped={false} />
+        <sphereGeometry args={[3.2, 24, 16]} />
+        <meshBasicMaterial color="#fff3e2" toneMapped={false} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[8.4, 28, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={0.28} depthWrite={false} toneMapped={false} />
+        <sphereGeometry args={[15, 24, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.18} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[32, 20, 12]} />
+        <meshBasicMaterial color="#e8b888" transparent opacity={0.08} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
     </group>
   );
