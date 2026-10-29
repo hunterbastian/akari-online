@@ -13,12 +13,14 @@ var _bank := 0.0
 var _mouse_dx := 0.0
 var _mouse_dy := 0.0
 var _shot := false
+var _closeup := false
 var _hull: Node3D
 var _flames: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
+	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1"
 	var ship := Ships.get_ship(GameState.ship_id)
 	_speeds = FlightProfile.for_speed_stat(float(ship.stats.speed))
 	_hull = Node3D.new()
@@ -58,7 +60,7 @@ func _process(delta: float) -> void:
 		yaw += FlightProfile.KEY_YAW_RATE * step
 	if Input.is_action_pressed("yaw_right"):
 		yaw -= FlightProfile.KEY_YAW_RATE * step
-	if _shot:
+	if _shot and not _closeup:
 		yaw += 0.05 * step
 
 	rotate_object_local(Vector3.UP, yaw)
@@ -76,7 +78,7 @@ func _process(delta: float) -> void:
 	var forward := -global_basis.z
 	boosting = Input.is_action_pressed("boost")
 	var throttle := 0.0
-	if Input.is_action_pressed("throttle_forward") or _shot:
+	if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup):
 		throttle += 1.0
 	if Input.is_action_pressed("throttle_back"):
 		throttle -= 1.0
@@ -154,7 +156,7 @@ func _tune_hull(material: StandardMaterial3D) -> void:
 		material.roughness = 0.28
 		material.emission_enabled = true
 		material.emission = Color(1.0, 0.45, 0.18)
-		material.emission_energy_multiplier = 4.5
+		material.emission_energy_multiplier = 1.6
 	elif "dark" in name:
 		material.metallic = 0.72
 		material.roughness = 0.32
@@ -168,8 +170,8 @@ func _build_flames() -> void:
 		var flame := MeshInstance3D.new()
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
-		cone.bottom_radius = 0.09
-		cone.height = 1.05
+		cone.bottom_radius = 0.045
+		cone.height = 0.48
 		cone.radial_segments = 6
 		flame.mesh = cone
 		flame.position = anchor
@@ -192,5 +194,5 @@ func _update_flames() -> void:
 		flame.scale = Vector3(1.0, 0.28 + hot * 1.35, 1.0)
 		var material := flame.material_override as StandardMaterial3D
 		if material:
-			var energy := 0.35 + hot * 7.5
-			material.albedo_color = Color(energy, energy * 0.42, energy * 0.16, 0.25 + hot * 0.7)
+			var energy := 0.15 + hot * 2.2
+			material.albedo_color = Color(energy, energy * 0.45, energy * 0.2, 0.18 + hot * 0.45)

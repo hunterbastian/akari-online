@@ -222,30 +222,36 @@ def glb_has_draco(path):
     return b'KHR_draco_mesh_compression' in blob
 
 
+def _section_ring(y, half_w, half_h):
+    """Slim octagon. The mid-side points chamfer the corners."""
+    return [
+        (0, y, half_h),
+        (half_w * 0.62, y, half_h * 0.58),
+        (half_w, y, half_h * 0.02),
+        (half_w * 0.5, y, -half_h * 0.62),
+        (0, y, -half_h),
+        (-half_w * 0.5, y, -half_h * 0.62),
+        (-half_w, y, half_h * 0.02),
+        (-half_w * 0.62, y, half_h * 0.58),
+    ]
+
+
 def hull_mesh():
-    """Wedge fuselage. Nose is +Y."""
+    """Slim chamfered fuselage. Nose is +Y. Same overall length as the old wedge."""
     mesh = bpy.data.meshes.new('hull')
     sections = [
-        (2.72, 0.06, 0.07),
-        (1.55, 0.30, 0.15),
-        (0.25, 0.46, 0.20),
-        (-0.85, 0.34, 0.16),
-        (-1.95, 0.18, 0.09),
+        (2.58, 0.02, 0.028),
+        (1.55, 0.10, 0.062),
+        (0.35, 0.16, 0.092),
+        (-0.75, 0.13, 0.075),
+        (-1.75, 0.07, 0.042),
+        (-2.28, 0.035, 0.022),
     ]
     verts = []
     rings = []
     for y, half_w, half_h in sections:
         ring = []
-        points = [
-            (0, y, half_h * 0.95),
-            (half_w * 0.78, y, half_h * 0.42),
-            (half_w, y, -half_h * 0.05),
-            (half_w * 0.48, y, -half_h),
-            (-half_w * 0.48, y, -half_h),
-            (-half_w, y, -half_h * 0.05),
-            (-half_w * 0.78, y, half_h * 0.42),
-        ]
-        for point in points:
+        for point in _section_ring(y, half_w, half_h):
             ring.append(len(verts))
             verts.append(point)
         rings.append(ring)
@@ -265,25 +271,37 @@ def hull_mesh():
     return obj
 
 
-def wing(sign):
+def swept_wing(sign):
+    """Tapered wing, swept back, with a chamfer between the broad edge and the caps."""
     mesh = bpy.data.meshes.new('wing')
     s = sign
-    top = [
-        (s * 0.28, 0.72, 0.02),
-        (s * 0.22, -0.95, 0.0),
-        (s * 2.05, -1.28, 0.05),
-        (s * 1.62, 0.18, 0.08),
+    outline = [
+        (s * 0.12, 0.42, 0.018),
+        (s * 0.09, -0.38, 0.0),
+        (s * 1.78, -1.22, 0.085),
+        (s * 1.52, -0.48, 0.10),
     ]
-    bottom = [(x, y, z - 0.045) for x, y, z in top]
-    verts = top + bottom
+    cx = sum(point[0] for point in outline) / 4
+    cy = sum(point[1] for point in outline) / 4
+
+    def inset(point, amount, z_shift):
+        return (
+            point[0] + (cx - point[0]) * amount,
+            point[1] + (cy - point[1]) * amount,
+            point[2] + z_shift,
+        )
+
+    top = [inset(point, 0.14, 0.012) for point in outline]
+    bottom = [inset(point, 0.14, -0.010) for point in outline]
+    verts = outline + top + bottom
     faces = [
-        (0, 1, 2, 3),
-        (4, 7, 6, 5),
-        (0, 3, 7, 4),
-        (3, 2, 6, 7),
-        (2, 1, 5, 6),
-        (1, 0, 4, 5),
+        (4, 5, 6, 7),
+        (11, 10, 9, 8),
     ]
+    for i in range(4):
+        j = (i + 1) % 4
+        faces.append((i, j, 4 + j, 4 + i))
+        faces.append((8 + i, 8 + j, j, i))
     mesh.from_pydata(verts, [], faces)
     mesh.update()
     obj = link_new(mesh, f'Wing{sign}')
@@ -293,47 +311,50 @@ def wing(sign):
 
 
 def build_ship():
-    parts = [hull_mesh(), wing(1), wing(-1)]
-    parts.append(box('Canopy', (0, 0.85, 0.28), (0.34, 0.72, 0.16), MAT['Canopy']))
-    parts.append(box('Stripe', (0, 0.15, 0.22), (0.06, 2.3, 0.025), MAT['Accent']))
-    parts.append(box('Fin', (0, -1.35, 0.38), (0.045, 0.55, 0.42), MAT['Hull']))
-    parts.append(box('FinTip', (0, -1.5, 0.62), (0.03, 0.22, 0.08), MAT['Accent']))
+    """Sleeker hull in the same size family: slim body, swept wings, one accent."""
+    MAT['Hull'] = make_material('Hull', '#e4e1da', 0.62, 0.06)
+    MAT['Accent'] = make_material('Accent', '#c4a090', 0.5, 0.08)
+    MAT['Canopy'] = make_material('Canopy', '#2e3c4c', 0.16, 0.22)
+    MAT['Dark'] = make_material('Dark', '#1c1816', 0.45, 0.18)
+    MAT['Engine'] = make_material('Engine', '#e7b090', 0.35, 0.0, '#e7a070', 1.15)
+
+    parts = [hull_mesh(), swept_wing(1), swept_wing(-1)]
+    parts.append(box('Canopy', (0, 0.95, 0.125), (0.14, 0.46, 0.05), MAT['Canopy']))
+    parts.append(box('Accent', (0, 1.15, 0.078), (0.018, 0.55, 0.01), MAT['Accent']))
+    parts.append(box('Fin', (0, -1.45, 0.16), (0.018, 0.32, 0.14), MAT['Hull']))
     for side in (1, -1):
         parts.append(primitive(
             'cylinder', f'Engine{side}',
-            (side * 0.34, -1.72, -0.02),
+            (side * 0.15, -1.95, -0.01),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
             material=MAT['Dark'],
-            vertices=8, radius=0.16, depth=0.62,
+            vertices=8, radius=0.065, depth=0.36,
         ))
         parts.append(primitive(
             'cylinder', f'Nozzle{side}',
-            (side * 0.34, -2.02, -0.02),
+            (side * 0.15, -2.16, -0.01),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
             material=MAT['Engine'],
-            vertices=8, radius=0.09, depth=0.08,
+            vertices=8, radius=0.04, depth=0.05,
         ))
     ship = join(parts, 'Ship')
     center_ship(ship)
-    engines = []
-    for side in (1, -1):
-        # Nozzles were joined; record the designed rear point in the centered mesh.
-        engines.append(None)
-    # Measure actual rear-most vertices near each side for trail anchors.
     left = []
     right = []
     for vert in ship.data.vertices:
-        if vert.co.y < -1.3:
+        if vert.co.y < -1.05 and abs(vert.co.x) < 0.42:
             (right if vert.co.x > 0 else left).append(vert.co)
+
     def anchor(group):
         if not group:
             return (0, -1.6, 0)
         x = sum(v.x for v in group) / len(group)
         y = min(v.y for v in group)
         z = sum(v.z for v in group) / len(group)
-        return (x, y - 0.05, z)
+        return (x, y - 0.04, z)
+
     meta = {
         'engines': [to_gltf(*anchor(right)), to_gltf(*anchor(left))],
     }

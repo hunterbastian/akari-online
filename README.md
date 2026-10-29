@@ -1,4 +1,4 @@
-# Akari Online
+# AKARI ONLINE
 
 A Godot 4.6 flight scene in Sol. You launch beside Mina, an ice world seeded to match the previous web build, under a nebula sky.
 
@@ -34,7 +34,7 @@ That regenerates Sol and compares every world's seed, name, biome, radius, and p
 `export_presets.cfg` has a macOS preset named `macOS` (universal, ad-hoc signature, testing distribution). Export templates for 4.6 are required:
 
 ```
-godot --headless --export-debug "macOS" "build/macos/Akari Online.zip"
+godot --headless --export-debug "macOS" "build/macos/AKARI ONLINE.zip"
 ```
 
 ## Ship mesh

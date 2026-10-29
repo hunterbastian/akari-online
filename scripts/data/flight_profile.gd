@@ -32,7 +32,7 @@ const SPAWN := Vector3(0, 6, 48)
 const SUN_OFFSET := Vector3(28, 46, 18)
 
 ## Nozzle centers in glTF space. From the ship entry in model meta.
-const ENGINE_ANCHORS = [Vector3(0.3318, -0.1492, 2.44), Vector3(-0.3249, -0.1491, 2.44)]
+const ENGINE_ANCHORS = [Vector3(0.1204, -0.0614, 2.47), Vector3(-0.11, -0.0621, 2.47)]
 
 
 static func for_speed_stat(speed_stat: float = 1.0) -> Dictionary:

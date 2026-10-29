@@ -5,12 +5,15 @@ const _ColorGrade := preload("res://scripts/world/color_grade.gd")
 ## Sol, one seeded world, the starter ship.
 
 var _shot := false
+var _title_card := false
 var _shot_time := 0.0
 var _shot_saved := false
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
+	_title_card = OS.get_environment("AKARI_TITLE") == "1"
+	DisplayServer.window_set_title("AKARI ONLINE")
 	var system := Galaxy.system_by_id(GameState.system_id)
 	var chart := Universe.generate_system(system)
 	var planet: Dictionary = chart.planets[0]
@@ -44,12 +47,20 @@ func _ready() -> void:
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
 	add_child(camera)
+	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
+		_frame_closeup(ship, camera)
 
-	if not _shot:
+	if not _shot or _title_card:
 		_build_hint()
 
 
 func _process(delta: float) -> void:
+	if _title_card and not _shot_saved:
+		_shot_time += delta
+		if _shot_time >= 0.7:
+			_shot_saved = true
+			_capture.call_deferred()
+		return
 	if not _shot or _shot_saved:
 		return
 	_shot_time += delta
@@ -85,6 +96,16 @@ func _place_for_shot(ship: Node3D, planet: Dictionary) -> void:
 	var look_dir := (sun_dir * cos(deg_to_rad(20.0)) - up * sin(deg_to_rad(20.0)) + right * 0.08).normalized()
 	ship.global_position = center - look_dir * radius * 14.2
 	ship.look_at(center, Vector3.UP)
+
+
+func _frame_closeup(ship: Node3D, camera: Camera3D) -> void:
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	camera.set_script(null)
+	camera.current = true
+	camera.fov = 28.0
+	camera.global_position = ship.global_position - forward * 11.0 + right * 5.8 + Vector3.UP * 2.6
+	camera.look_at(ship.global_position + forward * 0.15, Vector3.UP)
 
 
 func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
@@ -260,21 +281,6 @@ func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:
 
 func _build_hint() -> void:
 	var layer := CanvasLayer.new()
-	layer.name = "Hint"
-	var label := Label.new()
-	label.name = "HintLabel"
-	label.text = "Click to fly"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	label.offset_bottom = -28
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color.html("#f6ead4"))
-	label.add_theme_color_override("font_shadow_color", Color(0.05, 0.03, 0.08, 0.85))
-	label.add_theme_constant_override("shadow_offset_x", 0)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	layer.add_child(label)
+	layer.name = "Title"
+	layer.set_script(load("res://scripts/ui/title_card.gd"))
 	add_child(layer)
-	label.set_process(true)
-	label.set_script(load("res://scripts/ui/capture_hint.gd"))
