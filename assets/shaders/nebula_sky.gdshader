@@ -56,8 +56,8 @@ void sky() {
 	vec3 cell_b = floor(dir * 340.0 + 17.0);
 	float h1 = hash13(cell_a);
 	float h2 = hash13(cell_b);
-	float dim = step(0.996, h1) * (0.22 + 0.4 * hash13(cell_a + 3.1));
-	float bright = step(0.9984, h2) * (0.9 + 0.7 * hash13(cell_b + 1.7));
+	float dim = step(0.9988, h1) * (0.22 + 0.4 * hash13(cell_a + 3.1));
+	float bright = step(0.9982, h2) * (1.05 + 0.55 * hash13(cell_b + 1.7));
 	col += vec3(0.72, 0.8, 0.95) * dim;
 	col += vec3(0.92, 0.94, 1.0) * bright;
 

@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://cpqd14urt1wp4"
-path="res://.godot/imported/EBGaramond.ttf-79e8f860ffb742059dfbdb6c6f1064f7.fontdata"
+uid="uid://bfpubk2ppprmg"
+path="res://.godot/imported/Tinos-Regular.ttf-b959cef9aa48de4954b1863919197e43.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/EBGaramond.ttf"
-dest_files=["res://.godot/imported/EBGaramond.ttf-79e8f860ffb742059dfbdb6c6f1064f7.fontdata"]
+source_file="res://assets/fonts/Tinos-Regular.ttf"
+dest_files=["res://.godot/imported/Tinos-Regular.ttf-b959cef9aa48de4954b1863919197e43.fontdata"]
 
 [params]
 

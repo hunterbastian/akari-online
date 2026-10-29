@@ -33,6 +33,7 @@ func _ready() -> void:
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
+	ship.set_meta("flight_active", _shot)
 	add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
@@ -46,18 +47,23 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
+	camera.set_meta("title_hold", not _shot)
 	add_child(camera)
 	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
-
-	if not _shot or _title_card:
-		_build_hint()
+	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
+		_frame_side(ship, camera)
+	elif not _shot:
+		var director = load("res://scripts/ui/title_director.gd").new()
+		director.name = "TitleDirector"
+		add_child(director)
+		director.setup(ship, camera, planet.position, float(planet.radius), sun_dir)
 
 
 func _process(delta: float) -> void:
-	if _title_card and not _shot_saved:
+	if _title_card and not _shot and not _shot_saved:
 		_shot_time += delta
-		if _shot_time >= 0.7:
+		if _shot_time >= 2.4:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
@@ -98,14 +104,29 @@ func _place_for_shot(ship: Node3D, planet: Dictionary) -> void:
 	ship.look_at(center, Vector3.UP)
 
 
+func _frame_portrait(ship: Node3D, camera: Camera3D, offset: Vector3, aim: Vector3, fov: float) -> void:
+	camera.set_script(null)
+	camera.current = true
+	camera.fov = fov
+	camera.global_position = ship.global_position + offset
+	camera.look_at(ship.global_position + aim, Vector3.UP)
+
+
 func _frame_closeup(ship: Node3D, camera: Camera3D) -> void:
 	var forward := -ship.global_basis.z
 	var right := ship.global_basis.x
-	camera.set_script(null)
-	camera.current = true
-	camera.fov = 28.0
-	camera.global_position = ship.global_position - forward * 11.0 + right * 5.8 + Vector3.UP * 2.6
-	camera.look_at(ship.global_position + forward * 0.15, Vector3.UP)
+	_frame_portrait(
+		ship,
+		camera,
+		-forward * 8.2 + right * 7.4 + Vector3.UP * 2.5,
+		Vector3.ZERO,
+		30.0,
+	)
+
+
+func _frame_side(ship: Node3D, camera: Camera3D) -> void:
+	var right := ship.global_basis.x
+	_frame_portrait(ship, camera, right * 11.5 + Vector3.UP * 1.35, Vector3.ZERO, 28.0)
 
 
 func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
@@ -279,8 +300,3 @@ func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:
 	)
 
 
-func _build_hint() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "Title"
-	layer.set_script(load("res://scripts/ui/title_card.gd"))
-	add_child(layer)

@@ -10,7 +10,7 @@ Install [Godot 4.6](https://godotengine.org/download/archive/4.6-stable/) and op
 godot --path .
 ```
 
-Click the view to capture the mouse.
+The game opens on a title drift past Mina. Click or press any key, and the view fades into flight. Then click the view to capture the mouse.
 
 - **W / S** or the arrow keys throttle forward and back
 - **A / D** or the arrow keys yaw

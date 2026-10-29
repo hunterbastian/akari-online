@@ -80,6 +80,14 @@ def shade_flat(obj):
         poly.use_smooth = False
 
 
+def consistent_normals(obj):
+    select_only([obj])
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    shade_flat(obj)
+
+
 def link_new(mesh, name):
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
@@ -222,137 +230,164 @@ def glb_has_draco(path):
     return b'KHR_draco_mesh_compression' in blob
 
 
-def _section_ring(y, half_w, half_h):
-    """Slim octagon. The mid-side points chamfer the corners."""
-    return [
-        (0, y, half_h),
-        (half_w * 0.62, y, half_h * 0.58),
-        (half_w, y, half_h * 0.02),
-        (half_w * 0.5, y, -half_h * 0.62),
-        (0, y, -half_h),
-        (-half_w * 0.5, y, -half_h * 0.62),
-        (-half_w, y, half_h * 0.02),
-        (-half_w * 0.62, y, half_h * 0.58),
-    ]
-
-
-def hull_mesh():
-    """Slim chamfered fuselage. Nose is +Y. Same overall length as the old wedge."""
-    mesh = bpy.data.meshes.new('hull')
-    sections = [
-        (2.58, 0.02, 0.028),
-        (1.55, 0.10, 0.062),
-        (0.35, 0.16, 0.092),
-        (-0.75, 0.13, 0.075),
-        (-1.75, 0.07, 0.042),
-        (-2.28, 0.035, 0.022),
-    ]
+def _loft(name, rings, material):
+    """Loft closed rings. `rings` is a list of point lists, nose-to-tail order."""
+    mesh = bpy.data.meshes.new(name)
     verts = []
-    rings = []
-    for y, half_w, half_h in sections:
-        ring = []
-        for point in _section_ring(y, half_w, half_h):
-            ring.append(len(verts))
+    indices = []
+    for ring in rings:
+        slot = []
+        for point in ring:
+            slot.append(len(verts))
             verts.append(point)
-        rings.append(ring)
-
-    faces = [rings[0]]
-    for ring_a, ring_b in zip(rings, rings[1:]):
+        indices.append(slot)
+    faces = [indices[0]]
+    for ring_a, ring_b in zip(indices, indices[1:]):
         count = len(ring_a)
         for i in range(count):
             j = (i + 1) % count
             faces.append((ring_a[i], ring_a[j], ring_b[j], ring_b[i]))
-    faces.append(tuple(reversed(rings[-1])))
+    faces.append(tuple(reversed(indices[-1])))
     mesh.from_pydata(verts, [], faces)
     mesh.update()
-    obj = link_new(mesh, 'Hull')
-    assign(obj, MAT['Hull'])
-    shade_flat(obj)
+    obj = link_new(mesh, name)
+    assign(obj, material)
+    consistent_normals(obj)
     return obj
 
 
-def swept_wing(sign):
-    """Tapered wing, swept back, with a chamfer between the broad edge and the caps."""
-    mesh = bpy.data.meshes.new('wing')
-    s = sign
-    outline = [
-        (s * 0.12, 0.42, 0.018),
-        (s * 0.09, -0.38, 0.0),
-        (s * 1.78, -1.22, 0.085),
-        (s * 1.52, -0.48, 0.10),
+def _body_ring(y, half_w, half_h):
+    """Chamfered body section. +Y is the nose, +Z is up."""
+    return [
+        (0, y, half_h),
+        (half_w * 0.72, y, half_h * 0.62),
+        (half_w, y, half_h * 0.08),
+        (half_w * 0.62, y, -half_h * 0.55),
+        (0, y, -half_h * 0.82),
+        (-half_w * 0.62, y, -half_h * 0.55),
+        (-half_w, y, half_h * 0.08),
+        (-half_w * 0.72, y, half_h * 0.62),
     ]
-    cx = sum(point[0] for point in outline) / 4
-    cy = sum(point[1] for point in outline) / 4
 
-    def inset(point, amount, z_shift):
-        return (
-            point[0] + (cx - point[0]) * amount,
-            point[1] + (cy - point[1]) * amount,
-            point[2] + z_shift,
-        )
 
-    top = [inset(point, 0.14, 0.012) for point in outline]
-    bottom = [inset(point, 0.14, -0.010) for point in outline]
-    verts = outline + top + bottom
-    faces = [
-        (4, 5, 6, 7),
-        (11, 10, 9, 8),
+def hull_mesh(material):
+    """Compact jumpship fuselage. Nose is +Y."""
+    sections = [
+        (1.85, 0.08, 0.07),
+        (1.05, 0.30, 0.24),
+        (0.15, 0.46, 0.38),
+        (-0.65, 0.40, 0.32),
+        (-1.35, 0.24, 0.20),
     ]
-    for i in range(4):
-        j = (i + 1) % 4
-        faces.append((i, j, 4 + j, 4 + i))
-        faces.append((8 + i, 8 + j, j, i))
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    obj = link_new(mesh, f'Wing{sign}')
-    assign(obj, MAT['Hull'])
-    shade_flat(obj)
-    return obj
+    return _loft('Hull', [_body_ring(y, half_w, half_h) for y, half_w, half_h in sections], material)
+
+
+def _nacelle_ring(x, y, z, half_y, half_z):
+    return [
+        (x, y + half_y * 0.15, z + half_z),
+        (x, y + half_y, z + half_z * 0.35),
+        (x, y + half_y * 0.72, z - half_z * 0.15),
+        (x, y + half_y * 0.15, z - half_z),
+        (x, y - half_y * 0.55, z - half_z * 0.72),
+        (x, y - half_y, z - half_z * 0.05),
+        (x, y - half_y * 0.35, z + half_z * 0.45),
+    ]
+
+
+def nacelle_mesh(sign, material):
+    """Thick swept nacelle. The root sits inside the fuselage so it reads as attached."""
+    s = 1 if sign > 0 else -1
+    stations = [
+        (s * 0.06, 0.15, -0.02, 0.34, 0.22),
+        (s * 0.48, -0.08, -0.02, 0.32, 0.20),
+        (s * 0.95, -0.38, 0.0, 0.26, 0.17),
+        (s * 1.28, -0.62, 0.02, 0.16, 0.12),
+    ]
+    rings = [_nacelle_ring(x, y, z, half_y, half_z) for x, y, z, half_y, half_z in stations]
+    if s < 0:
+        rings = [list(reversed(ring)) for ring in rings]
+    return _loft(f'Nacelle{sign}', rings, material)
+
+
+def canopy_mesh(material):
+    """Raised cockpit. Bottom is buried in the nose so it does not float."""
+    rings = [
+        [
+            (0, 1.62, 0.12),
+            (0.08, 1.58, 0.16),
+            (0.10, 1.48, 0.10),
+            (0, 1.42, 0.08),
+            (-0.10, 1.48, 0.10),
+            (-0.08, 1.58, 0.16),
+        ],
+        [
+            (0, 0.72, 0.22),
+            (0.16, 0.78, 0.30),
+            (0.18, 0.62, 0.16),
+            (0, 0.55, 0.14),
+            (-0.18, 0.62, 0.16),
+            (-0.16, 0.78, 0.30),
+        ],
+    ]
+    return _loft('Canopy', rings, material)
 
 
 def build_ship():
-    """Sleeker hull in the same size family: slim body, swept wings, one accent."""
-    MAT['Hull'] = make_material('Hull', '#e4e1da', 0.62, 0.06)
-    MAT['Accent'] = make_material('Accent', '#c4a090', 0.5, 0.08)
-    MAT['Canopy'] = make_material('Canopy', '#2e3c4c', 0.16, 0.22)
-    MAT['Dark'] = make_material('Dark', '#1c1816', 0.45, 0.18)
-    MAT['Engine'] = make_material('Engine', '#e7b090', 0.35, 0.0, '#e7a070', 1.15)
+    """Guardian-style jumpship: chunky body, blended nacelles, rear engines."""
+    hull = make_material('Hull', '#d7d3cb', 0.78, 0.12)
+    panel = make_material('Panel', '#c5c0b6', 0.8, 0.1)
+    accent = make_material('Accent', '#b87448', 0.72, 0.06)
+    canopy = make_material('Canopy', '#24303c', 0.28, 0.35)
+    dark = make_material('Dark', '#2a2724', 0.7, 0.22)
+    engine = make_material('Engine', '#e8a060', 0.42, 0.05, '#e8954a', 1.6)
 
-    parts = [hull_mesh(), swept_wing(1), swept_wing(-1)]
-    parts.append(box('Canopy', (0, 0.95, 0.125), (0.14, 0.46, 0.05), MAT['Canopy']))
-    parts.append(box('Accent', (0, 1.15, 0.078), (0.018, 0.55, 0.01), MAT['Accent']))
-    parts.append(box('Fin', (0, -1.45, 0.16), (0.018, 0.32, 0.14), MAT['Hull']))
+    parts = [hull_mesh(hull), nacelle_mesh(1, hull), nacelle_mesh(-1, hull), canopy_mesh(canopy)]
+    parts.append(box('Accent', (0, 0.55, 0.42), (0.06, 1.15, 0.03), accent))
+    parts.append(box('Panel', (0, -0.2, 0.36), (0.42, 0.62, 0.05), panel))
+    parts.append(box('Fin', (0, -1.05, 0.48), (0.045, 0.28, 0.22), hull))
+    # One small mast, port side only.
+    parts.append(box('Mast', (-0.22, -0.15, 0.52), (0.04, 0.04, 0.12), dark))
     for side in (1, -1):
         parts.append(primitive(
             'cylinder', f'Engine{side}',
-            (side * 0.15, -1.95, -0.01),
+            (side * 0.72, -0.55, -0.04),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
-            material=MAT['Dark'],
-            vertices=8, radius=0.065, depth=0.36,
+            material=dark,
+            vertices=8, radius=0.13, depth=0.36,
         ))
         parts.append(primitive(
             'cylinder', f'Nozzle{side}',
-            (side * 0.15, -2.16, -0.01),
+            (side * 0.72, -0.76, -0.04),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
-            material=MAT['Engine'],
-            vertices=8, radius=0.04, depth=0.05,
+            material=engine,
+            vertices=8, radius=0.085, depth=0.08,
         ))
     ship = join(parts, 'Ship')
+    consistent_normals(ship)
     center_ship(ship)
     left = []
     right = []
     for vert in ship.data.vertices:
-        if vert.co.y < -1.05 and abs(vert.co.x) < 0.42:
+        if abs(vert.co.x) > 0.4:
             (right if vert.co.x > 0 else left).append(vert.co)
+
+    def rear_cluster(group):
+        if not group:
+            return []
+        limit = min(vert.y for vert in group) + 0.28
+        return [vert for vert in group if vert.y <= limit]
+
+    left = rear_cluster(left)
+    right = rear_cluster(right)
 
     def anchor(group):
         if not group:
             return (0, -1.6, 0)
-        x = sum(v.x for v in group) / len(group)
-        y = min(v.y for v in group)
-        z = sum(v.z for v in group) / len(group)
+        x = sum(vert.x for vert in group) / len(group)
+        y = min(vert.y for vert in group)
+        z = sum(vert.z for vert in group) / len(group)
         return (x, y - 0.04, z)
 
     meta = {

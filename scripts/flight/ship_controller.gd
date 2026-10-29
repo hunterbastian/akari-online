@@ -14,13 +14,17 @@ var _mouse_dx := 0.0
 var _mouse_dy := 0.0
 var _shot := false
 var _closeup := false
+var active := true
+var demo_fly := false
 var _hull: Node3D
 var _flames: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
-	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1"
+	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1" or OS.get_environment("AKARI_SIDE") == "1"
+	if has_meta("flight_active"):
+		active = bool(get_meta("flight_active"))
 	var ship := Ships.get_ship(GameState.ship_id)
 	_speeds = FlightProfile.for_speed_stat(float(ship.stats.speed))
 	_hull = Node3D.new()
@@ -38,8 +42,16 @@ func _ready() -> void:
 	_build_flames()
 
 
+func set_flight_active(on: bool) -> void:
+	active = on
+
+
+func set_demo_fly(on: bool) -> void:
+	demo_fly = on
+
+
 func _input(event: InputEvent) -> void:
-	if _shot:
+	if not active or _shot:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -51,6 +63,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if not active:
+		return
 	var step := minf(delta, FlightProfile.DT_CAP)
 	var yaw := -_mouse_dx * FlightProfile.MOUSE_YAW
 	var pitch := _mouse_dy * FlightProfile.MOUSE_PITCH
@@ -78,7 +92,7 @@ func _process(delta: float) -> void:
 	var forward := -global_basis.z
 	boosting = Input.is_action_pressed("boost")
 	var throttle := 0.0
-	if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup):
+	if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup) or demo_fly:
 		throttle += 1.0
 	if Input.is_action_pressed("throttle_back"):
 		throttle -= 1.0
@@ -145,24 +159,26 @@ func _dress_ship(node: Node) -> void:
 
 func _tune_hull(material: StandardMaterial3D) -> void:
 	var name := material.resource_name.to_lower()
-	material.metallic = 0.58
-	material.roughness = 0.4
+	material.metallic = 0.16
+	material.roughness = 0.76
 	if "canopy" in name:
-		material.metallic = 0.18
-		material.roughness = 0.12
-		material.albedo_color = material.albedo_color.lerp(Color(0.35, 0.5, 0.66), 0.35)
+		material.metallic = 0.32
+		material.roughness = 0.22
 	elif "engine" in name or "glow" in name:
-		material.metallic = 0.25
-		material.roughness = 0.28
+		material.metallic = 0.12
+		material.roughness = 0.45
 		material.emission_enabled = true
-		material.emission = Color(1.0, 0.45, 0.18)
-		material.emission_energy_multiplier = 1.6
+		material.emission = Color(1.0, 0.52, 0.22)
+		material.emission_energy_multiplier = 2.4
 	elif "dark" in name:
-		material.metallic = 0.72
-		material.roughness = 0.32
+		material.metallic = 0.22
+		material.roughness = 0.7
 	elif "accent" in name:
-		material.metallic = 0.42
-		material.roughness = 0.46
+		material.metallic = 0.08
+		material.roughness = 0.7
+	elif "panel" in name:
+		material.metallic = 0.14
+		material.roughness = 0.8
 
 
 func _build_flames() -> void:
@@ -170,8 +186,8 @@ func _build_flames() -> void:
 		var flame := MeshInstance3D.new()
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
-		cone.bottom_radius = 0.045
-		cone.height = 0.48
+		cone.bottom_radius = 0.07
+		cone.height = 0.62
 		cone.radial_segments = 6
 		flame.mesh = cone
 		flame.position = anchor
@@ -194,5 +210,5 @@ func _update_flames() -> void:
 		flame.scale = Vector3(1.0, 0.28 + hot * 1.35, 1.0)
 		var material := flame.material_override as StandardMaterial3D
 		if material:
-			var energy := 0.15 + hot * 2.2
-			material.albedo_color = Color(energy, energy * 0.45, energy * 0.2, 0.18 + hot * 0.45)
+			var energy := 0.55 + hot * 3.4
+			material.albedo_color = Color(energy, energy * 0.48, energy * 0.18, 0.35 + hot * 0.45)

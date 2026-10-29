@@ -6,6 +6,7 @@ extends Camera3D
 
 var _ship: Node3D
 var _ready_cam := false
+var held := false
 
 
 func _ready() -> void:
@@ -13,13 +14,23 @@ func _ready() -> void:
 	fov = FlightProfile.FOV
 	near = 0.12
 	far = 7000.0
+	held = has_meta("title_hold") and bool(get_meta("title_hold"))
+	if held:
+		current = false
+		return
 	current = true
 	if _ship:
 		_apply(0.0, true)
 
 
+func release_from_title() -> void:
+	held = false
+	current = true
+	_apply(0.0, true)
+
+
 func _process(delta: float) -> void:
-	if _ship == null:
+	if held or _ship == null:
 		return
 	_apply(minf(delta, FlightProfile.DT_CAP), false)
 
