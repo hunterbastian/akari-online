@@ -80,6 +80,34 @@ def shade_flat(obj):
         poly.use_smooth = False
 
 
+def shade_smooth(obj):
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    mesh = obj.data
+    if hasattr(mesh, 'use_auto_smooth'):
+        mesh.use_auto_smooth = True
+        mesh.auto_smooth_angle = math.radians(52)
+
+
+def bevel_object(obj, width=0.016, segments=2):
+    """Chamfer hard edges, then let auto-smooth keep the broad faces soft."""
+    shade_smooth(obj)
+    select_only([obj])
+    mod = obj.modifiers.new('Bevel', 'BEVEL')
+    mod.width = width
+    mod.segments = segments
+    mod.limit_method = 'ANGLE'
+    mod.angle_limit = math.radians(38)
+    if hasattr(mod, 'harden_normals'):
+        mod.harden_normals = True
+    try:
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    except Exception as error:  # noqa: BLE001
+        print('bevel skipped:', error)
+        obj.modifiers.remove(mod)
+    shade_smooth(obj)
+
+
 def consistent_normals(obj):
     select_only([obj])
     bpy.ops.object.mode_set(mode='EDIT')
@@ -132,12 +160,15 @@ def box(name, location, size, material, rotation=(0, 0, 0)):
     return obj
 
 
-def join(objects, name):
+def join(objects, name, smooth=False):
     select_only(objects)
     bpy.ops.object.join()
     obj = bpy.context.active_object
     obj.name = name
-    shade_flat(obj)
+    if smooth:
+        shade_smooth(obj)
+    else:
+        shade_flat(obj)
     return obj
 
 
@@ -256,9 +287,20 @@ def _loft(name, rings, material):
     return obj
 
 
+def _subdivide_ring(ring):
+    """Insert edge midpoints so the chamfered section is not an octagon."""
+    points = []
+    count = len(ring)
+    for index, point in enumerate(ring):
+        nxt = ring[(index + 1) % count]
+        points.append(point)
+        points.append(tuple((Vector(point) + Vector(nxt)) * 0.5))
+    return points
+
+
 def _body_ring(y, half_w, half_h):
     """Chamfered body section. +Y is the nose, +Z is up."""
-    return [
+    return _subdivide_ring([
         (0, y, half_h),
         (half_w * 0.72, y, half_h * 0.62),
         (half_w, y, half_h * 0.08),
@@ -267,19 +309,33 @@ def _body_ring(y, half_w, half_h):
         (-half_w * 0.62, y, -half_h * 0.55),
         (-half_w, y, half_h * 0.08),
         (-half_w * 0.72, y, half_h * 0.62),
-    ]
+    ])
+
+
+def _densify_sections(sections, steps):
+    dense = []
+    width = len(sections[0])
+    for start, end in zip(sections, sections[1:]):
+        dense.append(start)
+        for step in range(1, steps):
+            blend = step / steps
+            dense.append(tuple(start[axis] * (1.0 - blend) + end[axis] * blend for axis in range(width)))
+    dense.append(sections[-1])
+    return dense
 
 
 def hull_mesh(material):
-    """Compact jumpship fuselage. Nose is +Y."""
-    sections = [
+    """Compact jumpship fuselage. Nose is +Y. Same profile, more stations."""
+    sections = _densify_sections([
         (1.85, 0.08, 0.07),
         (1.05, 0.30, 0.24),
         (0.15, 0.46, 0.38),
         (-0.65, 0.40, 0.32),
         (-1.35, 0.24, 0.20),
-    ]
-    return _loft('Hull', [_body_ring(y, half_w, half_h) for y, half_w, half_h in sections], material)
+    ], 3)
+    obj = _loft('Hull', [_body_ring(y, half_w, half_h) for y, half_w, half_h in sections], material)
+    bevel_object(obj, 0.026, 2)
+    return obj
 
 
 def _nacelle_ring(x, y, z, half_y, half_z):
@@ -297,56 +353,63 @@ def _nacelle_ring(x, y, z, half_y, half_z):
 def nacelle_mesh(sign, material):
     """Thick swept nacelle. The root sits inside the fuselage so it reads as attached."""
     s = 1 if sign > 0 else -1
-    stations = [
+    stations = _densify_sections([
         (s * 0.06, 0.15, -0.02, 0.34, 0.22),
         (s * 0.48, -0.08, -0.02, 0.32, 0.20),
         (s * 0.95, -0.38, 0.0, 0.26, 0.17),
         (s * 1.28, -0.62, 0.02, 0.16, 0.12),
-    ]
+    ], 2)
     rings = [_nacelle_ring(x, y, z, half_y, half_z) for x, y, z, half_y, half_z in stations]
     if s < 0:
         rings = [list(reversed(ring)) for ring in rings]
-    return _loft(f'Nacelle{sign}', rings, material)
+    obj = _loft(f'Nacelle{sign}', rings, material)
+    bevel_object(obj, 0.012, 2)
+    return obj
 
 
 def canopy_mesh(material):
-    """Raised cockpit. Bottom is buried in the nose so it does not float."""
-    rings = [
-        [
-            (0, 1.62, 0.12),
-            (0.08, 1.58, 0.16),
-            (0.10, 1.48, 0.10),
-            (0, 1.42, 0.08),
-            (-0.10, 1.48, 0.10),
-            (-0.08, 1.58, 0.16),
-        ],
-        [
-            (0, 0.72, 0.22),
-            (0.16, 0.78, 0.30),
-            (0.18, 0.62, 0.16),
-            (0, 0.55, 0.14),
-            (-0.18, 0.62, 0.16),
-            (-0.16, 0.78, 0.30),
-        ],
-    ]
-    return _loft('Canopy', rings, material)
+    """Raised glasshouse. The lower ring is buried in the nose so it does not float."""
+    rings = []
+    for y, width, lift, bury in (
+        (1.5, 0.09, 0.26, 0.02),
+        (1.12, 0.16, 0.46, 0.02),
+        (0.76, 0.2, 0.5, 0.02),
+        (0.46, 0.14, 0.32, 0.02),
+    ):
+        rings.append([
+            (0, y + 0.08, lift),
+            (width * 0.7, y + 0.04, lift * 0.82),
+            (width, y, bury),
+            (width * 0.55, y - 0.06, bury * 0.7),
+            (0, y - 0.08, bury * 0.65),
+            (-width * 0.55, y - 0.06, bury * 0.7),
+            (-width, y, bury),
+            (-width * 0.7, y + 0.04, lift * 0.82),
+        ])
+    obj = _loft('Canopy', rings, material)
+    bevel_object(obj, 0.008, 1)
+    return obj
 
 
 def build_ship():
-    """Guardian-style jumpship: chunky body, blended nacelles, rear engines."""
+    """Guardian-style jumpship: same silhouette, chamfered skin, glass cockpit."""
     hull = make_material('Hull', '#d7d3cb', 0.78, 0.12)
-    panel = make_material('Panel', '#c5c0b6', 0.8, 0.1)
-    accent = make_material('Accent', '#b87448', 0.72, 0.06)
-    canopy = make_material('Canopy', '#24303c', 0.28, 0.35)
+    panel = make_material('Panel', '#c5c0b6', 0.82, 0.1)
+    accent = make_material('Accent', '#3f7f88', 0.62, 0.08)
+    canopy = make_material('Canopy', '#141c24', 0.08, 0.55)
     dark = make_material('Dark', '#2a2724', 0.7, 0.22)
-    engine = make_material('Engine', '#e8a060', 0.42, 0.05, '#e8954a', 1.6)
+    engine = make_material('Engine', '#d5e8ff', 0.28, 0.04, '#cfe4ff', 3.4)
 
     parts = [hull_mesh(hull), nacelle_mesh(1, hull), nacelle_mesh(-1, hull), canopy_mesh(canopy)]
-    parts.append(box('Accent', (0, 0.55, 0.42), (0.06, 1.15, 0.03), accent))
-    parts.append(box('Panel', (0, -0.2, 0.36), (0.42, 0.62, 0.05), panel))
-    parts.append(box('Fin', (0, -1.05, 0.48), (0.045, 0.28, 0.22), hull))
-    # One small mast, port side only.
-    parts.append(box('Mast', (-0.22, -0.15, 0.52), (0.04, 0.04, 0.12), dark))
+    # Thin faction stripe along the spine, not a slab.
+    # Plates and the stripe are sunk into the skin so they don't read as floating sticks.
+    parts.append(box('Accent', (0.22, 0.2, 0.16), (0.018, 0.72, 0.03), accent))
+    parts.append(box('Panel', (0.04, -0.02, 0.3), (0.12, 0.26, 0.06), panel))
+    parts.append(box('PanelB', (-0.06, -0.42, 0.24), (0.1, 0.16, 0.05), panel))
+    parts.append(box('Intake', (0.32, 0.2, 0.02), (0.08, 0.18, 0.06), dark))
+    parts.append(box('IntakeB', (-0.32, 0.2, 0.02), (0.08, 0.18, 0.06), dark))
+    parts.append(box('Vent', (0.22, -0.55, -0.08), (0.1, 0.05, 0.04), dark))
+    parts.append(box('VentB', (-0.22, -0.55, -0.08), (0.1, 0.05, 0.04), dark))
     for side in (1, -1):
         parts.append(primitive(
             'cylinder', f'Engine{side}',
@@ -354,18 +417,27 @@ def build_ship():
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
             material=dark,
-            vertices=8, radius=0.13, depth=0.36,
+            vertices=16, radius=0.14, depth=0.42,
         ))
         parts.append(primitive(
             'cylinder', f'Nozzle{side}',
-            (side * 0.72, -0.76, -0.04),
+            (side * 0.72, -0.78, -0.04),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
             material=engine,
-            vertices=8, radius=0.085, depth=0.08,
+            vertices=16, radius=0.09, depth=0.07,
         ))
-    ship = join(parts, 'Ship')
+        parts.append(primitive(
+            'cylinder', f'Glow{side}',
+            (side * 0.72, -0.8, -0.04),
+            scale=(1, 1, 1),
+            rotation=(math.pi / 2, 0, 0),
+            material=engine,
+            vertices=12, radius=0.045, depth=0.03,
+        ))
+    ship = join(parts, 'Ship', smooth=True)
     consistent_normals(ship)
+    shade_smooth(ship)
     center_ship(ship)
     left = []
     right = []
@@ -700,6 +772,19 @@ def build_monolith():
 def main():
     clear_scene()
     ensure_materials()
+    if '--ship-only' in sys.argv:
+        ship_meta = build_ship()
+        previous = {}
+        if os.path.isfile(META_PATH):
+            with open(META_PATH, encoding='utf-8') as handle:
+                previous = json.load(handle)
+        previous['ship'] = ship_meta
+        os.makedirs(os.path.dirname(META_PATH), exist_ok=True)
+        with open(META_PATH, 'w', encoding='utf-8') as handle:
+            json.dump(previous, handle, indent=2)
+            handle.write('\n')
+        print('meta', previous)
+        return
     meta = {
         'ship': build_ship(),
         'hauler': build_hauler(),

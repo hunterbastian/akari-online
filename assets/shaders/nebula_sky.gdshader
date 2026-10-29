@@ -63,10 +63,10 @@ void sky() {
 
 	vec3 sun = normalize(sun_dir);
 	float mu = max(dot(dir, sun), 0.0);
-	float corona = pow(mu, 28.0);
-	float wide = pow(mu, 6.0);
-	col += vec3(0.55, 0.72, 0.95) * corona * 0.55;
-	col += vec3(0.25, 0.35, 0.5) * wide * 0.12;
+	float corona = pow(mu, 64.0);
+	float wide = pow(mu, 18.0);
+	col += vec3(0.42, 0.58, 0.82) * corona * 0.22;
+	col += vec3(0.05, 0.08, 0.14) * wide * 0.04;
 
 	COLOR = col;
 }

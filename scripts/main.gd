@@ -1,6 +1,7 @@
 extends Node3D
 
 const _ColorGrade := preload("res://scripts/world/color_grade.gd")
+const _PostProfile := preload("res://scripts/data/post_profile.gd")
 
 ## Sol, one seeded world, the starter ship.
 
@@ -8,12 +9,14 @@ var _shot := false
 var _title_card := false
 var _shot_time := 0.0
 var _shot_saved := false
+var _world: SubViewport
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	DisplayServer.window_set_title("AKARI ONLINE")
+	_mount_world()
 	var system := Galaxy.system_by_id(GameState.system_id)
 	var chart := Universe.generate_system(system)
 	var planet: Dictionary = chart.planets[0]
@@ -26,7 +29,7 @@ func _ready() -> void:
 
 	var body := PlanetBody.new()
 	body.name = planet.name
-	add_child(body)
+	_world.add_child(body)
 	body.setup(planet, sun_dir)
 	_add_planet_haze(planet)
 
@@ -34,7 +37,7 @@ func _ready() -> void:
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
 	ship.set_meta("flight_active", _shot)
-	add_child(ship)
+	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	if _shot:
@@ -48,7 +51,7 @@ func _ready() -> void:
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
 	camera.set_meta("title_hold", not _shot)
-	add_child(camera)
+	_world.add_child(camera)
 	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
@@ -58,6 +61,58 @@ func _ready() -> void:
 		director.name = "TitleDirector"
 		add_child(director)
 		director.setup(ship, camera, planet.position, float(planet.radius), sun_dir)
+	_add_dither()
+
+
+func _mount_world() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "View"
+	layer.layer = 0
+	var frame := TextureRect.new()
+	frame.name = "Frame"
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var view := SubViewport.new()
+	view.name = "World"
+	view.own_world_3d = true
+	view.handle_input_locally = false
+	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	frame.add_child(view)
+	frame.texture = view.get_texture()
+	layer.add_child(frame)
+	add_child(layer)
+	_world = view
+	get_viewport().size_changed.connect(_apply_render_scale)
+	_apply_render_scale()
+
+
+func _apply_render_scale() -> void:
+	var full := get_viewport().get_visible_rect().size
+	var scale := _PostProfile.render_scale()
+	_world.size = Vector2i(
+		maxi(1, int(round(full.x * scale))),
+		maxi(1, int(round(full.y * scale)))
+	)
+
+
+func _add_dither() -> void:
+	if not _PostProfile.dither_enabled():
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "Dither"
+	layer.layer = 1
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var material := ShaderMaterial.new()
+	material.shader = load("res://assets/shaders/film_dither.gdshader")
+	rect.material = material
+	layer.add_child(rect)
+	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
+	_world.add_child(layer)
 
 
 func _process(delta: float) -> void:
@@ -198,7 +253,7 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	sky.sky_material = material
 	environment.sky = sky
 	world.environment = environment
-	add_child(world)
+	_world.add_child(world)
 	_log_features(environment, sky_colors)
 
 
@@ -215,7 +270,7 @@ func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	key.directional_shadow_max_distance = 900.0
 	key.directional_shadow_fade_start = 0.85
 	key.look_at_from_position(sun_dir, Vector3.ZERO, Vector3.UP)
-	add_child(key)
+	_world.add_child(key)
 
 	var fill := DirectionalLight3D.new()
 	fill.name = "SkyFill"
@@ -223,7 +278,7 @@ func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	fill.light_energy = 0.2
 	fill.shadow_enabled = false
 	fill.look_at_from_position(-sun_dir, Vector3.ZERO, Vector3.UP)
-	add_child(fill)
+	_world.add_child(fill)
 
 
 func _build_sun(_sky_colors: Dictionary) -> void:
@@ -232,7 +287,7 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 	var star := Node3D.new()
 	star.name = "Star"
 	star.position = sun_dir * distance
-	add_child(star)
+	_world.add_child(star)
 
 	var core := MeshInstance3D.new()
 	var core_mesh := SphereMesh.new()
@@ -250,8 +305,8 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 
 	var glow := MeshInstance3D.new()
 	var glow_mesh := SphereMesh.new()
-	glow_mesh.radius = 150.0
-	glow_mesh.height = 300.0
+	glow_mesh.radius = 96.0
+	glow_mesh.height = 192.0
 	glow_mesh.radial_segments = 28
 	glow_mesh.rings = 16
 	glow.mesh = glow_mesh
@@ -260,7 +315,7 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	glow_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	glow_mat.albedo_color = Color(1.6, 1.75, 2.1, 0.35)
+	glow_mat.albedo_color = Color(0.85, 0.95, 1.15, 0.14)
 	glow.material_override = glow_mat
 	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	star.add_child(glow)
@@ -278,7 +333,7 @@ func _add_planet_haze(planet: Dictionary) -> void:
 	fog.albedo = Color(0.45, 0.66, 0.82)
 	fog.emission = Color(0.015, 0.03, 0.05)
 	volume.material = fog
-	add_child(volume)
+	_world.add_child(volume)
 
 
 func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:

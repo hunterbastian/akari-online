@@ -144,6 +144,9 @@ func _keep_off_planet() -> void:
 		velocity -= normal * into
 
 
+const _HULL_PAINT := preload("res://assets/shaders/hull_paint.gdshader")
+
+
 func _dress_ship(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
@@ -152,33 +155,46 @@ func _dress_ship(node: Node) -> void:
 			for surface in mesh.get_surface_count():
 				var material := mesh.surface_get_material(surface)
 				if material is StandardMaterial3D:
-					_tune_hull(material as StandardMaterial3D)
+					var painted := _tune_hull(material as StandardMaterial3D)
+					if painted:
+						mesh.surface_set_material(surface, painted)
 	for child in node.get_children():
 		_dress_ship(child)
 
 
-func _tune_hull(material: StandardMaterial3D) -> void:
+func _tune_hull(material: StandardMaterial3D) -> ShaderMaterial:
 	var name := material.resource_name.to_lower()
 	material.metallic = 0.16
 	material.roughness = 0.76
 	if "canopy" in name:
-		material.metallic = 0.32
-		material.roughness = 0.22
+		material.albedo_color = Color(0.07, 0.1, 0.14)
+		material.metallic = 0.58
+		material.roughness = 0.06
+		material.clearcoat_enabled = true
+		material.clearcoat = 0.9
+		material.clearcoat_roughness = 0.07
 	elif "engine" in name or "glow" in name:
-		material.metallic = 0.12
-		material.roughness = 0.45
-		material.emission_enabled = true
-		material.emission = Color(1.0, 0.52, 0.22)
-		material.emission_energy_multiplier = 2.4
-	elif "dark" in name:
-		material.metallic = 0.22
-		material.roughness = 0.7
-	elif "accent" in name:
 		material.metallic = 0.08
-		material.roughness = 0.7
-	elif "panel" in name:
-		material.metallic = 0.14
-		material.roughness = 0.8
+		material.roughness = 0.32
+		material.emission_enabled = true
+		material.emission = Color(0.72, 0.86, 1.0)
+		material.emission_energy_multiplier = 3.6
+	elif "dark" in name or "line" in name or "intake" in name or "vent" in name:
+		material.albedo_color = Color(0.11, 0.11, 0.12)
+		material.metallic = 0.22
+		material.roughness = 0.62
+	elif "accent" in name:
+		material.albedo_color = Color(0.22, 0.48, 0.52)
+		material.metallic = 0.1
+		material.roughness = 0.58
+	elif "hull" in name or "panel" in name or "fin" in name or "nacelle" in name:
+		var paint := ShaderMaterial.new()
+		paint.shader = _HULL_PAINT
+		paint.set_shader_parameter("base_color", Color(0.843, 0.827, 0.796))
+		paint.set_shader_parameter("roughness_base", 0.8 if "panel" in name else 0.76)
+		paint.set_shader_parameter("metallic_base", 0.12)
+		return paint
+	return null
 
 
 func _build_flames() -> void:
@@ -197,7 +213,7 @@ func _build_flames() -> void:
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-		material.albedo_color = Color(2.4, 0.85, 0.35, 0.55)
+		material.albedo_color = Color(0.72, 0.88, 1.45, 0.62)
 		flame.material_override = material
 		flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_hull.add_child(flame)
@@ -210,5 +226,5 @@ func _update_flames() -> void:
 		flame.scale = Vector3(1.0, 0.28 + hot * 1.35, 1.0)
 		var material := flame.material_override as StandardMaterial3D
 		if material:
-			var energy := 0.55 + hot * 3.4
-			material.albedo_color = Color(energy, energy * 0.48, energy * 0.18, 0.35 + hot * 0.45)
+			var energy := 0.7 + hot * 2.8
+			material.albedo_color = Color(energy * 0.45, energy * 0.72, energy, 0.4 + hot * 0.4)

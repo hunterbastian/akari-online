@@ -75,6 +75,11 @@ drop={
 3d/physics_engine="Jolt Physics"
 common/physics_ticks_per_second=120
 
+[akari]
+
+post/dither=true
+render/scale=0.7
+
 [rendering]
 
 renderer/rendering_method="forward_plus"
