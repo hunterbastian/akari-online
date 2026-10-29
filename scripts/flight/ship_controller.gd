@@ -30,7 +30,9 @@ func _ready() -> void:
 	if packed == null:
 		push_error("Ship glb failed to import.")
 	else:
-		_hull.add_child(packed.instantiate())
+		var model := packed.instantiate()
+		_hull.add_child(model)
+		_dress_ship(model)
 	_build_flames()
 
 
@@ -126,6 +128,41 @@ func _keep_off_planet() -> void:
 		velocity -= normal * into
 
 
+func _dress_ship(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		var mesh := mesh_instance.mesh
+		if mesh:
+			for surface in mesh.get_surface_count():
+				var material := mesh.surface_get_material(surface)
+				if material is StandardMaterial3D:
+					_tune_hull(material as StandardMaterial3D)
+	for child in node.get_children():
+		_dress_ship(child)
+
+
+func _tune_hull(material: StandardMaterial3D) -> void:
+	var name := material.resource_name.to_lower()
+	material.metallic = 0.58
+	material.roughness = 0.4
+	if "canopy" in name:
+		material.metallic = 0.18
+		material.roughness = 0.12
+		material.albedo_color = material.albedo_color.lerp(Color(0.35, 0.5, 0.66), 0.35)
+	elif "engine" in name or "glow" in name:
+		material.metallic = 0.25
+		material.roughness = 0.28
+		material.emission_enabled = true
+		material.emission = Color(1.0, 0.45, 0.18)
+		material.emission_energy_multiplier = 4.5
+	elif "dark" in name:
+		material.metallic = 0.72
+		material.roughness = 0.32
+	elif "accent" in name:
+		material.metallic = 0.42
+		material.roughness = 0.46
+
+
 func _build_flames() -> void:
 	for anchor in FlightProfile.ENGINE_ANCHORS:
 		var flame := MeshInstance3D.new()
@@ -142,8 +179,7 @@ func _build_flames() -> void:
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-		material.albedo_color = Color.html("#e07a48")
-		material.albedo_color.a = 0.12
+		material.albedo_color = Color(2.4, 0.85, 0.35, 0.55)
 		flame.material_override = material
 		flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_hull.add_child(flame)
@@ -156,4 +192,5 @@ func _update_flames() -> void:
 		flame.scale = Vector3(1.0, 0.28 + hot * 1.35, 1.0)
 		var material := flame.material_override as StandardMaterial3D
 		if material:
-			material.albedo_color.a = 0.06 + hot * 0.5
+			var energy := 0.35 + hot * 7.5
+			material.albedo_color = Color(energy, energy * 0.42, energy * 0.16, 0.25 + hot * 0.7)

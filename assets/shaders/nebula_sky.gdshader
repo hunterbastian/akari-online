@@ -1,11 +1,6 @@
 shader_type sky;
 
-uniform vec3 top_color : source_color = vec3(0.102, 0.063, 0.157);
-uniform vec3 mid_color : source_color = vec3(0.878, 0.416, 0.361);
-uniform vec3 bottom_color : source_color = vec3(0.949, 0.765, 0.580);
-uniform vec3 star_color : source_color = vec3(0.965, 0.945, 0.910);
 uniform vec3 sun_dir = vec3(0.48, 0.79, 0.31);
-uniform float yaw = 0.6;
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -13,33 +8,65 @@ float hash13(vec3 p) {
 	return fract((p.x + p.y) * p.z);
 }
 
-vec3 rotate_y(vec3 d, float a) {
-	float c = cos(a);
-	float s = sin(a);
-	return vec3(d.x * c - d.z * s, d.y, d.x * s + d.z * c);
+float vnoise(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(
+		mix(mix(hash13(i), hash13(i + vec3(1.0, 0.0, 0.0)), f.x),
+			mix(hash13(i + vec3(0.0, 1.0, 0.0)), hash13(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+		mix(mix(hash13(i + vec3(0.0, 0.0, 1.0)), hash13(i + vec3(1.0, 0.0, 1.0)), f.x),
+			mix(hash13(i + vec3(0.0, 1.0, 1.0)), hash13(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+		f.z);
+}
+
+float fbm(vec3 p) {
+	float s = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 5; i++) {
+		s += a * vnoise(p);
+		p = p * 2.03 + vec3(1.7, 9.2, 2.4);
+		a *= 0.5;
+	}
+	return s;
 }
 
 void sky() {
-	vec3 dir = normalize(rotate_y(EYEDIR, yaw));
-	// Canvas gradient: top stop at the zenith, mid at 0.46, bottom at the nadir.
-	float t = clamp((1.0 - dir.y) * 0.5, 0.0, 1.0);
-	vec3 col = mix(top_color, mid_color, smoothstep(0.0, 0.46, t));
-	col = mix(col, bottom_color, smoothstep(0.34, 1.0, t));
+	vec3 dir = normalize(EYEDIR);
+	vec3 base = vec3(0.008, 0.012, 0.028);
 
-	vec3 lobe_a = normalize(vec3(0.55, 0.42, 0.72));
-	vec3 lobe_b = normalize(vec3(-0.72, -0.15, 0.35));
-	float lobe_a_amt = pow(max(dot(dir, lobe_a), 0.0), 4.0);
-	float lobe_b_amt = pow(max(dot(dir, lobe_b), 0.0), 3.0);
-	vec3 glow = mid_color * lobe_a_amt * 0.55 + bottom_color * lobe_b_amt * 0.40;
-	col = vec3(1.0) - (vec3(1.0) - col) * (vec3(1.0) - glow);
+	float far_n = fbm(dir * 1.35 + vec3(2.2, 0.4, 1.1));
+	float mid_n = fbm(dir * 2.8 + far_n * 0.55 + vec3(7.0, 1.4, 3.2));
+	float near_n = fbm(dir * 5.4 + mid_n * 0.35 + vec3(0.6, 4.8, 8.1));
 
-	float cell = hash13(floor(dir * 260.0));
-	float star = step(0.996, cell) * smoothstep(-0.05, 0.55, dir.y);
-	col += star_color * star * 0.9;
+	vec3 indigo = vec3(0.07, 0.08, 0.18);
+	vec3 teal = vec3(0.04, 0.16, 0.2);
+	vec3 violet = vec3(0.11, 0.07, 0.16);
+	float far_mask = smoothstep(0.42, 0.72, far_n);
+	float mid_mask = smoothstep(0.48, 0.78, mid_n);
+	float near_mask = smoothstep(0.55, 0.84, near_n);
+	vec3 col = base;
+	col = mix(col, indigo, far_mask * 0.55);
+	col = mix(col, teal, mid_mask * 0.42);
+	col = mix(col, violet, near_mask * 0.28);
+	float filament = smoothstep(0.62, 0.8, fbm(dir * 8.0 + vec3(4.0, 2.0, 9.0)));
+	col += vec3(0.16, 0.1, 0.07) * filament * 0.08;
+
+	vec3 cell_a = floor(dir * 720.0);
+	vec3 cell_b = floor(dir * 340.0 + 17.0);
+	float h1 = hash13(cell_a);
+	float h2 = hash13(cell_b);
+	float dim = step(0.988, h1) * (0.25 + 0.55 * hash13(cell_a + 3.1));
+	float bright = step(0.9965, h2) * (0.7 + 0.8 * hash13(cell_b + 1.7));
+	col += vec3(0.72, 0.8, 0.95) * dim;
+	col += vec3(0.9, 0.93, 1.0) * bright;
 
 	vec3 sun = normalize(sun_dir);
-	float wide = pow(max(dot(dir, sun), 0.0), 8.0);
-	col += star_color * wide * 0.22;
+	float mu = max(dot(dir, sun), 0.0);
+	float corona = pow(mu, 28.0);
+	float wide = pow(mu, 6.0);
+	col += vec3(0.55, 0.72, 0.95) * corona * 0.55;
+	col += vec3(0.25, 0.35, 0.5) * wide * 0.12;
 
 	COLOR = col;
 }

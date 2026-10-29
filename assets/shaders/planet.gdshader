@@ -53,10 +53,15 @@ void fragment() {
 	float lat = abs(nrm.y);
 
 	vec3 world_n = normalize(v_world - u_center);
-	float bx = vnoise(p2 + vec3(0.14, 0.0, 0.0)) - n2;
-	float by = vnoise(p2 + vec3(0.0, 0.14, 0.0)) - n2;
-	float bz = vnoise(p2 + vec3(0.0, 0.0, 0.14)) - n2;
-	vec3 local_n = normalize(nrm - vec3(bx, by, bz) * 2.6);
+	float eps = 0.09;
+	float bx = vnoise(p2 + vec3(eps, 0.0, 0.0)) - n2;
+	float by = vnoise(p2 + vec3(0.0, eps, 0.0)) - n2;
+	float bz = vnoise(p2 + vec3(0.0, 0.0, eps)) - n2;
+	float fine_x = vnoise(p * 7.0 + vec3(eps, 0.0, 0.0)) - vnoise(p * 7.0);
+	float fine_y = vnoise(p * 7.0 + vec3(0.0, eps, 0.0)) - vnoise(p * 7.0);
+	float fine_z = vnoise(p * 7.0 + vec3(0.0, 0.0, eps)) - vnoise(p * 7.0);
+	vec3 bump = vec3(bx, by, bz) * 5.2 + vec3(fine_x, fine_y, fine_z) * 1.6;
+	vec3 local_n = normalize(nrm - bump);
 	world_n = normalize((MODEL_MATRIX * vec4(local_n, 0.0)).xyz);
 
 	vec3 albedo = u_c1;
@@ -102,10 +107,10 @@ void fragment() {
 		vec3 blue = mix(u_c0, u_c1, 0.22 + paint * 0.5);
 		vec3 pale = mix(u_c1, u_c2, 0.4);
 		float high = smoothstep(0.7, 0.88, shape);
-		albedo = mix(blue, pale, high * 0.5);
-		albedo = mix(albedo, u_c2, smoothstep(0.78, 0.96, lat) * 0.5);
-		float crev = smoothstep(0.4, 0.14, detail);
-		albedo = mix(albedo, u_c0 * 0.62, crev * 0.4);
+		albedo = mix(blue, pale, high * 0.72);
+		albedo = mix(albedo, u_c2, smoothstep(0.74, 0.95, lat) * 0.72);
+		float crev = smoothstep(0.42, 0.1, detail);
+		albedo = mix(albedo, u_c0 * 0.42, crev * 0.62);
 		spec_mask = 0.5;
 		shine = 30.0;
 		sheen_amt = 0.04;
@@ -133,14 +138,14 @@ void fragment() {
 	vec3 light_dir = normalize(u_sun_dir);
 	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - v_world);
 	float ndl = dot(world_n, light_dir);
-	float day = smoothstep(-0.32, 0.46, ndl);
-	float wrap = smoothstep(-0.4, 0.7, ndl);
-	vec3 lit = albedo * (0.58 + 0.42 * wrap);
-	vec3 night = mix(albedo * 0.24, u_atmo * 0.14, 0.2);
+	float day = smoothstep(-0.18, 0.42, ndl);
+	float wrap = smoothstep(-0.35, 0.65, ndl);
+	vec3 lit = albedo * (0.42 + 0.7 * wrap);
+	vec3 night = albedo * vec3(0.05, 0.08, 0.14);
 	vec3 color = mix(night, lit, day);
-	float term = exp(-ndl * ndl * 7.5);
-	color = mix(color, color * vec3(1.08, 0.86, 0.58), term * 0.38);
-	color += vec3(1.0, 0.42, 0.16) * crack * 0.2;
+	float term = exp(-ndl * ndl * 22.0);
+	color += vec3(1.0, 0.78, 0.48) * term * 0.22;
+	color += vec3(1.0, 0.42, 0.16) * crack * 0.16;
 
 	vec3 half_dir = normalize(light_dir + view_dir);
 	float ndh = max(dot(world_n, half_dir), 0.0);
@@ -151,15 +156,16 @@ void fragment() {
 	float cn = vnoise(nrm * 1.8 + vec3(u_time * 0.01, u_seed, 0.4));
 	float cloud = smoothstep(0.18, 0.88, band * 0.5 + 0.5);
 	cloud = clamp(cloud * 0.7 + smoothstep(0.42, 0.8, cn) * 0.55, 0.0, 1.0);
-	vec3 cloud_col = mix(vec3(0.93, 0.9, 0.82), u_atmo, 0.16);
-	float cloud_vis = mix(0.2, 1.0, smoothstep(-0.25, 0.35, ndl));
-	color = mix(color, cloud_col * mix(0.4, 1.0, day), clamp(cloud * cloud_amt, 0.0, 0.36) * cloud_vis);
+	vec3 cloud_col = mix(vec3(0.78, 0.86, 0.92), vec3(0.9, 0.94, 0.97), 0.55);
+	float cloud_vis = mix(0.15, 1.0, smoothstep(-0.2, 0.4, ndl));
+	color = mix(color, cloud_col * mix(0.35, 1.0, day), clamp(cloud * cloud_amt, 0.0, 0.42) * cloud_vis);
 
-	float fres = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 2.2);
-	color += u_atmo * fres * mix(0.06, 0.28, day);
+	float fres = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 2.4);
+	vec3 rim_col = mix(vec3(0.45, 0.72, 0.88), vec3(1.0, 0.86, 0.62), smoothstep(0.0, 0.35, ndl));
+	color += rim_col * fres * mix(0.08, 0.42, day);
 
 	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	color = mix(vec3(luma), color, 0.86);
-	color = mix(color * vec3(0.9, 0.97, 1.0), color * vec3(1.03, 0.98, 0.92), smoothstep(0.16, 0.7, luma));
+	color = mix(vec3(luma), color, 0.82);
+	color = mix(color * vec3(0.82, 0.92, 1.05), color * vec3(1.04, 0.98, 0.9), smoothstep(0.18, 0.72, luma));
 	ALBEDO = color;
 }

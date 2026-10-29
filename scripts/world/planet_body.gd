@@ -5,6 +5,7 @@ extends Node3D
 
 const _PLANET_SHADER := preload("res://assets/shaders/planet.gdshader")
 const _ATMO_SHADER := preload("res://assets/shaders/atmosphere.gdshader")
+const _RING_SHADER := preload("res://assets/shaders/ring.gdshader")
 
 var planet: Dictionary = {}
 var surface: MeshInstance3D
@@ -48,22 +49,9 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 	surface.material_override = _surface_mat
 	_spin.add_child(surface)
 
-	var shell := SphereMesh.new()
-	var shell_radius := radius * 1.28
-	shell.radius = shell_radius
-	shell.height = shell_radius * 2.0
-	shell.radial_segments = 48
-	shell.rings = 32
-	var atmo := MeshInstance3D.new()
-	atmo.name = "Atmosphere"
-	atmo.mesh = shell
-	_atmo_mat = ShaderMaterial.new()
-	_atmo_mat.shader = _ATMO_SHADER
-	_atmo_mat.set_shader_parameter("u_color", Color.html(data.atmosphere))
-	_atmo_mat.set_shader_parameter("u_sun_dir", sun)
-	atmo.material_override = _atmo_mat
-	atmo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(atmo)
+	var atmo_color := _cool(Color.html(data.atmosphere), 0.74)
+	_atmo_mat = _add_atmosphere(radius * 1.045, atmo_color, sun, 2.6, 2.4, 1.25)
+	_add_atmosphere(radius * 1.42, atmo_color, sun, 1.35, 1.05, 0.62)
 
 	if data.rings:
 		var rings := Node3D.new()
@@ -71,8 +59,10 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 		rings.rotation_order = EULER_ORDER_XYZ
 		rings.rotation = data.ringTilt
 		add_child(rings)
-		_add_ring(rings, radius * 1.42, radius * 1.58, Color.html(data.ring), 0.62)
-		_add_ring(rings, radius * 1.7, radius * 2.18, Color.html(colors[2]), 0.28)
+		var ring_color := _cool(Color.html(data.ring), 0.62)
+		var band_color := _cool(Color.html(colors[2]), 0.7)
+		_add_ring(rings, radius * 1.42, radius * 1.62, ring_color, 0.55, data.position, radius, sun)
+		_add_ring(rings, radius * 1.72, radius * 2.22, band_color, 0.28, data.position, radius, sun)
 
 	var moon := MeshInstance3D.new()
 	moon.name = "Moon"
@@ -84,8 +74,9 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 	moon_mesh.rings = 14
 	moon.mesh = moon_mesh
 	var moon_mat := StandardMaterial3D.new()
-	moon_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	moon_mat.albedo_color = Color.html(data.moon)
+	moon_mat.metallic = 0.04
+	moon_mat.roughness = 0.92
 	moon.material_override = moon_mat
 	moon.position = _moon_offset(data)
 	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -100,15 +91,44 @@ func _process(delta: float) -> void:
 		_surface_mat.set_shader_parameter("u_time", time + delta)
 
 
-func _add_ring(parent: Node3D, inner: float, outer: float, color: Color, alpha: float) -> void:
+func _cool(color: Color, toward: float) -> Color:
+	return color.lerp(Color(0.5, 0.74, 0.88), toward)
+
+
+func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: float, falloff: float, strength: float) -> ShaderMaterial:
+	var shell := SphereMesh.new()
+	shell.radius = shell_radius
+	shell.height = shell_radius * 2.0
+	shell.radial_segments = 64
+	shell.rings = 40
+	var atmo := MeshInstance3D.new()
+	atmo.name = "Atmosphere"
+	atmo.mesh = shell
+	var material := ShaderMaterial.new()
+	material.shader = _ATMO_SHADER
+	material.set_shader_parameter("u_color", color)
+	material.set_shader_parameter("u_sun_dir", sun)
+	material.set_shader_parameter("u_power", power)
+	material.set_shader_parameter("u_falloff", falloff)
+	material.set_shader_parameter("u_strength", strength)
+	atmo.material_override = material
+	atmo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(atmo)
+	return material
+
+
+func _add_ring(parent: Node3D, inner: float, outer: float, color: Color, alpha: float, center: Vector3, planet_radius: float, sun: Vector3) -> void:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = _annulus(inner, outer)
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	material.albedo_color = Color(color.r, color.g, color.b, alpha)
+	var material := ShaderMaterial.new()
+	material.shader = _RING_SHADER
+	material.set_shader_parameter("u_color", color)
+	material.set_shader_parameter("u_center", center)
+	material.set_shader_parameter("u_sun_dir", sun)
+	material.set_shader_parameter("u_planet_radius", planet_radius)
+	material.set_shader_parameter("u_inner", inner)
+	material.set_shader_parameter("u_outer", outer)
+	material.set_shader_parameter("u_alpha", alpha)
 	mesh_instance.material_override = material
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mesh_instance)
