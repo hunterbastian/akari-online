@@ -3,11 +3,15 @@
 
 Run from the repo root:
 
-    blender -b --python tools/blender/build_assets.py
+    blender -b --python tools/blender/build_assets.py -- --uncompressed
 
 Meshes are flat-shaded geometric forms in a small warm/cool palette.
-Blender +Y is the nose; the glTF exporter maps that to Three.js -Z.
+Blender +Y is the nose; the glTF exporter maps that to glTF -Z.
 Props sit on local Z = 0, which becomes Y = 0 after export.
+
+Godot cannot import Draco. Pass --uncompressed to write plain glBs into
+assets/models and skip the Draco pass. The default still writes
+Draco glBs to public/models for the old web pipeline.
 """
 
 import json
@@ -15,13 +19,15 @@ import math
 import os
 import random
 import subprocess
+import sys
 
 import bpy
 from mathutils import Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-OUT_DIR = os.path.join(ROOT, 'public', 'models')
-META_PATH = os.path.join(ROOT, 'src', 'components', 'flight', 'modelMeta.json')
+UNCOMPRESSED = '--uncompressed' in sys.argv
+OUT_DIR = os.path.join(ROOT, 'assets', 'models') if UNCOMPRESSED else os.path.join(ROOT, 'public', 'models')
+META_PATH = os.path.join(ROOT, 'assets', 'models', 'model_meta.json')
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -191,19 +197,22 @@ def export_glb(objects, filename):
     )
     # The exporter flag is present, but Debian's Blender omits libextern_draco.so
     # and silently writes an uncompressed file. compress.mjs does the real pass.
-    try:
-        bpy.ops.export_scene.gltf(
-            **common,
-            export_draco_mesh_compression_enable=True,
-            export_draco_mesh_compression_level=6,
-            export_draco_position_quantization=14,
-            export_draco_normal_quantization=10,
-            export_draco_texcoord_quantization=10,
-        )
-    except Exception as error:  # noqa: BLE001 - still emit a mesh if the flag is rejected
-        print('Draco flag rejected, writing plain GLB:', error)
+    if UNCOMPRESSED:
         bpy.ops.export_scene.gltf(**common)
-    print(f'exported {filename} ({os.path.getsize(path)} bytes, draco={glb_has_draco(path)})')
+    else:
+        try:
+            bpy.ops.export_scene.gltf(
+                **common,
+                export_draco_mesh_compression_enable=True,
+                export_draco_mesh_compression_level=6,
+                export_draco_position_quantization=14,
+                export_draco_normal_quantization=10,
+                export_draco_texcoord_quantization=10,
+            )
+        except Exception as error:  # noqa: BLE001 - still emit a mesh if the flag is rejected
+            print('Draco flag rejected, writing plain GLB:', error)
+            bpy.ops.export_scene.gltf(**common)
+    print(f'exported {filename} ({os.path.getsize(path)} bytes, draco={glb_has_draco(path)}, uncompressed={UNCOMPRESSED})')
     return path
 
 
@@ -653,10 +662,14 @@ def main():
     build_arch()
     build_deposit()
     build_monolith()
+    os.makedirs(os.path.dirname(META_PATH), exist_ok=True)
     with open(META_PATH, 'w', encoding='utf-8') as handle:
         json.dump(meta, handle, indent=2)
         handle.write('\n')
     print('meta', meta)
+    if UNCOMPRESSED:
+        print('Uncompressed glTF export for Godot. Skipping Draco.')
+        return
     compress = os.path.join(os.path.dirname(__file__), 'compress.mjs')
     modules = os.path.join(os.path.dirname(__file__), 'node_modules')
     if os.path.isdir(modules):

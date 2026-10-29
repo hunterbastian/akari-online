@@ -1,0 +1,153 @@
+{
+  "hash_sol": 3795205537,
+  "sky": {
+    "top": "#1a1028",
+    "mid": "#e06a5c",
+    "bottom": "#f2c394",
+    "star": "#ffe1bf"
+  },
+  "spawn": [
+    0,
+    6,
+    48
+  ],
+  "planets": [
+    {
+      "id": "sol:0",
+      "name": "Mina",
+      "biome": "ice",
+      "biomeLabel": "Ice",
+      "relief": 0.036,
+      "position": [
+        86.62858283451034,
+        -0.021581342676626078,
+        -170.73515488630864
+      ],
+      "radius": 24.533373176585883,
+      "colors": [
+        "#7ecfe2",
+        "#c5eef4",
+        "#f2fafa",
+        "#f6e0d4"
+      ],
+      "atmosphere": "#f0b5a4",
+      "ring": "#f6d8cc",
+      "moon": "#f8eee8",
+      "rings": true,
+      "ringTilt": [
+        0.7655716885346919,
+        2.2688961514204133,
+        0.07846865501487627
+      ],
+      "seed": 0.4948453608247423,
+      "resources": [
+        "ore",
+        "medicine"
+      ]
+    },
+    {
+      "id": "sol:1",
+      "name": "Irthe",
+      "biome": "desert",
+      "biomeLabel": "Desert",
+      "relief": 0.042,
+      "position": [
+        413.375145264923,
+        -10.357771611766326,
+        186.7887233086488
+      ],
+      "radius": 27.31783838570118,
+      "colors": [
+        "#c45a38",
+        "#e08848",
+        "#f2c98a",
+        "#f8e6c8"
+      ],
+      "atmosphere": "#2f8f8a",
+      "ring": "#e8b48a",
+      "moon": "#f4e0c8",
+      "rings": false,
+      "ringTilt": [
+        0.6653458226355724,
+        2.158717041698245,
+        -0.153308753517922
+      ],
+      "seed": 9.711340206185566,
+      "resources": [
+        "ore",
+        "fuel"
+      ]
+    },
+    {
+      "id": "sol:2",
+      "name": "Mivel",
+      "biome": "volcanic",
+      "biomeLabel": "Volcanic",
+      "relief": 0.058,
+      "position": [
+        -323.47577951988205,
+        12.585811216859645,
+        625.9743522435992
+      ],
+      "radius": 30.874174713157117,
+      "colors": [
+        "#5c2a22",
+        "#c45a38",
+        "#ee7840",
+        "#f6c4a0"
+      ],
+      "atmosphere": "#e08868",
+      "ring": "#f0a878",
+      "moon": "#ead2c2",
+      "rings": false,
+      "ringTilt": [
+        0.46373498416505754,
+        2.344713084128554,
+        0.047410589212086046
+      ],
+      "seed": 2.618556701030928,
+      "resources": [
+        "ore",
+        "scrap"
+      ]
+    },
+    {
+      "id": "sol:3",
+      "name": "Elir",
+      "biome": "ocean",
+      "biomeLabel": "Ocean",
+      "relief": 0.03,
+      "position": [
+        -884.1436413076531,
+        5.0021637365540865,
+        -370.72854396761016
+      ],
+      "radius": 32.61558487871662,
+      "colors": [
+        "#1e6a88",
+        "#3eb0c4",
+        "#c8eee4",
+        "#f6d0b4"
+      ],
+      "atmosphere": "#f0a888",
+      "ring": "#f2d0b6",
+      "moon": "#f7e6d6",
+      "rings": false,
+      "ringTilt": [
+        0.5547829896328039,
+        0.10884091564958541,
+        0.044436975207645446
+      ],
+      "seed": 1.556701030927835,
+      "resources": [
+        "food",
+        "medicine"
+      ]
+    }
+  ],
+  "starter": {
+    "cruise": 33.9,
+    "boost": 69.49499999999999,
+    "pulse": 134.4
+  }
+}
