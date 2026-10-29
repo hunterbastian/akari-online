@@ -92,20 +92,21 @@ func _layout() -> void:
 	var size_px := int(round(font_size))
 	_title_font.spacing_glyph = int(round(spacing))
 	_title.add_theme_font_size_override("font_size", size_px)
-	var advance := _title_font.get_string_size(_TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px)
-	var trailing := float(_title_font.spacing_glyph)
-	var visual_width := advance.x - trailing
+	var run := _glyph_run_bounds(_title_font, _TITLE, size_px)
 	var title_y := view.y * 0.40
-	_title.position = Vector2((view.x - visual_width) * 0.5, title_y)
-	_title.size = Vector2(advance.x, font_size * 1.35)
+	var run_center := run.position.x + run.size.x * 0.5
+	var origin_x := view.x * 0.5 - run_center
+	_title.position = Vector2(origin_x, title_y)
+	_title.size = Vector2(run.end.x + 4.0, font_size * 1.35)
 
-	var line_w := visual_width * 0.42
-	_line.position = Vector2((view.x - line_w) * 0.5, title_y + font_size * 1.08)
+	var ink_center := origin_x + run_center
+	var line_w := run.size.x * 0.42
+	_line.position = Vector2(ink_center - line_w * 0.5, title_y + font_size * 1.08)
 	_line.size = Vector2(line_w, maxf(1.0, view.y / 1080.0))
 
-	var glow_w := visual_width * 1.5
+	var glow_w := run.size.x * 1.5
 	var glow_h := font_size * 2.8
-	_glow.position = Vector2((view.x - glow_w) * 0.5, title_y - font_size * 0.7)
+	_glow.position = Vector2(ink_center - glow_w * 0.5, title_y - font_size * 0.7)
 	_glow.size = Vector2(glow_w, glow_h)
 
 	var prompt_size := int(round(15.0 * view.y / 1080.0))
@@ -133,6 +134,34 @@ func _process(delta: float) -> void:
 	_vignette.modulate.a = ui_alpha
 	var pulse := 0.22 + 0.78 * (0.5 + 0.5 * sin(_clock * 1.35))
 	_prompt.modulate.a = pulse * ui_alpha * _smooth(clampf((_intro - 0.35) / 0.4, 0.0, 1.0))
+
+
+func _glyph_run_bounds(font: Font, text: String, size_px: int) -> Rect2:
+	var server := TextServerManager.get_primary_interface()
+	var shaped := server.create_shaped_text()
+	server.shaped_text_add_string(shaped, text, font.get_rids(), size_px, font.get_opentype_features())
+	server.shaped_text_shape(shaped)
+	var min_x := INF
+	var max_x := -INF
+	var pen := 0.0
+	for glyph in server.shaped_text_get_glyphs(shaped):
+		var index := int(glyph.get("index", 0))
+		var advance := float(glyph.get("advance", 0.0))
+		var glyph_shift: Vector2 = glyph.get("offset", Vector2.ZERO)
+		var font_rid: RID = glyph.get("font_rid", RID())
+		var glyph_size := int(glyph.get("font_size", size_px))
+		if font_rid.is_valid() and index != 0:
+			var bounds_offset := server.font_get_glyph_offset(font_rid, Vector2i(glyph_size, 0), index)
+			var bounds_size := server.font_get_glyph_size(font_rid, Vector2i(glyph_size, 0), index)
+			if bounds_size.x > 0.0:
+				var left := pen + glyph_shift.x + bounds_offset.x
+				min_x = minf(min_x, left)
+				max_x = maxf(max_x, left + bounds_size.x)
+		pen += advance
+	server.free_rid(shaped)
+	if min_x > max_x:
+		return Rect2(0, 0, pen, 0)
+	return Rect2(min_x, 0, max_x - min_x, 0)
 
 
 func _smooth(value: float) -> float:

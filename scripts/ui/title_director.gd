@@ -138,8 +138,21 @@ func _build_dust() -> void:
 
 
 func _park_ship() -> void:
+	# Lower-right of the title frame at the still, clear of the wordmark.
+	var forward := (planet_center - _title_position(2.4)).normalized()
+	var cam_back := -forward
+	var cam_right := Vector3.UP.cross(cam_back)
+	if cam_right.length_squared() < 0.0001:
+		cam_right = Vector3.RIGHT
+	cam_right = cam_right.normalized()
+	var cam_up := cam_back.cross(cam_right).normalized()
+	var depth := planet_radius * 2.85
+	var half_h := depth * tan(deg_to_rad(_camera.fov * 0.5))
+	var half_w := half_h * (16.0 / 9.0)
+	var ndc_x := 1188.0 / 1280.0 * 2.0 - 1.0
+	var ndc_y := (1.0 - 575.0 / 720.0) * 2.0 - 1.0
+	ship.global_position = planet_center + cam_right * ndc_x * half_w + cam_up * ndc_y * half_h
 	var right := sun_dir.cross(Vector3.UP).normalized()
-	ship.global_position = planet_center + right * planet_radius * 1.55 + Vector3.UP * planet_radius * 0.08
 	var ahead := -right.cross(Vector3.UP).normalized()
 	if ahead.length_squared() < 0.01:
 		ahead = Vector3.FORWARD
