@@ -100,7 +100,8 @@ func _build_camera() -> void:
 	_camera.fov = 42.0
 	_camera.near = 0.12
 	_camera.far = 7000.0
-	add_child(_camera)
+	# The 3D world lives in the low-res viewport. The title card stays on the root.
+	ship.get_parent().add_child(_camera)
 
 
 func _build_dust() -> void:

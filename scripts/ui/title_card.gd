@@ -1,11 +1,14 @@
 extends CanvasLayer
 
 const _FONT := preload("res://assets/fonts/Tinos-Regular.ttf")
+const _PIXEL := preload("res://scripts/ui/pixel_text.gd")
 const _TITLE := "AKARI ONLINE"
 const _PROMPT := "CLICK TO BEGIN"
 const _TITLE_COLOR := Color("#E8EEF5")
+const _PHOSPHOR := Color(0.58, 0.82, 0.96, 0.4)
 
 var _title: Label
+var _halo: Label
 var _prompt: Label
 var _glow: TextureRect
 var _line: ColorRect
@@ -50,6 +53,13 @@ func _ready() -> void:
 
 	_title_font = FontVariation.new()
 	_title_font.base_font = _FONT
+	_halo = Label.new()
+	_halo.text = _TITLE
+	_halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_halo.add_theme_font_override("font", _title_font)
+	_halo.add_theme_color_override("font_color", Color(_PHOSPHOR.r, _PHOSPHOR.g, _PHOSPHOR.b, 0.14))
+	_halo.add_theme_color_override("font_outline_color", _PHOSPHOR)
+	add_child(_halo)
 	_title = Label.new()
 	_title.text = _TITLE
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -63,12 +73,9 @@ func _ready() -> void:
 	add_child(_line)
 
 	_prompt_font = FontVariation.new()
-	_prompt_font.base_font = _FONT
-	_prompt = Label.new()
-	_prompt.text = _PROMPT
-	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt_font.base_font = _PIXEL.font()
+	_prompt = _PIXEL.make_label(_PROMPT)
 	_prompt.add_theme_font_override("font", _prompt_font)
-	_prompt.add_theme_color_override("font_color", _TITLE_COLOR)
 	add_child(_prompt)
 
 	_black = ColorRect.new()
@@ -96,8 +103,15 @@ func _layout() -> void:
 	var title_y := view.y * 0.40
 	var run_center := run.position.x + run.size.x * 0.5
 	var origin_x := view.x * 0.5 - run_center
-	_title.position = Vector2(origin_x, title_y)
-	_title.size = Vector2(run.end.x + 4.0, font_size * 1.35)
+	var title_pos := Vector2(origin_x, title_y)
+	var title_size := Vector2(run.end.x + 4.0, font_size * 1.35)
+	var outline := maxi(2, int(round(font_size / 22.0)))
+	_halo.add_theme_constant_override("outline_size", outline)
+	_halo.add_theme_font_size_override("font_size", size_px)
+	_halo.position = title_pos
+	_halo.size = title_size
+	_title.position = title_pos
+	_title.size = title_size
 
 	var ink_center := origin_x + run_center
 	var line_w := run.size.x * 0.42
@@ -109,13 +123,15 @@ func _layout() -> void:
 	_glow.position = Vector2(ink_center - glow_w * 0.5, title_y - font_size * 0.7)
 	_glow.size = Vector2(glow_w, glow_h)
 
-	var prompt_size := int(round(15.0 * view.y / 1080.0))
-	_prompt_font.spacing_glyph = int(round(float(prompt_size) * 0.62))
+	var prompt_size := _PIXEL.pixel_size(view.y)
+	_prompt_font.spacing_glyph = maxi(2, prompt_size / 8)
 	_prompt.add_theme_font_size_override("font_size", prompt_size)
-	var prompt_advance := _prompt_font.get_string_size(_PROMPT, HORIZONTAL_ALIGNMENT_LEFT, -1, prompt_size)
-	var prompt_visual := prompt_advance.x - float(_prompt_font.spacing_glyph)
-	_prompt.position = Vector2((view.x - prompt_visual) * 0.5, view.y - 78.0 * view.y / 1080.0)
-	_prompt.size = Vector2(prompt_advance.x, prompt_size * 1.8)
+	var prompt_run := _glyph_run_bounds(_prompt_font, _PROMPT, prompt_size)
+	var prompt_center := prompt_run.position.x + prompt_run.size.x * 0.5
+	var prompt_x := int(round(view.x * 0.5 - prompt_center))
+	var prompt_y := int(view.y) - prompt_size * 4
+	_prompt.position = Vector2(prompt_x, prompt_y)
+	_prompt.size = Vector2(prompt_run.end.x + 4.0, prompt_size + 4.0)
 
 
 func _process(delta: float) -> void:
@@ -128,6 +144,7 @@ func _process(delta: float) -> void:
 		ui_alpha = 1.0 - _smooth(clampf(_dismiss / 0.55, 0.0, 1.0))
 		veil = sin(clampf(_dismiss, 0.0, 1.0) * PI) * 0.42
 	_black.color = Color(0, 0, 0, maxf(intro_alpha, veil))
+	_halo.modulate.a = ui_alpha
 	_title.modulate.a = ui_alpha
 	_line.modulate.a = ui_alpha
 	_glow.modulate.a = ui_alpha

@@ -61,6 +61,10 @@ func _ready() -> void:
 		director.name = "TitleDirector"
 		add_child(director)
 		director.setup(ship, camera, planet.position, float(planet.radius), sun_dir)
+	var hud = load("res://scripts/ui/flight_hud.gd").new()
+	hud.name = "FlightHud"
+	add_child(hud)
+	hud.setup(ship)
 	_add_dither()
 
 
