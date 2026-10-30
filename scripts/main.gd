@@ -10,6 +10,10 @@ var _title_card := false
 var _shot_time := 0.0
 var _shot_saved := false
 var _world: SubViewport
+var _bounce: DirectionalLight3D
+var _ship: Node3D
+var _planet_center := Vector3.ZERO
+var _planet_radius := 24.0
 
 
 func _ready() -> void:
@@ -31,7 +35,8 @@ func _ready() -> void:
 	body.name = planet.name
 	_world.add_child(body)
 	body.setup(planet, sun_dir)
-	_add_planet_haze(planet)
+	_planet_center = planet.position
+	_planet_radius = float(planet.radius)
 
 	var ship := Node3D.new()
 	ship.name = "Ship"
@@ -40,6 +45,7 @@ func _ready() -> void:
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
+	_ship = ship
 	if _shot:
 		_place_for_shot(ship, planet)
 	else:
@@ -51,6 +57,8 @@ func _ready() -> void:
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
 	camera.set_meta("title_hold", not _shot)
+	camera.set_meta("planet_center", planet.position)
+	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
 	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
@@ -65,7 +73,9 @@ func _ready() -> void:
 	hud.name = "FlightHud"
 	add_child(hud)
 	hud.setup(ship)
+	_add_sun_glare(camera, sun_dir)
 	_add_dither()
+	_update_bounce()
 
 
 func _mount_world() -> void:
@@ -119,7 +129,27 @@ func _add_dither() -> void:
 	_world.add_child(layer)
 
 
+func _add_sun_glare(chase: Camera3D, sun_dir: Vector3) -> void:
+	var glare = load("res://scripts/world/sun_glare.gd").new()
+	glare.name = "SunGlare"
+	# Inside the low-res view, under the dither layer, so the flare is dithered like the world.
+	_world.add_child(glare)
+	glare.setup(_world, sun_dir * 1800.0, _planet_center, _planet_radius)
+
+
+func _update_bounce() -> void:
+	if _bounce == null or _ship == null:
+		return
+	# Light travels from Mina to the ship. Stronger close in, gone far out.
+	var offset := _ship.global_position - _planet_center
+	var distance := maxf(offset.length(), 0.001)
+	_bounce.look_at_from_position(Vector3.ZERO, offset / distance, Vector3.UP if absf(offset.normalized().y) < 0.98 else Vector3.RIGHT)
+	var near := clampf(1.0 - (distance - _planet_radius) / (_planet_radius * 8.0), 0.0, 1.0)
+	_bounce.light_energy = 0.08 + 0.32 * near * near
+
+
 func _process(delta: float) -> void:
+	_update_bounce()
 	if _title_card and not _shot and not _shot_saved:
 		_shot_time += delta
 		if _shot_time >= 2.4:
@@ -189,65 +219,63 @@ func _frame_side(ship: Node3D, camera: Camera3D) -> void:
 
 
 func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
+	var high := _PostProfile.high_quality()
 	var world := WorldEnvironment.new()
 	world.name = "WorldEnvironment"
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	environment.background_energy_multiplier = 1.0
+	# Cold, low ambient: shadow sides fall to near black instead of grey.
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.55, 0.68, 0.82)
-	environment.ambient_light_energy = 0.16
+	environment.ambient_light_color = Color(0.36, 0.5, 0.72)
+	environment.ambient_light_energy = 0.045
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_AGX
-	environment.tonemap_exposure = 1.02
+	environment.tonemap_exposure = 1.0
 	environment.tonemap_white = 6.0
 
+	# Bloom only well above white: the sun, its glare and the engines. The frame itself stays crisp.
 	environment.glow_enabled = true
-	environment.glow_intensity = 0.8
-	environment.glow_strength = 0.72
-	environment.glow_bloom = 0.14
-	environment.glow_hdr_threshold = 0.85
-	environment.glow_hdr_scale = 1.6
-	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	environment.glow_normalized = false
+	environment.glow_intensity = 0.65
+	environment.glow_strength = 0.9
+	environment.glow_bloom = 0.0
+	environment.glow_hdr_threshold = 2.4
+	environment.glow_hdr_scale = 2.2
+	environment.glow_hdr_luminance_cap = 24.0
+	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	environment.set_glow_level(0, 0.0)
+	environment.set_glow_level(1, 0.6)
+	environment.set_glow_level(2, 0.8)
+	environment.set_glow_level(3, 0.35)
+	environment.set_glow_level(4, 0.12)
 
-	environment.ssao_enabled = true
-	environment.ssao_radius = 1.4
-	environment.ssao_intensity = 1.35
-	environment.ssao_power = 1.4
-	environment.ssao_detail = 0.45
-	environment.ssao_horizon = 0.08
+	environment.ssao_enabled = high
+	environment.ssao_radius = 1.1
+	environment.ssao_intensity = 1.6
+	environment.ssao_power = 1.5
+	environment.ssao_detail = 0.5
+	environment.ssao_horizon = 0.06
 	environment.ssao_sharpness = 0.98
-	environment.ssao_light_affect = 0.35
+	environment.ssao_light_affect = 0.2
 
-	environment.ssr_enabled = true
-	environment.ssr_max_steps = 48
-	environment.ssr_fade_in = 0.12
-	environment.ssr_fade_out = 1.8
-	environment.ssr_depth_tolerance = 0.25
+	# Sharp canopy and panel reflections of Mina and the engines.
+	environment.ssr_enabled = high
+	environment.ssr_max_steps = 56
+	environment.ssr_fade_in = 0.08
+	environment.ssr_fade_out = 2.0
+	environment.ssr_depth_tolerance = 0.2
 
-	environment.sdfgi_enabled = true
-	environment.sdfgi_cascades = 4
-	environment.sdfgi_min_cell_size = 0.4
-	environment.sdfgi_cascade0_distance = 24.0
-	environment.sdfgi_max_distance = 512.0
-	environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
-	environment.sdfgi_use_occlusion = true
-	environment.sdfgi_bounce_feedback = 0.35
-	environment.sdfgi_energy = 0.55
-	environment.sdfgi_read_sky_light = true
-
-	environment.volumetric_fog_enabled = true
-	environment.volumetric_fog_density = 0.0
-	environment.volumetric_fog_albedo = Color(0.55, 0.7, 0.84)
-	environment.volumetric_fog_emission = Color(0.01, 0.02, 0.035)
-	environment.volumetric_fog_length = 64.0
-	environment.volumetric_fog_detail_spread = 2.0
-	environment.volumetric_fog_ambient_inject = 0.35
-	environment.volumetric_fog_sky_affect = 0.15
+	# GI does little in open space and costs a lot; the ship bounce is a dedicated light instead.
+	environment.sdfgi_enabled = false
+	# Volumetric fog washed the close ring pass into flat grey sheets. Limb haze lives in the
+	# atmosphere shells now, which stay crisp at any distance.
+	environment.volumetric_fog_enabled = false
 
 	environment.adjustment_enabled = true
-	environment.adjustment_brightness = 1.0
-	environment.adjustment_contrast = 1.04
-	environment.adjustment_saturation = 0.9
+	environment.adjustment_brightness = 0.98
+	environment.adjustment_contrast = 1.08
+	environment.adjustment_saturation = 1.0
 	environment.adjustment_color_correction = _ColorGrade.build_lut()
 
 	var sky := Sky.new()
@@ -255,6 +283,7 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	material.shader = load("res://assets/shaders/nebula_sky.gdshader")
 	material.set_shader_parameter("sun_dir", sun_dir)
 	sky.sky_material = material
+	sky.radiance_size = Sky.RADIANCE_SIZE_256 if high else Sky.RADIANCE_SIZE_64
 	environment.sky = sky
 	world.environment = environment
 	_world.add_child(world)
@@ -262,27 +291,45 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 
 
 func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
+	var high := _PostProfile.high_quality()
+	# One hard sun: small angular size and little blur, so terminators and hull shadows are crisp.
 	var key := DirectionalLight3D.new()
 	key.name = "SunLight"
-	key.light_color = Color(1.0, 0.94, 0.82)
-	key.light_energy = 2.6
+	key.light_color = Color(1.0, 0.95, 0.86)
+	key.light_energy = 2.4
+	key.light_specular = 1.0
 	key.shadow_enabled = true
-	key.shadow_blur = 1.7
-	key.light_angular_distance = 0.7
-	key.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	key.directional_shadow_blend_splits = true
-	key.directional_shadow_max_distance = 900.0
+	key.shadow_blur = 0.6
+	key.light_angular_distance = 0.25
+	key.shadow_normal_bias = 1.2
+	if high:
+		key.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	else:
+		key.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	key.directional_shadow_blend_splits = high
+	key.directional_shadow_max_distance = 600.0
 	key.directional_shadow_fade_start = 0.85
 	key.look_at_from_position(sun_dir, Vector3.ZERO, Vector3.UP)
 	_world.add_child(key)
 
-	var fill := DirectionalLight3D.new()
-	fill.name = "SkyFill"
-	fill.light_color = Color(0.62, 0.74, 0.9)
-	fill.light_energy = 0.2
-	fill.shadow_enabled = false
-	fill.look_at_from_position(-sun_dir, Vector3.ZERO, Vector3.UP)
-	_world.add_child(fill)
+	# Thin cool rim on the shadow side: almost no diffuse, mostly a specular edge.
+	var rim := DirectionalLight3D.new()
+	rim.name = "CoolRim"
+	rim.light_color = Color(0.5, 0.68, 1.0)
+	rim.light_energy = 0.12
+	rim.light_specular = 1.6
+	rim.shadow_enabled = false
+	rim.look_at_from_position(-sun_dir + Vector3(0.0, -0.25, 0.0), Vector3.ZERO, Vector3.UP)
+	_world.add_child(rim)
+
+	# Mina-blue bounce: a weak fill aimed from the planet at the ship, updated each frame.
+	_bounce = DirectionalLight3D.new()
+	_bounce.name = "PlanetBounce"
+	_bounce.light_color = Color(0.42, 0.64, 0.95)
+	_bounce.light_energy = 0.0
+	_bounce.light_specular = 0.6
+	_bounce.shadow_enabled = false
+	_world.add_child(_bounce)
 
 
 func _build_sun(_sky_colors: Dictionary) -> void:
@@ -325,29 +372,15 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 	star.add_child(glow)
 
 
-func _add_planet_haze(planet: Dictionary) -> void:
-	var volume := FogVolume.new()
-	volume.name = "PlanetHaze"
-	volume.shape = 0
-	var radius: float = planet.radius
-	volume.size = Vector3.ONE * radius * 3.4
-	volume.position = planet.position
-	var fog := FogMaterial.new()
-	fog.density = 0.008
-	fog.albedo = Color(0.45, 0.66, 0.82)
-	fog.emission = Color(0.015, 0.03, 0.05)
-	volume.material = fog
-	_world.add_child(volume)
-
-
 func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:
 	var adapter := ""
 	if RenderingServer.has_method("get_video_adapter_name"):
 		adapter = str(RenderingServer.get_video_adapter_name())
 	print("RENDER adapter=", adapter)
 	print(
-		"FEATURES agx=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
+		"FEATURES quality=%s agx=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
 		% [
+			_PostProfile.quality(),
 			environment.tonemap_mode == Environment.TONE_MAPPER_AGX,
 			environment.glow_enabled,
 			environment.ssao_enabled,

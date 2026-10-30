@@ -51,7 +51,7 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 
 	var atmo_color := _cool(Color.html(data.atmosphere), 0.74)
 	_atmo_mat = _add_atmosphere(radius * 1.045, atmo_color, sun, 2.6, 2.4, 1.25)
-	_add_atmosphere(radius * 1.42, atmo_color, sun, 1.35, 1.05, 0.62)
+	_add_atmosphere(radius * 1.16, atmo_color, sun, 2.2, 1.4, 0.5)
 
 	if data.rings:
 		var rings := Node3D.new()

@@ -2,7 +2,7 @@ class_name ColorGrade
 extends RefCounted
 
 ## Destiny 1-style grade as a 16³ LUT. Godot samples a Texture3D as output = texture(input_rgb).
-## Shadows lift toward blue-teal, mids desaturate, highlights stay warm and small, contrast stays soft.
+## Shadows lean blue-teal (near-black, not lifted), mids desaturate, highlights stay warm and small, contrast stays soft.
 
 const SIZE := 16
 
@@ -33,9 +33,9 @@ static func grade(color: Vector3) -> Vector3:
 	var desat := 0.07 + mid * 0.18
 	var graded := softened.lerp(Vector3.ONE * luma, desat)
 	var shadow := 1.0 - smoothstep(0.0, 0.5, luma)
-	graded.x += 0.01 * shadow
-	graded.y += 0.04 * shadow
-	graded.z += 0.075 * shadow
+	graded.x += 0.006 * shadow
+	graded.y += 0.024 * shadow
+	graded.z += 0.052 * shadow
 	var highlight := smoothstep(0.6, 1.0, luma)
 	graded.x += 0.028 * highlight
 	graded.y += 0.01 * highlight
@@ -48,8 +48,9 @@ static func grade(color: Vector3) -> Vector3:
 
 
 static func _soft(value: float) -> float:
-	var lifted := clampf(value, 0.0, 1.0) * 0.94 + 0.012
-	return clampf((lifted - 0.5) * 0.9 + 0.5, 0.0, 1.0)
+	# Blacks stay near black (a faint blue tint comes from the shadow push above).
+	var lifted := clampf(value, 0.0, 1.0) * 0.965 + 0.004
+	return clampf((lifted - 0.5) * 0.98 + 0.5, 0.0, 1.0)
 
 
 static func _luma(color: Vector3) -> float:

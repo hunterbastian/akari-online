@@ -7,6 +7,10 @@ extends Camera3D
 var _ship: Node3D
 var _ready_cam := false
 var held := false
+var _planet_bias := Vector3.ZERO
+
+const PLANET_LOOK_BIAS := 0.2
+const PLANET_LOOK_RANGE := 6.0
 
 
 func _ready() -> void:
@@ -46,7 +50,23 @@ func _apply(step: float, snap: bool) -> void:
 	else:
 		global_position = global_position.lerp(desired, 1.0 - exp(-FlightProfile.CAM_CHASE * step))
 	var aim := _ship.global_position + forward * FlightProfile.CAM_LOOK_AHEAD
-	look_at(aim, Vector3.UP)
+	# Lean the view a little toward Mina when she is close and ahead, so she sits in frame more.
+	var target_bias := Vector3.ZERO
+	if has_meta("planet_center"):
+		var center: Vector3 = get_meta("planet_center")
+		var radius := float(get_meta("planet_radius", 24.0))
+		var to_planet := center - global_position
+		var distance := to_planet.length()
+		var ahead := to_planet.normalized().dot(forward)
+		if distance < radius * PLANET_LOOK_RANGE and ahead > -0.1:
+			var reach := clampf(1.0 - distance / (radius * PLANET_LOOK_RANGE), 0.0, 1.0)
+			var weight := PLANET_LOOK_BIAS * smoothstep(0.0, 0.35, reach) * smoothstep(-0.1, 0.3, ahead)
+			target_bias = (to_planet.normalized() - forward) * FlightProfile.CAM_LOOK_AHEAD * weight
+	if snap:
+		_planet_bias = target_bias
+	else:
+		_planet_bias = _planet_bias.lerp(target_bias, 1.0 - exp(-2.0 * step))
+	look_at(aim + _planet_bias, Vector3.UP)
 	if snap:
 		fov = FlightProfile.FOV
 		return

@@ -33,7 +33,7 @@ float fbm(vec3 p) {
 
 void sky() {
 	vec3 dir = normalize(EYEDIR);
-	vec3 base = vec3(0.004, 0.006, 0.016);
+	vec3 base = vec3(0.0015, 0.0025, 0.008);
 
 	float far_n = fbm(dir * 1.35 + vec3(2.2, 0.4, 1.1));
 	float mid_n = fbm(dir * 2.8 + far_n * 0.55 + vec3(7.0, 1.4, 3.2));
@@ -46,9 +46,9 @@ void sky() {
 	float mid_mask = smoothstep(0.52, 0.82, mid_n);
 	float near_mask = smoothstep(0.58, 0.86, near_n);
 	vec3 col = base;
-	col = mix(col, indigo, far_mask * 0.36);
-	col = mix(col, teal, mid_mask * 0.26);
-	col = mix(col, violet, near_mask * 0.16);
+	col = mix(col, indigo, far_mask * 0.2);
+	col = mix(col, teal, mid_mask * 0.13);
+	col = mix(col, violet, near_mask * 0.08);
 	float filament = smoothstep(0.66, 0.84, fbm(dir * 8.0 + vec3(4.0, 2.0, 9.0)));
 	col += vec3(0.12, 0.08, 0.05) * filament * 0.05;
 
@@ -56,8 +56,8 @@ void sky() {
 	vec3 cell_b = floor(dir * 340.0 + 17.0);
 	float h1 = hash13(cell_a);
 	float h2 = hash13(cell_b);
-	float dim = step(0.9988, h1) * (0.22 + 0.4 * hash13(cell_a + 3.1));
-	float bright = step(0.9982, h2) * (1.05 + 0.55 * hash13(cell_b + 1.7));
+	float dim = step(0.9993, h1) * (0.1 + 0.22 * hash13(cell_a + 3.1));
+	float bright = step(0.9991, h2) * (0.45 + 0.4 * hash13(cell_b + 1.7));
 	col += vec3(0.72, 0.8, 0.95) * dim;
 	col += vec3(0.92, 0.94, 1.0) * bright;
 
@@ -65,7 +65,7 @@ void sky() {
 	float mu = max(dot(dir, sun), 0.0);
 	float corona = pow(mu, 64.0);
 	float wide = pow(mu, 18.0);
-	col += vec3(0.42, 0.58, 0.82) * corona * 0.22;
+	col += vec3(0.5, 0.64, 0.86) * corona * 0.35;
 	col += vec3(0.05, 0.08, 0.14) * wide * 0.04;
 
 	COLOR = col;

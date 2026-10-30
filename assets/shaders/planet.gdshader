@@ -138,14 +138,17 @@ void fragment() {
 	vec3 light_dir = normalize(u_sun_dir);
 	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - v_world);
 	float ndl = dot(world_n, light_dir);
-	float day = smoothstep(-0.18, 0.42, ndl);
-	float wrap = smoothstep(-0.35, 0.65, ndl);
-	vec3 lit = albedo * (0.42 + 0.7 * wrap);
-	vec3 night = albedo * vec3(0.05, 0.08, 0.14);
+	// Geometric normal for the terminator so bump noise does not smear it.
+	float ndl_geo = dot(normalize(v_world - u_center), light_dir);
+	// Hard sun: a narrow terminator, lit side Lambert-ish, night side near black.
+	float day = smoothstep(-0.03, 0.09, ndl_geo);
+	float lambert = clamp(ndl * 0.85 + 0.15, 0.0, 1.0);
+	vec3 lit = albedo * (0.05 + 0.6 * lambert);
+	vec3 night = albedo * vec3(0.012, 0.02, 0.04);
 	vec3 color = mix(night, lit, day);
-	float term = exp(-ndl * ndl * 22.0);
-	color += vec3(1.0, 0.78, 0.48) * term * 0.22;
-	color += vec3(1.0, 0.42, 0.16) * crack * 0.16;
+	float term = exp(-ndl_geo * ndl_geo * 160.0);
+	color += vec3(1.0, 0.72, 0.42) * term * 0.08 * (0.3 + albedo);
+	color += vec3(1.0, 0.42, 0.16) * crack * 0.16 * day;
 
 	vec3 half_dir = normalize(light_dir + view_dir);
 	float ndh = max(dot(world_n, half_dir), 0.0);
@@ -156,16 +159,19 @@ void fragment() {
 	float cn = vnoise(nrm * 1.8 + vec3(u_time * 0.01, u_seed, 0.4));
 	float cloud = smoothstep(0.18, 0.88, band * 0.5 + 0.5);
 	cloud = clamp(cloud * 0.7 + smoothstep(0.42, 0.8, cn) * 0.55, 0.0, 1.0);
-	vec3 cloud_col = mix(vec3(0.78, 0.86, 0.92), vec3(0.9, 0.94, 0.97), 0.55);
-	float cloud_vis = mix(0.15, 1.0, smoothstep(-0.2, 0.4, ndl));
-	color = mix(color, cloud_col * mix(0.35, 1.0, day), clamp(cloud * cloud_amt, 0.0, 0.42) * cloud_vis);
+	vec3 cloud_col = mix(vec3(0.78, 0.86, 0.92), vec3(0.9, 0.94, 0.97), 0.55) * 0.68;
+	float cloud_vis = mix(0.03, 1.0, smoothstep(-0.03, 0.3, ndl_geo));
+	color = mix(color, cloud_col * mix(0.02, 1.0, day) * mix(0.7, 1.0, lambert), clamp(cloud * cloud_amt, 0.0, 0.42) * cloud_vis);
 
 	float fres = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 2.4);
-	vec3 rim_col = mix(vec3(0.45, 0.72, 0.88), vec3(1.0, 0.86, 0.62), smoothstep(0.0, 0.35, ndl));
-	color += rim_col * fres * mix(0.08, 0.42, day);
+	vec3 rim_col = mix(vec3(0.35, 0.6, 0.95), vec3(0.75, 0.88, 1.0), smoothstep(0.0, 0.35, ndl_geo));
+	// Thin cool rim on the night limb, brighter haze on the day limb.
+	float thin = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 6.0);
+	color += rim_col * (fres * 0.32 * day + thin * 0.22 * (1.0 - day));
 
 	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	color = mix(vec3(luma), color, 0.82);
-	color = mix(color * vec3(0.82, 0.92, 1.05), color * vec3(1.04, 0.98, 0.9), smoothstep(0.18, 0.72, luma));
+	// AgX and the grade both pull saturation; push it back so Mina stays ice-blue, not grey.
+	color = max(mix(vec3(luma), color, 1.7), vec3(0.0));
+	color = mix(color * vec3(0.8, 0.92, 1.08), color * vec3(0.98, 0.99, 1.0), smoothstep(0.25, 0.85, luma));
 	ALBEDO = color;
 }

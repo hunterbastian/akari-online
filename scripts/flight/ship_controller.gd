@@ -18,6 +18,11 @@ var active := true
 var demo_fly := false
 var _hull: Node3D
 var _flames: Array[MeshInstance3D] = []
+var _halos: Array[MeshInstance3D] = []
+var _trails: Array[MeshInstance3D] = []
+var _streaks: CPUParticles3D
+
+const _PostProfile := preload("res://scripts/data/post_profile.gd")
 
 
 func _ready() -> void:
@@ -40,6 +45,12 @@ func _ready() -> void:
 		_hull.add_child(model)
 		_dress_ship(model)
 	_build_flames()
+	_build_engine_fx()
+	_build_speed_streaks()
+	if _PostProfile.high_quality():
+		_build_reflection_probe()
+		# Keep the ship out of its own probe (layer 2), so the probe sees only space and Mina.
+		_set_layer(_hull, 2)
 
 
 func set_flight_active(on: bool) -> void:
@@ -168,31 +179,35 @@ func _tune_hull(material: StandardMaterial3D) -> ShaderMaterial:
 	material.roughness = 0.76
 	if "canopy" in name:
 		material.albedo_color = Color(0.07, 0.1, 0.14)
-		material.metallic = 0.58
-		material.roughness = 0.06
+		material.albedo_color = Color(0.04, 0.06, 0.09)
+		material.metallic = 0.72
+		material.roughness = 0.03
 		material.clearcoat_enabled = true
-		material.clearcoat = 0.9
-		material.clearcoat_roughness = 0.07
+		material.clearcoat = 1.0
+		material.clearcoat_roughness = 0.02
 	elif "engine" in name or "glow" in name:
 		material.metallic = 0.08
 		material.roughness = 0.32
 		material.emission_enabled = true
 		material.emission = Color(0.72, 0.86, 1.0)
-		material.emission_energy_multiplier = 3.6
+		material.emission_energy_multiplier = 6.0
 	elif "dark" in name or "line" in name or "intake" in name or "vent" in name:
 		material.albedo_color = Color(0.11, 0.11, 0.12)
-		material.metallic = 0.22
-		material.roughness = 0.62
+		material.metallic = 0.4
+		material.roughness = 0.42
 	elif "accent" in name:
 		material.albedo_color = Color(0.22, 0.48, 0.52)
-		material.metallic = 0.1
-		material.roughness = 0.58
+		material.metallic = 0.25
+		material.roughness = 0.34
+		material.clearcoat_enabled = true
+		material.clearcoat = 0.7
+		material.clearcoat_roughness = 0.1
 	elif "hull" in name or "panel" in name or "fin" in name or "nacelle" in name:
 		var paint := ShaderMaterial.new()
 		paint.shader = _HULL_PAINT
 		paint.set_shader_parameter("base_color", Color(0.843, 0.827, 0.796))
-		paint.set_shader_parameter("roughness_base", 0.8 if "panel" in name else 0.76)
-		paint.set_shader_parameter("metallic_base", 0.12)
+		paint.set_shader_parameter("roughness_base", 0.42 if "panel" in name else 0.34)
+		paint.set_shader_parameter("metallic_base", 0.1)
 		return paint
 	return null
 
@@ -226,5 +241,151 @@ func _update_flames() -> void:
 		flame.scale = Vector3(1.0, 0.28 + hot * 1.35, 1.0)
 		var material := flame.material_override as StandardMaterial3D
 		if material:
-			var energy := 0.7 + hot * 2.8
-			material.albedo_color = Color(energy * 0.45, energy * 0.72, energy, 0.4 + hot * 0.4)
+			# Above the glow threshold at full thrust, so only engines and the sun bloom.
+			var energy := 1.2 + hot * 5.0
+			material.albedo_color = Color(energy * 0.42, energy * 0.7, energy, 0.45 + hot * 0.4)
+	for halo in _halos:
+		halo.scale = Vector3.ONE * (0.55 + hot * 0.75)
+		var halo_material := halo.material_override as StandardMaterial3D
+		if halo_material:
+			halo_material.albedo_color = Color(0.55, 0.78, 1.6, 0.25 + hot * 0.55)
+	for plume in _trails:
+		var length := 0.4 + hot * (2.6 if boosting else 1.6)
+		plume.visible = hot > 0.03
+		plume.scale = Vector3(0.7 + hot * 0.4, length, 0.7 + hot * 0.4)
+		plume.position = (plume.get_meta("anchor") as Vector3) + Vector3(0.0, 0.0, 0.1 + length * 0.5)
+	if _streaks:
+		_streaks.emitting = boosting and velocity.length() > _speeds.cruise * 1.2
+
+
+func _soft_dot() -> GradientTexture2D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	gradient.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.35), Color(1, 1, 1, 0)])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	texture.width = 64
+	texture.height = 64
+	return texture
+
+
+func _additive(texture: Texture2D, color: Color, billboard: int) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_texture = texture
+	material.albedo_color = color
+	material.vertex_color_use_as_albedo = true
+	material.billboard_mode = billboard
+	return material
+
+
+func _build_engine_fx() -> void:
+	var dot := _soft_dot()
+	var high := _PostProfile.high_quality()
+	for anchor in FlightProfile.ENGINE_ANCHORS:
+		# Hot glow at the nozzle.
+		var halo := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.62, 0.62)
+		halo.mesh = quad
+		halo.position = anchor + Vector3(0.0, 0.0, 0.08)
+		halo.material_override = _additive(dot, Color(0.55, 0.78, 1.6, 0.6), BaseMaterial3D.BILLBOARD_ENABLED)
+		halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_hull.add_child(halo)
+		_halos.append(halo)
+		# Short exhaust plume: a tapered additive cone stretched behind the nozzle.
+		# A mesh (not particles) so it reads as one smooth streak at any frame rate.
+		var plume := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.2
+		cone.bottom_radius = 0.015
+		cone.height = 1.0
+		cone.radial_segments = 10 if high else 6
+		cone.rings = 1
+		cone.cap_top = false
+		cone.cap_bottom = false
+		plume.mesh = cone
+		var fade := GradientTexture2D.new()
+		var fade_ramp := Gradient.new()
+		fade_ramp.offsets = PackedFloat32Array([0.0, 0.2, 1.0])
+		fade_ramp.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.5), Color(1, 1, 1, 0)])
+		fade.gradient = fade_ramp
+		fade.fill_from = Vector2(0.0, 0.0)
+		fade.fill_to = Vector2(0.0, 1.0)
+		fade.width = 4
+		fade.height = 64
+		var plume_mat := _additive(fade, Color(0.5, 0.74, 1.5, 0.5), BaseMaterial3D.BILLBOARD_DISABLED)
+		plume_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		plume.material_override = plume_mat
+		# Cylinder axis is +Y; tip it so the wide top sits at the nozzle and the tip trails along +Z.
+		plume.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+		plume.position = anchor + Vector3(0.0, 0.0, 0.1)
+		plume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		plume.set_meta("anchor", anchor)
+		_hull.add_child(plume)
+		_trails.append(plume)
+
+
+func _build_speed_streaks() -> void:
+	# Thin lines rushing past the camera while boosting.
+	_streaks = CPUParticles3D.new()
+	_streaks.name = "SpeedStreaks"
+	_streaks.emitting = false
+	_streaks.local_coords = true
+	_streaks.amount = 70 if _PostProfile.high_quality() else 24
+	_streaks.lifetime = 0.32
+	_streaks.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_streaks.emission_box_extents = Vector3(7.0, 4.5, 10.0)
+	_streaks.position = Vector3(0.0, 1.0, -4.0)
+	_streaks.direction = Vector3(0, 0, 1)
+	_streaks.spread = 0.0
+	_streaks.initial_velocity_min = 80.0
+	_streaks.initial_velocity_max = 110.0
+	_streaks.gravity = Vector3.ZERO
+	_streaks.particle_flag_align_y = true
+	var line := BoxMesh.new()
+	line.size = Vector3(0.018, 2.2, 0.018)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	material.vertex_color_use_as_albedo = true
+	material.albedo_color = Color(0.7, 0.85, 1.0, 0.35)
+	line.material = material
+	_streaks.mesh = line
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
+	ramp.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	_streaks.color_ramp = ramp
+	_streaks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_streaks)
+
+
+func _build_reflection_probe() -> void:
+	# Follows the ship so the canopy and lacquer reflect Mina and the sun, not just the sky.
+	var probe := ReflectionProbe.new()
+	probe.name = "ShipReflections"
+	probe.update_mode = ReflectionProbe.UPDATE_ALWAYS
+	probe.size = Vector3(40, 40, 40)
+	probe.max_distance = 2000.0
+	probe.box_projection = false
+	probe.interior = false
+	probe.enable_shadows = false
+	probe.mesh_lod_threshold = 4.0
+	probe.cull_mask = 1
+	add_child(probe)
+
+
+func _set_layer(node: Node, layer: int) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = 1 << (layer - 1)
+	for child in node.get_children():
+		_set_layer(child, layer)

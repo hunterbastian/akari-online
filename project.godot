@@ -79,6 +79,8 @@ common/physics_ticks_per_second=120
 
 post/dither=true
 render/scale=0.7
+quality="high"
+quality.mobile="low"
 
 [rendering]
 

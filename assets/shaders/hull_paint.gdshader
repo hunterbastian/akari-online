@@ -3,6 +3,8 @@ shader_type spatial;
 uniform vec4 base_color : source_color = vec4(0.843, 0.827, 0.796, 1.0);
 uniform float roughness_base = 0.78;
 uniform float metallic_base = 0.14;
+uniform float clearcoat_amount = 0.85;
+uniform float clearcoat_gloss = 0.08;
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -30,6 +32,11 @@ void fragment() {
 	vec3 worn = base_color.rgb * vec3(0.62, 0.64, 0.68);
 	ALBEDO = mix(base_color.rgb, worn, chip);
 	ALBEDO *= mix(0.96, 1.04, broad);
-	ROUGHNESS = clamp(roughness_base + (speckle - 0.5) * 0.14 - chip * 0.2, 0.46, 0.92);
-	METALLIC = mix(metallic_base, 0.34, chip);
+	// Glossy lacquered paint: a clearcoat carries the sharp sun highlight across panels as the ship banks.
+	// Curved edges are worn bare metal, so they catch small glints.
+	ROUGHNESS = clamp(roughness_base + (speckle - 0.5) * 0.1 - curve * 0.18, 0.18, 0.7);
+	METALLIC = mix(metallic_base, 0.6, curve * 0.8);
+	SPECULAR = mix(0.5, 0.75, curve);
+	CLEARCOAT = clearcoat_amount * (1.0 - chip * 0.6);
+	CLEARCOAT_ROUGHNESS = clearcoat_gloss + speckle * 0.05;
 }
