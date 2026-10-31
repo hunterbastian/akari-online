@@ -12,6 +12,7 @@ const _HUD := preload("res://assets/shaders/hud_glass.gdshader")
 const _Plate := preload("res://scripts/ui/hud_plate.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
+const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -42,6 +43,7 @@ var _hum_phase := 0.0
 var _whine_phase := 0.0
 var _step_acc := 0.0
 var _last_walk := Vector3.ZERO
+var _shot_hold := false
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -52,18 +54,16 @@ func build(scale: float, high_quality: bool) -> void:
 	_font.hinting = TextServer.HINTING_NONE
 	_font.generate_mipmaps = false
 	_font.oversampling = 1.0
+	_shot_hold = OS.get_cmdline_user_args().has("--shot")
+	_Blocks.prepare(_scale)
 	var wall := _paint(Color(0.16, 0.165, 0.175), 0.5, 0.1)
 	var trim := _paint(Color(0.2, 0.208, 0.22), 0.4, 0.12)
 	var cloth := _paint(Color(0.09, 0.092, 0.105), 0.72, 0.0)
-	var bunk := _paint(Color(0.16, 0.145, 0.125), 0.7, 0.0)
 	var bezel := _paint(Color(0.07, 0.074, 0.082), 0.38, 0.18)
 	var door := _paint(Color(0.12, 0.125, 0.138), 0.46, 0.2)
 
-	# Floor and a ceiling that stops where the canopy opens, so the sun can reach the seat.
-	var floor_mesh := _box("Floor", _v(0.0, -0.46, -1.35), _v(2.08, 0.06, 3.2), wall, false)
-	var grate := _Detail.grate_material(_high)
-	paints.append(grate)
-	floor_mesh.material_override = grate
+	# Subfloor sits under the grate tiles. Ceiling stops where the canopy opens.
+	_box("Floor", _v(0.0, -0.52, -1.35), _v(2.08, 0.1, 3.2), wall, false)
 	_box("CeilingRear", _v(0.0, 1.58, -0.42), _v(2.08, 0.06, 1.45), wall, true)
 	_box("CeilingL", _v(-0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
 	_box("CeilingR", _v(0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
@@ -72,9 +72,7 @@ func build(scale: float, high_quality: bool) -> void:
 	_box("WallRear", _v(0.0, 0.56, 0.24), _v(2.08, 2.08, 0.07), wall, true)
 	_box("Kick", _v(0.0, -0.22, -2.72), _v(1.7, 0.42, 0.08), trim, true)
 
-	_box("Bunk", _v(0.68, -0.22, -0.45), _v(0.58, 0.16, 1.15), bunk, false)
-	_box("Pillow", _v(0.68, -0.1, -0.92), _v(0.36, 0.1, 0.22), bunk, false)
-	_box("JumpSeat", _v(-0.72, -0.16, -0.5), _v(0.42, 0.28, 0.42), cloth, false)
+	_box("JumpSeat", _v(-0.82, -0.22, -2.02), _v(0.4, 0.22, 0.4), cloth, false)
 
 	_box("Door", _v(0.0, 0.42, 0.18), _v(0.62, 1.15, 0.04), door, false)
 	_box("DoorBar", _v(0.22, 0.48, 0.14), _v(0.16, 0.035, 0.035), trim, false)
@@ -86,15 +84,16 @@ func build(scale: float, high_quality: bool) -> void:
 	_glow("StripL", _v(-0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.85, 0.78, 0.62))
 	_glow("StripR", _v(0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.45, 0.75, 0.95))
 
-	var side_size := Vector2i(320, 200) if high_quality else Vector2i(240, 150)
-	var prompt_size := Vector2i(384, 144) if high_quality else Vector2i(256, 96)
-	_screen("Nav", _v(-0.64, 0.95, -2.12), Vector2(0.30, 0.20) * _scale, 0.16, 0.0, "nav", side_size, bezel)
-	_screen("Drive", _v(0.64, 0.95, -2.12), Vector2(0.30, 0.20) * _scale, 0.16, 0.0, "drive", side_size, bezel)
-	_screen("Bay", _v(0.0, 1.02, 0.15), Vector2(0.36, 0.22) * _scale, 0.0, PI, "bay", side_size, bezel)
+	var side_size := Vector2i(400, 272) if high_quality else Vector2i(320, 216)
+	var prompt_size := Vector2i(480, 360) if high_quality else Vector2i(360, 270)
+	_screen("Nav", _v(-0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "nav", side_size)
+	_screen("Drive", _v(0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "drive", side_size)
+	_screen("Bay", _v(0.0, 0.92, 0.1), Vector2(0.4, 0.28) * _scale, 0.0, PI, "bay", side_size)
 	# Same tilt family as the readable CRTs, dropped into the window above the dash.
 	_build_hud(bezel)
-	# Inset in the slim dash, tilted up toward the seat.
-	_build_prompt(_v(0.0, 0.2, -2.06), prompt_size, bezel)
+	# Chunky terminal on the dash. The frame is a thin bezel, not a hood.
+	_build_prompt(_v(0.0, 0.4, -1.98), prompt_size)
+	_Blocks.dress(self)
 	_Detail.apply(self)
 	_build_walker()
 	_setup_audio()
@@ -115,27 +114,29 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	# No fuel tank yet. 1.00 is a full cell until that system exists.
 	if _plate and _plate.has_method("set_readout"):
 		_plate.set_readout(ship_name, hull, speed, mina_range, 1.0, autopilot, "NONE")
-	_set_line("nav", "NAV\nMINA\nRNG   %s\nBRG   FWD\nLINK  HOLD" % rng)
-	_set_line("drive", "DRIVE\nSPD   %s\nTHR   %s\nSTAT  NOM" % [spd, thr])
-	_set_line("bay", "ENG BAY\nSEALED\nCORE  NOM\nTEMP  312")
+	_set_line("nav", "NAV\nMINA\nRNG %s\nBRG FWD\nLINK" % rng)
+	_set_line("drive", "DRIVE\nSPD %s\nTHR %s\nNOM" % [spd, thr])
+	_set_line("bay", "BAY\nSEALED\nCORE\n312")
 
 
 func snap_view(mode: String) -> void:
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.1, 0.0)
 	elif mode == "rear":
-		walker.snap(_v(0.0, 0.0, -1.15), standing_eye, -0.22, PI)
+		walker.snap(_v(0.0, 0.0, -1.86), standing_eye, -0.18, PI)
+	elif mode == "storage":
+		walker.snap(_v(-0.05, 0.0, -1.62), _scale * 0.88, -0.32, -2.2)
 	elif mode == "dash":
-		walker.snap(_v(0.0, 0.0, -1.72), _scale * 0.82, -0.72, 0.0)
+		walker.snap(_v(0.0, 0.0, -1.2), _scale * 0.92, -0.42, 0.0)
 	else:
-		walker.snap(aisle_point, standing_eye, 0.06, 0.0)
+		walker.snap(aisle_point, standing_eye, -0.02, 0.0)
 
 
 func _process(delta: float) -> void:
 	if not _lines.has("terminal"):
 		return
 	# Shots must show the cursor. A long first frame would otherwise land in the off half.
-	if not OS.get_environment("AKARI_CABIN").is_empty():
+	if _shot_hold or not OS.get_environment("AKARI_CABIN").is_empty():
 		if not _prompt_held:
 			_cursor_on = true
 			_prompt_held = true
@@ -238,26 +239,18 @@ func _build_hud(bezel: Material) -> void:
 	pivot.add_child(rail)
 
 
-func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
-	var size := Vector2(0.46, 0.16) * _scale
+func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
+	var size := Vector2(0.52, 0.39) * _scale
 	var pivot := Node3D.new()
 	pivot.name = "TerminalPivot"
 	pivot.position = pos
-	pivot.rotation.x = 0.72
+	pivot.rotation.x = 0.48
 	add_child(pivot)
 	pivot.add_to_group("akari_hud")
 
-	var pad := _scale * 0.045
-	var depth := _scale * 0.06
-	var housing := MeshInstance3D.new()
-	housing.name = "TerminalBezel"
-	var box := BoxMesh.new()
-	box.size = Vector3(size.x + pad, size.y + pad, depth)
-	housing.mesh = box
-	housing.material_override = bezel
-	housing.layers = INTERIOR_LAYER
-	housing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	pivot.add_child(housing)
+	var border := _scale * 0.055
+	var depth := _scale * 0.026
+	_Blocks.monitor_frame(pivot, size, border, depth, INTERIOR_LAYER)
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -269,16 +262,26 @@ func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	var background := ColorRect.new()
-	background.color = Color(0.02, 0.09, 0.035)
+	background.color = Color(0, 0, 0, 1)
 	background.size = Vector2(view_size)
 	viewport.add_child(background)
+	var header := Label.new()
+	header.position = Vector2(28, 20)
+	header.size = Vector2(view_size.x - 48, 120)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.add_theme_font_override("font", _font)
+	header.add_theme_font_size_override("font_size", 32 if view_size.y >= 300 else 24)
+	header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
+	header.text = "TERM\nREADY"
+	header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	viewport.add_child(header)
 	var label := Label.new()
-	label.position = Vector2.ZERO
-	label.size = Vector2(view_size)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.position = Vector2(28, view_size.y * 0.46)
+	label.size = Vector2(view_size.x - 56, 80)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 36 if view_size.y >= 120 else 24)
+	label.add_theme_font_size_override("font_size", 48 if view_size.y >= 300 else 32)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = ">_"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -292,13 +295,13 @@ func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
 	var quad := QuadMesh.new()
 	quad.size = size
 	mesh_instance.mesh = quad
-	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.5 + _scale * 0.004)
+	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.95)
 	var material := ShaderMaterial.new()
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
 	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
-	material.set_shader_parameter("brightness", 1.3 if _high else 1.15)
-	material.set_shader_parameter("curvature", 0.04)
+	material.set_shader_parameter("brightness", 1.45 if _high else 1.25)
+	material.set_shader_parameter("curvature", 0.006)
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -325,8 +328,12 @@ func _build_walker() -> void:
 	walker.boxes = [
 		_aabb(_v(0.0, 0.0, -2.28), _v(1.4, 0.2, 0.62)),
 		_aabb(_v(0.0, 0.0, -1.55), _v(0.52, 0.2, 0.4)),
-		_aabb(_v(0.68, 0.0, -0.45), _v(0.62, 0.2, 1.2)),
-		_aabb(_v(-0.78, 0.0, -0.5), _v(0.46, 0.2, 0.46)),
+		_aabb(_v(0.72, 0.0, -1.42), _v(0.55, 0.3, 1.05)),
+		_aabb(_v(0.72, 0.0, -0.62), _v(0.55, 0.3, 0.55)),
+		_aabb(_v(0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
+		_aabb(_v(-0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
+		_aabb(_v(-0.55, 0.0, -0.62), _v(0.45, 0.3, 0.45)),
+		_aabb(_v(-0.82, 0.0, -2.02), _v(0.45, 0.3, 0.45)),
 		_aabb(_v(-1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
 		_aabb(_v(1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
 		_aabb(_v(0.0, 0.0, 0.22), _v(2.2, 0.2, 0.16)),
@@ -548,9 +555,16 @@ func _omni(pos: Vector3, color: Color, energy: float, range: float) -> void:
 	add_child(light)
 
 
-func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: float, kind: String, view_size: Vector2i, bezel: Material) -> void:
-	var bezel_pad := _scale * 0.03
-	_box(node_name + "Bezel", pos, Vector3(size.x + bezel_pad, size.y + bezel_pad, 0.02 * _scale), bezel, false)
+func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: float, kind: String, view_size: Vector2i) -> void:
+	var pivot := Node3D.new()
+	pivot.name = node_name + "Pivot"
+	pivot.position = pos
+	pivot.rotation = Vector3(tilt, yaw, 0.0)
+	add_child(pivot)
+	var border := _scale * 0.05
+	var depth := _scale * 0.03
+	_Blocks.monitor_frame(pivot, size, border, depth, INTERIOR_LAYER)
+
 	var viewport := SubViewport.new()
 	viewport.name = node_name + "View"
 	viewport.size = view_size
@@ -559,16 +573,17 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	viewport.handle_input_locally = false
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.gui_disable_input = true
+	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	var background := ColorRect.new()
-	background.color = Color(0.02, 0.09, 0.035)
+	background.color = Color(0, 0, 0, 1)
 	background.size = Vector2(view_size)
 	viewport.add_child(background)
 	var label := Label.new()
-	label.position = Vector2(10, 8)
-	label.size = Vector2(view_size) - Vector2(16, 12)
+	label.position = Vector2(16, 12)
+	label.size = Vector2(view_size) - Vector2(28, 20)
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 18 if view_size.y >= 280 else 14)
+	label.add_theme_font_size_override("font_size", 32 if view_size.y >= 250 else 24)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = "AKARI"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -581,18 +596,17 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	var quad := QuadMesh.new()
 	quad.size = size
 	mesh_instance.mesh = quad
-	var face := 1.0 if yaw < 0.1 else -1.0
-	mesh_instance.position = pos + Vector3(0.0, 0.0, 0.045 * face)
-	mesh_instance.rotation = Vector3(tilt, yaw, 0.0)
+	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.95)
 	var material := ShaderMaterial.new()
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
 	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
-	material.set_shader_parameter("brightness", 1.3 if _high else 1.15)
+	material.set_shader_parameter("brightness", 1.4 if _high else 1.2)
+	material.set_shader_parameter("curvature", 0.006)
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mesh_instance)
+	pivot.add_child(mesh_instance)
 
 
 func _set_line(kind: String, text: String) -> void:

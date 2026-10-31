@@ -170,7 +170,7 @@ func _register_builtins() -> void:
 	register_command("help", _cmd_help, "List commands, or help <command>")
 	register_command("clear", _cmd_clear, "Clear the scrollback")
 	register_command("fps", _cmd_fps, "Toggle the FPS, draw-call and memory overlay")
-	register_command("tp", _cmd_tp, "tp <planet|moon|ship|cabin|aisle> or tp x y z")
+	register_command("tp", _cmd_tp, "tp <planet|moon|ship|cabin|aisle|rear|dash|storage> or tp x y z")
 	register_command("speed", _cmd_speed, "speed <mult>  flight speed multiplier")
 	register_command("timescale", _cmd_timescale, "timescale <x>  Engine.time_scale")
 	register_command("noclip", _cmd_freecam, "Toggle the free camera (WASD, mouse, shift)")
@@ -475,7 +475,7 @@ func _complete_arg(command_name: String) -> void:
 	var options: PackedStringArray = PackedStringArray()
 	match command_name:
 		"tp":
-			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle"])
+			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "rear", "dash", "storage"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
 		"dither", "hud":
@@ -550,7 +550,7 @@ func _cmd_tp(args: PackedStringArray) -> void:
 		_echo("no flight scene", "err")
 		return
 	if args.is_empty():
-		_echo("tp <planet|moon|ship|cabin|aisle> or tp x y z", "warn")
+		_echo("tp <planet|moon|ship|cabin|aisle|rear|dash|storage> or tp x y z", "warn")
 		return
 	var spec := " ".join(args)
 	var message := str(scene.dev_teleport(spec))
