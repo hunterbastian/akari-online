@@ -261,7 +261,12 @@ func _update_cabin() -> void:
 	if _cabin:
 		var ship := Ships.get_ship(GameState.ship_id)
 		var mina_range := maxf(distance - planet_radius, 0.0)
-		_cabin.update_readouts(velocity.length(), thrust, mina_range, str(ship.name))
+		var hull := int(ship.stats.hull)
+		# Standing up holds the last velocity. Seated flight and the locked seat stay on standby.
+		var autopilot := "STANDBY"
+		if walking and _cabin.walker != null and not _cabin.walker.locked:
+			autopilot = "HOLD"
+		_cabin.update_readouts(velocity.length(), thrust, mina_range, str(ship.name), hull, autopilot)
 
 
 func _keep_off_star() -> void:

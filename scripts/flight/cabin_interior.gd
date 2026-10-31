@@ -7,6 +7,8 @@ extends Node3D
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Walker := preload("res://scripts/flight/cabin_walker.gd")
 const _CRT := preload("res://assets/shaders/crt_green.gdshader")
+const _HUD := preload("res://assets/shaders/hud_glass.gdshader")
+const _Plate := preload("res://scripts/ui/hud_plate.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 
 const INTERIOR_LAYER := 1 << 2
@@ -24,6 +26,11 @@ var _high := true
 var _shadowers: Array[MeshInstance3D] = []
 var _lines := {}
 var _font: FontFile
+var _plate: Control
+var _command := ""
+var _cursor_on := true
+var _cursor_time := 0.0
+var _prompt_held := false
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -33,6 +40,7 @@ func build(scale: float, high_quality: bool) -> void:
 	_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	_font.hinting = TextServer.HINTING_NONE
 	_font.generate_mipmaps = false
+	_font.oversampling = 1.0
 	var wall := _paint(Color(0.24, 0.25, 0.27), 0.48, 0.08)
 	var floor := _paint(Color(0.1, 0.105, 0.115), 0.78, 0.02)
 	var trim := _paint(Color(0.2, 0.208, 0.22), 0.4, 0.12)
@@ -74,12 +82,15 @@ func build(scale: float, high_quality: bool) -> void:
 		_omni(_v(-0.15, 1.2, -1.7), Color(1.0, 0.72, 0.42), 0.38, 1.15)
 		_omni(_v(0.4, 1.15, -0.35), Color(1.0, 0.68, 0.4), 0.22, 0.9)
 
-	var terminal_size := Vector2i(512, 320) if high_quality else Vector2i(360, 220)
 	var side_size := Vector2i(320, 200) if high_quality else Vector2i(240, 150)
-	_screen("Terminal", _v(0.0, 0.98, -2.12), Vector2(0.62, 0.4) * _scale, 0.22, 0.0, "terminal", terminal_size, bezel)
-	_screen("Nav", _v(-0.46, 0.92, -2.1), Vector2(0.32, 0.24) * _scale, 0.2, 0.0, "nav", side_size, bezel)
-	_screen("Drive", _v(0.46, 0.92, -2.1), Vector2(0.32, 0.24) * _scale, 0.2, 0.0, "drive", side_size, bezel)
+	var prompt_size := Vector2i(384, 144) if high_quality else Vector2i(256, 96)
+	_screen("Nav", _v(-0.64, 0.95, -2.12), Vector2(0.30, 0.20) * _scale, 0.16, 0.0, "nav", side_size, bezel)
+	_screen("Drive", _v(0.64, 0.95, -2.12), Vector2(0.30, 0.20) * _scale, 0.16, 0.0, "drive", side_size, bezel)
 	_screen("Bay", _v(0.0, 1.02, 0.15), Vector2(0.36, 0.22) * _scale, 0.0, PI, "bay", side_size, bezel)
+	# Same tilt family as the readable CRTs, dropped into the window above the dash.
+	_build_hud(bezel)
+	# In front of the seat back, which otherwise hides the dash from the seated eye.
+	_build_prompt(_v(0.0, 0.58, -1.44), prompt_size, bezel)
 
 	_build_walker()
 
@@ -92,11 +103,13 @@ func set_walking(on: bool) -> void:
 		mesh.cast_shadow = mode
 
 
-func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String) -> void:
+func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String, hull: int, autopilot: String) -> void:
 	var spd := "%03d" % int(round(speed))
 	var rng := "%05d" % int(round(maxf(mina_range, 0.0)))
 	var thr := "%04.2f" % clampf(throttle, 0.0, 1.0)
-	_set_line("terminal", "AKARI  %s\nSYS    SOL\nHULL   50\nSPD    %s\nMINA   %s\nFUEL   1.00\n\nSHIP COMPUTER\nAUTOPILOT  STANDBY\nROUTE      NONE\n>" % [ship_name, spd, rng])
+	# No fuel tank yet. 1.00 is a full cell until that system exists.
+	if _plate and _plate.has_method("set_readout"):
+		_plate.set_readout(ship_name, hull, speed, mina_range, 1.0, autopilot, "NONE")
 	_set_line("nav", "NAV\nMINA\nRNG   %s\nBRG   FWD\nLINK  HOLD" % rng)
 	_set_line("drive", "DRIVE\nSPD   %s\nTHR   %s\nSTAT  NOM" % [spd, thr])
 	_set_line("bay", "ENG BAY\nSEALED\nCORE  NOM\nTEMP  312")
@@ -107,6 +120,176 @@ func snap_view(mode: String) -> void:
 		walker.snap(seat_point, seated_eye, -0.22, 0.0)
 	else:
 		walker.snap(aisle_point, standing_eye, 0.14, 0.0)
+
+
+func _process(delta: float) -> void:
+	if not _lines.has("terminal"):
+		return
+	# Shots must show the cursor. A long first frame would otherwise land in the off half.
+	if not OS.get_environment("AKARI_CABIN").is_empty():
+		if not _prompt_held:
+			_cursor_on = true
+			_prompt_held = true
+			_refresh_prompt()
+		return
+	_cursor_time += delta
+	var on := fmod(_cursor_time, 1.05) < 0.62
+	if on == _cursor_on:
+		return
+	_cursor_on = on
+	_refresh_prompt()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Typing only while the body is locked in the seat, so WASD still walks the aisle.
+	if walker == null or not walker.locked or walker.eye == null or not walker.eye.current:
+		return
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var key := event as InputEventKey
+	if key.keycode == KEY_BACKSPACE:
+		_command = _command.substr(0, maxi(_command.length() - 1, 0))
+	elif key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER:
+		_command = ""
+	elif key.unicode >= 32 and key.unicode < 127 and _command.length() < 8:
+		_command += char(key.unicode).to_upper()
+	else:
+		return
+	get_viewport().set_input_as_handled()
+	_refresh_prompt()
+
+
+func _refresh_prompt() -> void:
+	var cursor := "_" if _cursor_on else " "
+	_set_line("terminal", ">" + _command + cursor)
+
+
+func _build_hud(bezel: Material) -> void:
+	# glTF meters. Seated eye is (0, 0.72, -1.22) looking along pitch -0.22.
+	var pivot := Node3D.new()
+	pivot.name = "HudGlass"
+	pivot.position = _v(0.0, 0.74, -1.90)
+	pivot.rotation.x = 0.2
+	add_child(pivot)
+
+	var view_size := Vector2i(640, 360) if _high else Vector2i(512, 288)
+	var viewport := SubViewport.new()
+	viewport.name = "HudView"
+	viewport.size = view_size
+	viewport.disable_3d = true
+	viewport.transparent_bg = false
+	viewport.handle_input_locally = false
+	viewport.gui_disable_input = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var background := ColorRect.new()
+	background.color = Color(0, 0, 0, 1)
+	background.size = Vector2(view_size)
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	viewport.add_child(background)
+	var plate = _Plate.new()
+	plate.name = "Plate"
+	plate.size = Vector2(view_size)
+	plate.setup(_font)
+	viewport.add_child(plate)
+	add_child(viewport)
+	_plate = plate
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "HudPlate"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.86, 0.48375) * _scale
+	mesh_instance.mesh = quad
+	var material := ShaderMaterial.new()
+	material.shader = _HUD
+	material.render_priority = 3
+	material.set_shader_parameter("screen_tex", viewport.get_texture())
+	material.set_shader_parameter("glow_spread", 0.0035 if _high else 0.0)
+	material.set_shader_parameter("brightness", 1.55 if _high else 1.3)
+	material.set_shader_parameter("fresnel_strength", 0.28 if _high else 0.14)
+	material.set_shader_parameter("edge_glow", 0.5 if _high else 0.32)
+	mesh_instance.material_override = material
+	mesh_instance.layers = INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	pivot.add_child(mesh_instance)
+
+	var rail := MeshInstance3D.new()
+	rail.name = "HudRail"
+	var rail_box := BoxMesh.new()
+	rail_box.size = Vector3(quad.size.x + _scale * 0.02, _scale * 0.012, _scale * 0.014)
+	rail.mesh = rail_box
+	rail.position = Vector3(0.0, -quad.size.y * 0.5 - _scale * 0.004, 0.0)
+	rail.material_override = bezel
+	rail.layers = INTERIOR_LAYER
+	rail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pivot.add_child(rail)
+
+
+func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
+	var size := Vector2(0.20, 0.075) * _scale
+	var pivot := Node3D.new()
+	pivot.name = "TerminalPivot"
+	pivot.position = pos
+	pivot.rotation.x = 0.22
+	add_child(pivot)
+
+	var pad := _scale * 0.045
+	var depth := _scale * 0.06
+	var housing := MeshInstance3D.new()
+	housing.name = "TerminalBezel"
+	var box := BoxMesh.new()
+	box.size = Vector3(size.x + pad, size.y + pad, depth)
+	housing.mesh = box
+	housing.material_override = bezel
+	housing.layers = INTERIOR_LAYER
+	housing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pivot.add_child(housing)
+
+	var viewport := SubViewport.new()
+	viewport.name = "TerminalView"
+	viewport.size = view_size
+	viewport.disable_3d = true
+	viewport.transparent_bg = false
+	viewport.handle_input_locally = false
+	viewport.gui_disable_input = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var background := ColorRect.new()
+	background.color = Color(0.02, 0.09, 0.035)
+	background.size = Vector2(view_size)
+	viewport.add_child(background)
+	var label := Label.new()
+	label.position = Vector2.ZERO
+	label.size = Vector2(view_size)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", _font)
+	label.add_theme_font_size_override("font_size", 36 if view_size.y >= 120 else 24)
+	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
+	label.text = ">_"
+	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	label.clip_text = true
+	viewport.add_child(label)
+	add_child(viewport)
+	_lines["terminal"] = label
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "Terminal"
+	var quad := QuadMesh.new()
+	quad.size = size
+	mesh_instance.mesh = quad
+	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.5 + _scale * 0.004)
+	var material := ShaderMaterial.new()
+	material.shader = _CRT
+	material.set_shader_parameter("screen_tex", viewport.get_texture())
+	material.set_shader_parameter("glow_spread", 0.004 if _high else 0.0)
+	material.set_shader_parameter("brightness", 1.3 if _high else 1.15)
+	material.set_shader_parameter("curvature", 0.04)
+	mesh_instance.material_override = material
+	mesh_instance.layers = INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pivot.add_child(mesh_instance)
 
 
 func _build_walker() -> void:
