@@ -11,6 +11,7 @@ const _CRT := preload("res://assets/shaders/crt_green.gdshader")
 const _HUD := preload("res://assets/shaders/hud_glass.gdshader")
 const _Plate := preload("res://scripts/ui/hud_plate.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
+const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -32,6 +33,15 @@ var _command := ""
 var _cursor_on := true
 var _cursor_time := 0.0
 var _prompt_held := false
+var _hum: AudioStreamPlayer
+var _whine: AudioStreamPlayer3D
+var _steps: AudioStreamPlayer
+var _hum_pb: AudioStreamGeneratorPlayback
+var _whine_pb: AudioStreamGeneratorPlayback
+var _hum_phase := 0.0
+var _whine_phase := 0.0
+var _step_acc := 0.0
+var _last_walk := Vector3.ZERO
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -42,8 +52,7 @@ func build(scale: float, high_quality: bool) -> void:
 	_font.hinting = TextServer.HINTING_NONE
 	_font.generate_mipmaps = false
 	_font.oversampling = 1.0
-	var wall := _paint(Color(0.24, 0.25, 0.27), 0.48, 0.08)
-	var floor := _paint(Color(0.1, 0.105, 0.115), 0.78, 0.02)
+	var wall := _paint(Color(0.16, 0.165, 0.175), 0.5, 0.1)
 	var trim := _paint(Color(0.2, 0.208, 0.22), 0.4, 0.12)
 	var cloth := _paint(Color(0.09, 0.092, 0.105), 0.72, 0.0)
 	var bunk := _paint(Color(0.16, 0.145, 0.125), 0.7, 0.0)
@@ -51,7 +60,10 @@ func build(scale: float, high_quality: bool) -> void:
 	var door := _paint(Color(0.12, 0.125, 0.138), 0.46, 0.2)
 
 	# Floor and a ceiling that stops where the canopy opens, so the sun can reach the seat.
-	_box("Floor", _v(0.0, -0.46, -1.35), _v(2.08, 0.06, 3.2), floor, false)
+	var floor_mesh := _box("Floor", _v(0.0, -0.46, -1.35), _v(2.08, 0.06, 3.2), wall, false)
+	var grate := _Detail.grate_material(_high)
+	paints.append(grate)
+	floor_mesh.material_override = grate
 	_box("CeilingRear", _v(0.0, 1.58, -0.42), _v(2.08, 0.06, 1.45), wall, true)
 	_box("CeilingL", _v(-0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
 	_box("CeilingR", _v(0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
@@ -60,9 +72,6 @@ func build(scale: float, high_quality: bool) -> void:
 	_box("WallRear", _v(0.0, 0.56, 0.24), _v(2.08, 2.08, 0.07), wall, true)
 	_box("Kick", _v(0.0, -0.22, -2.72), _v(1.7, 0.42, 0.08), trim, true)
 
-	_box("Console", _v(0.0, 0.02, -2.5), _v(1.45, 0.72, 0.42), trim, false)
-	_box("Seat", _v(0.0, -0.18, -1.72), _v(0.46, 0.36, 0.42), cloth, false)
-	_box("Backrest", _v(0.0, 0.36, -1.52), _v(0.26, 0.7, 0.07), cloth, false)
 	_box("Bunk", _v(0.68, -0.22, -0.45), _v(0.58, 0.16, 1.15), bunk, false)
 	_box("Pillow", _v(0.68, -0.1, -0.92), _v(0.36, 0.1, 0.22), bunk, false)
 	_box("JumpSeat", _v(-0.72, -0.16, -0.5), _v(0.42, 0.28, 0.42), cloth, false)
@@ -74,14 +83,8 @@ func build(scale: float, high_quality: bool) -> void:
 	_glass(_v(0.0, 0.78, -2.86), Vector2(1.55, 0.78) * _scale, 0.18)
 	_glass(_v(0.0, 1.32, -2.05), Vector2(1.35, 1.45) * _scale, 1.05)
 
-	_glow("StripL", _v(-0.9, -0.3, -1.3), _v(0.02, 0.018, 2.55), Color(0.28, 0.62, 2.4))
-	_glow("StripR", _v(0.9, -0.3, -1.3), _v(0.02, 0.018, 2.55), Color(0.28, 0.62, 2.4))
-	_glow("BulbSeat", _v(-0.28, 1.42, -1.85), Vector3(0.035, 0.035, 0.035) * _scale, Color(1.15, 0.62, 0.28))
-	_glow("BulbBunk", _v(0.55, 1.42, -0.4), Vector3(0.03, 0.03, 0.03) * _scale, Color(1.05, 0.55, 0.26))
-	if high_quality:
-		_omni(_v(0.0, 1.15, -1.7), Color(0.55, 0.72, 1.0), 0.55, 1.5)
-		_omni(_v(-0.15, 1.2, -1.7), Color(1.0, 0.72, 0.42), 0.38, 1.15)
-		_omni(_v(0.4, 1.15, -0.35), Color(1.0, 0.68, 0.4), 0.22, 0.9)
+	_glow("StripL", _v(-0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.85, 0.78, 0.62))
+	_glow("StripR", _v(0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.45, 0.75, 0.95))
 
 	var side_size := Vector2i(320, 200) if high_quality else Vector2i(240, 150)
 	var prompt_size := Vector2i(384, 144) if high_quality else Vector2i(256, 96)
@@ -90,10 +93,11 @@ func build(scale: float, high_quality: bool) -> void:
 	_screen("Bay", _v(0.0, 1.02, 0.15), Vector2(0.36, 0.22) * _scale, 0.0, PI, "bay", side_size, bezel)
 	# Same tilt family as the readable CRTs, dropped into the window above the dash.
 	_build_hud(bezel)
-	# In front of the seat back, which otherwise hides the dash from the seated eye.
-	_build_prompt(_v(0.0, 0.58, -1.44), prompt_size, bezel)
-
+	# Inset in the slim dash, tilted up toward the seat.
+	_build_prompt(_v(0.0, 0.2, -2.06), prompt_size, bezel)
+	_Detail.apply(self)
 	_build_walker()
+	_setup_audio()
 
 
 func set_walking(on: bool) -> void:
@@ -118,9 +122,13 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 
 func snap_view(mode: String) -> void:
 	if mode == "seat":
-		walker.snap(seat_point, seated_eye, -0.22, 0.0)
+		walker.snap(seat_point, seated_eye, -0.1, 0.0)
+	elif mode == "rear":
+		walker.snap(_v(0.0, 0.0, -1.15), standing_eye, -0.22, PI)
+	elif mode == "dash":
+		walker.snap(_v(0.0, 0.0, -1.72), _scale * 0.82, -0.72, 0.0)
 	else:
-		walker.snap(aisle_point, standing_eye, 0.14, 0.0)
+		walker.snap(aisle_point, standing_eye, 0.06, 0.0)
 
 
 func _process(delta: float) -> void:
@@ -135,10 +143,10 @@ func _process(delta: float) -> void:
 		return
 	_cursor_time += delta
 	var on := fmod(_cursor_time, 1.05) < 0.62
-	if on == _cursor_on:
-		return
-	_cursor_on = on
-	_refresh_prompt()
+	if on != _cursor_on:
+		_cursor_on = on
+		_refresh_prompt()
+	_ambience(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -231,11 +239,11 @@ func _build_hud(bezel: Material) -> void:
 
 
 func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
-	var size := Vector2(0.20, 0.075) * _scale
+	var size := Vector2(0.46, 0.16) * _scale
 	var pivot := Node3D.new()
 	pivot.name = "TerminalPivot"
 	pivot.position = pos
-	pivot.rotation.x = 0.22
+	pivot.rotation.x = 0.72
 	add_child(pivot)
 	pivot.add_to_group("akari_hud")
 
@@ -302,7 +310,7 @@ func _build_walker() -> void:
 	standing_eye = _scale * 1.5
 	seated_eye = _scale * 1.12
 	seat_point = _v(0.0, 0.0, -1.22)
-	aisle_point = _v(0.0, 0.0, -1.02)
+	aisle_point = _v(0.0, 0.0, -0.72)
 	sit_reach = _scale * 0.62
 	walker = _Walker.new()
 	walker.name = "Walker"
@@ -315,8 +323,8 @@ func _build_walker() -> void:
 	walker.limit_min = _v(-0.7, 0.0, -2.05)
 	walker.limit_max = _v(0.38, 0.0, 0.02)
 	walker.boxes = [
-		_aabb(_v(0.0, 0.0, -2.5), _v(1.5, 0.2, 0.46)),
-		_aabb(_v(0.0, 0.0, -1.66), _v(0.42, 0.2, 0.5)),
+		_aabb(_v(0.0, 0.0, -2.28), _v(1.4, 0.2, 0.62)),
+		_aabb(_v(0.0, 0.0, -1.55), _v(0.52, 0.2, 0.4)),
 		_aabb(_v(0.68, 0.0, -0.45), _v(0.62, 0.2, 1.2)),
 		_aabb(_v(-0.78, 0.0, -0.5), _v(0.46, 0.2, 0.46)),
 		_aabb(_v(-1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
@@ -364,6 +372,119 @@ func _box(node_name: String, pos: Vector3, size: Vector3, material: Material, sh
 	if shadows:
 		_shadowers.append(mesh_instance)
 	return mesh_instance
+
+
+func _cyl(node_name: String, pos: Vector3, radius: float, height: float, rot: Vector3, material: Material) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = radius * _scale
+	cyl.bottom_radius = radius * _scale
+	cyl.height = height * _scale
+	cyl.radial_segments = 6
+	cyl.rings = 1
+	mesh_instance.mesh = cyl
+	mesh_instance.position = pos
+	mesh_instance.rotation = rot
+	mesh_instance.material_override = material
+	mesh_instance.layers = INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mesh_instance)
+	return mesh_instance
+
+
+func _sphere(node_name: String, pos: Vector3, radius: float, material: Material) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var sphere := SphereMesh.new()
+	sphere.radius = radius * _scale
+	sphere.height = radius * _scale * 2.0
+	sphere.radial_segments = 8
+	sphere.rings = 6
+	mesh_instance.mesh = sphere
+	mesh_instance.position = pos
+	mesh_instance.material_override = material
+	mesh_instance.layers = INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mesh_instance)
+
+
+func _setup_audio() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	_hum = AudioStreamPlayer.new()
+	_attach_tone(_hum)
+	_hum.volume_db = -26.0
+	_whine = AudioStreamPlayer3D.new()
+	_attach_tone(_whine)
+	_whine.position = _v(0.0, 0.35, -2.0)
+	_whine.unit_size = 0.35
+	_whine.max_distance = 1.6
+	_whine.volume_db = -24.0
+	_steps = AudioStreamPlayer.new()
+	_steps.stream = _step_wav()
+	_steps.volume_db = -10.0
+	add_child(_steps)
+	_hum.play()
+	_whine.play()
+	_hum_pb = _hum.get_stream_playback() as AudioStreamGeneratorPlayback
+	_whine_pb = _whine.get_stream_playback() as AudioStreamGeneratorPlayback
+
+
+func _attach_tone(player) -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = 22050
+	gen.buffer_length = 0.15
+	player.stream = gen
+	add_child(player)
+
+
+func _step_wav() -> AudioStreamWAV:
+	var rate := 22050
+	var count := 1400
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1408
+	for i in count:
+		var env := 1.0 - float(i) / float(count)
+		var sample := int(rng.randf_range(-1.0, 1.0) * env * env * 7000.0)
+		data.encode_s16(i * 2, sample)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.stereo = false
+	wav.data = data
+	return wav
+
+
+func _ambience(delta: float) -> void:
+	_fill_tone(_hum_pb, 78.0, 0.05, _hum_phase)
+	_hum_phase += delta
+	_fill_tone(_whine_pb, 2400.0, 0.03, _whine_phase)
+	_whine_phase += delta
+	if walker == null or not walker.active_walk or walker.locked or _steps == null:
+		if walker:
+			_last_walk = walker.position
+		return
+	_step_acc += walker.position.distance_to(_last_walk)
+	_last_walk = walker.position
+	if _step_acc > _scale * 0.52:
+		_step_acc = 0.0
+		_steps.pitch_scale = 0.92 + randf() * 0.16
+		_steps.play()
+
+
+func _fill_tone(playback: AudioStreamGeneratorPlayback, freq: float, amp: float, phase: float) -> void:
+	if playback == null:
+		return
+	var frames := playback.get_frames_available()
+	var step := TAU * freq / 22050.0
+	var t := phase * freq
+	for _i in frames:
+		var sample := sin(t) * amp
+		t += step
+		playback.push_frame(Vector2(sample, sample))
 
 
 func _glow(node_name: String, pos: Vector3, size: Vector3, color: Color) -> void:
