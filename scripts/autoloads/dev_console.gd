@@ -64,6 +64,19 @@ func freecam_active() -> bool:
 	return _enabled and _freecam_on
 
 
+func place_freecam(at: Vector3, look: Vector3) -> void:
+	if not _enabled:
+		return
+	if not _freecam_on:
+		_cmd_freecam(PackedStringArray())
+	if not is_instance_valid(_freecam):
+		return
+	_freecam.global_position = at
+	_freecam.look_at(look, Vector3.UP)
+	_freecam_pitch = _freecam.rotation.x
+	_freecam_yaw = _freecam.rotation.y
+
+
 func register_command(command_name: String, callback: Callable, help_text: String) -> void:
 	if not _enabled:
 		return
@@ -475,7 +488,9 @@ func _complete_arg(command_name: String) -> void:
 	var options: PackedStringArray = PackedStringArray()
 	match command_name:
 		"tp":
-			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle"])
+			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "gallery", "hero", "derelict"])
+		"ship":
+			options = PackedStringArray(["spawn", "regen", "gallery", "save"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
 		"dither", "hud":
