@@ -3,11 +3,15 @@
 
 Run from the repo root:
 
-    blender -b --python tools/blender/build_assets.py
+    blender -b --python tools/blender/build_assets.py -- --uncompressed
 
 Meshes are flat-shaded geometric forms in a small warm/cool palette.
-Blender +Y is the nose; the glTF exporter maps that to Three.js -Z.
+Blender +Y is the nose; the glTF exporter maps that to glTF -Z.
 Props sit on local Z = 0, which becomes Y = 0 after export.
+
+Godot cannot import Draco. Pass --uncompressed to write plain glBs into
+assets/models and skip the Draco pass. The default still writes
+Draco glBs to public/models for the old web pipeline.
 """
 
 import json
@@ -15,13 +19,15 @@ import math
 import os
 import random
 import subprocess
+import sys
 
 import bpy
 from mathutils import Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-OUT_DIR = os.path.join(ROOT, 'public', 'models')
-META_PATH = os.path.join(ROOT, 'src', 'components', 'flight', 'modelMeta.json')
+UNCOMPRESSED = '--uncompressed' in sys.argv
+OUT_DIR = os.path.join(ROOT, 'assets', 'models') if UNCOMPRESSED else os.path.join(ROOT, 'public', 'models')
+META_PATH = os.path.join(ROOT, 'assets', 'models', 'model_meta.json')
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -74,6 +80,42 @@ def shade_flat(obj):
         poly.use_smooth = False
 
 
+def shade_smooth(obj):
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    mesh = obj.data
+    if hasattr(mesh, 'use_auto_smooth'):
+        mesh.use_auto_smooth = True
+        mesh.auto_smooth_angle = math.radians(52)
+
+
+def bevel_object(obj, width=0.016, segments=2):
+    """Chamfer hard edges, then let auto-smooth keep the broad faces soft."""
+    shade_smooth(obj)
+    select_only([obj])
+    mod = obj.modifiers.new('Bevel', 'BEVEL')
+    mod.width = width
+    mod.segments = segments
+    mod.limit_method = 'ANGLE'
+    mod.angle_limit = math.radians(38)
+    if hasattr(mod, 'harden_normals'):
+        mod.harden_normals = True
+    try:
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    except Exception as error:  # noqa: BLE001
+        print('bevel skipped:', error)
+        obj.modifiers.remove(mod)
+    shade_smooth(obj)
+
+
+def consistent_normals(obj):
+    select_only([obj])
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    shade_flat(obj)
+
+
 def link_new(mesh, name):
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
@@ -118,12 +160,15 @@ def box(name, location, size, material, rotation=(0, 0, 0)):
     return obj
 
 
-def join(objects, name):
+def join(objects, name, smooth=False):
     select_only(objects)
     bpy.ops.object.join()
     obj = bpy.context.active_object
     obj.name = name
-    shade_flat(obj)
+    if smooth:
+        shade_smooth(obj)
+    else:
+        shade_flat(obj)
     return obj
 
 
@@ -191,19 +236,22 @@ def export_glb(objects, filename):
     )
     # The exporter flag is present, but Debian's Blender omits libextern_draco.so
     # and silently writes an uncompressed file. compress.mjs does the real pass.
-    try:
-        bpy.ops.export_scene.gltf(
-            **common,
-            export_draco_mesh_compression_enable=True,
-            export_draco_mesh_compression_level=6,
-            export_draco_position_quantization=14,
-            export_draco_normal_quantization=10,
-            export_draco_texcoord_quantization=10,
-        )
-    except Exception as error:  # noqa: BLE001 - still emit a mesh if the flag is rejected
-        print('Draco flag rejected, writing plain GLB:', error)
+    if UNCOMPRESSED:
         bpy.ops.export_scene.gltf(**common)
-    print(f'exported {filename} ({os.path.getsize(path)} bytes, draco={glb_has_draco(path)})')
+    else:
+        try:
+            bpy.ops.export_scene.gltf(
+                **common,
+                export_draco_mesh_compression_enable=True,
+                export_draco_mesh_compression_level=6,
+                export_draco_position_quantization=14,
+                export_draco_normal_quantization=10,
+                export_draco_texcoord_quantization=10,
+            )
+        except Exception as error:  # noqa: BLE001 - still emit a mesh if the flag is rejected
+            print('Draco flag rejected, writing plain GLB:', error)
+            bpy.ops.export_scene.gltf(**common)
+    print(f'exported {filename} ({os.path.getsize(path)} bytes, draco={glb_has_draco(path)}, uncompressed={UNCOMPRESSED})')
     return path
 
 
@@ -213,118 +261,207 @@ def glb_has_draco(path):
     return b'KHR_draco_mesh_compression' in blob
 
 
-def hull_mesh():
-    """Wedge fuselage. Nose is +Y."""
-    mesh = bpy.data.meshes.new('hull')
-    sections = [
-        (2.72, 0.06, 0.07),
-        (1.55, 0.30, 0.15),
-        (0.25, 0.46, 0.20),
-        (-0.85, 0.34, 0.16),
-        (-1.95, 0.18, 0.09),
-    ]
+def _loft(name, rings, material):
+    """Loft closed rings. `rings` is a list of point lists, nose-to-tail order."""
+    mesh = bpy.data.meshes.new(name)
     verts = []
-    rings = []
-    for y, half_w, half_h in sections:
-        ring = []
-        points = [
-            (0, y, half_h * 0.95),
-            (half_w * 0.78, y, half_h * 0.42),
-            (half_w, y, -half_h * 0.05),
-            (half_w * 0.48, y, -half_h),
-            (-half_w * 0.48, y, -half_h),
-            (-half_w, y, -half_h * 0.05),
-            (-half_w * 0.78, y, half_h * 0.42),
-        ]
-        for point in points:
-            ring.append(len(verts))
+    indices = []
+    for ring in rings:
+        slot = []
+        for point in ring:
+            slot.append(len(verts))
             verts.append(point)
-        rings.append(ring)
-
-    faces = [rings[0]]
-    for ring_a, ring_b in zip(rings, rings[1:]):
+        indices.append(slot)
+    faces = [indices[0]]
+    for ring_a, ring_b in zip(indices, indices[1:]):
         count = len(ring_a)
         for i in range(count):
             j = (i + 1) % count
             faces.append((ring_a[i], ring_a[j], ring_b[j], ring_b[i]))
-    faces.append(tuple(reversed(rings[-1])))
+    faces.append(tuple(reversed(indices[-1])))
     mesh.from_pydata(verts, [], faces)
     mesh.update()
-    obj = link_new(mesh, 'Hull')
-    assign(obj, MAT['Hull'])
-    shade_flat(obj)
+    obj = link_new(mesh, name)
+    assign(obj, material)
+    consistent_normals(obj)
     return obj
 
 
-def wing(sign):
-    mesh = bpy.data.meshes.new('wing')
-    s = sign
-    top = [
-        (s * 0.28, 0.72, 0.02),
-        (s * 0.22, -0.95, 0.0),
-        (s * 2.05, -1.28, 0.05),
-        (s * 1.62, 0.18, 0.08),
+def _subdivide_ring(ring):
+    """Insert edge midpoints so the chamfered section is not an octagon."""
+    points = []
+    count = len(ring)
+    for index, point in enumerate(ring):
+        nxt = ring[(index + 1) % count]
+        points.append(point)
+        points.append(tuple((Vector(point) + Vector(nxt)) * 0.5))
+    return points
+
+
+def _body_ring(y, half_w, half_h):
+    """Chamfered body section. +Y is the nose, +Z is up."""
+    return _subdivide_ring([
+        (0, y, half_h),
+        (half_w * 0.72, y, half_h * 0.62),
+        (half_w, y, half_h * 0.08),
+        (half_w * 0.62, y, -half_h * 0.55),
+        (0, y, -half_h * 0.82),
+        (-half_w * 0.62, y, -half_h * 0.55),
+        (-half_w, y, half_h * 0.08),
+        (-half_w * 0.72, y, half_h * 0.62),
+    ])
+
+
+def _densify_sections(sections, steps):
+    dense = []
+    width = len(sections[0])
+    for start, end in zip(sections, sections[1:]):
+        dense.append(start)
+        for step in range(1, steps):
+            blend = step / steps
+            dense.append(tuple(start[axis] * (1.0 - blend) + end[axis] * blend for axis in range(width)))
+    dense.append(sections[-1])
+    return dense
+
+
+def hull_mesh(material):
+    """Compact jumpship fuselage. Nose is +Y. Same profile, more stations."""
+    sections = _densify_sections([
+        (1.85, 0.08, 0.07),
+        (1.05, 0.30, 0.24),
+        (0.15, 0.46, 0.38),
+        (-0.65, 0.40, 0.32),
+        (-1.35, 0.24, 0.20),
+    ], 3)
+    obj = _loft('Hull', [_body_ring(y, half_w, half_h) for y, half_w, half_h in sections], material)
+    bevel_object(obj, 0.026, 2)
+    return obj
+
+
+def _nacelle_ring(x, y, z, half_y, half_z):
+    return [
+        (x, y + half_y * 0.15, z + half_z),
+        (x, y + half_y, z + half_z * 0.35),
+        (x, y + half_y * 0.72, z - half_z * 0.15),
+        (x, y + half_y * 0.15, z - half_z),
+        (x, y - half_y * 0.55, z - half_z * 0.72),
+        (x, y - half_y, z - half_z * 0.05),
+        (x, y - half_y * 0.35, z + half_z * 0.45),
     ]
-    bottom = [(x, y, z - 0.045) for x, y, z in top]
-    verts = top + bottom
-    faces = [
-        (0, 1, 2, 3),
-        (4, 7, 6, 5),
-        (0, 3, 7, 4),
-        (3, 2, 6, 7),
-        (2, 1, 5, 6),
-        (1, 0, 4, 5),
-    ]
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    obj = link_new(mesh, f'Wing{sign}')
-    assign(obj, MAT['Hull'])
-    shade_flat(obj)
+
+
+def nacelle_mesh(sign, material):
+    """Thick swept nacelle. The root sits inside the fuselage so it reads as attached."""
+    s = 1 if sign > 0 else -1
+    stations = _densify_sections([
+        (s * 0.06, 0.15, -0.02, 0.34, 0.22),
+        (s * 0.48, -0.08, -0.02, 0.32, 0.20),
+        (s * 0.95, -0.38, 0.0, 0.26, 0.17),
+        (s * 1.28, -0.62, 0.02, 0.16, 0.12),
+    ], 2)
+    rings = [_nacelle_ring(x, y, z, half_y, half_z) for x, y, z, half_y, half_z in stations]
+    if s < 0:
+        rings = [list(reversed(ring)) for ring in rings]
+    obj = _loft(f'Nacelle{sign}', rings, material)
+    bevel_object(obj, 0.012, 2)
+    return obj
+
+
+def canopy_mesh(material):
+    """Raised glasshouse. The lower ring is buried in the nose so it does not float."""
+    rings = []
+    for y, width, lift, bury in (
+        (1.5, 0.09, 0.26, 0.02),
+        (1.12, 0.16, 0.46, 0.02),
+        (0.76, 0.2, 0.5, 0.02),
+        (0.46, 0.14, 0.32, 0.02),
+    ):
+        rings.append([
+            (0, y + 0.08, lift),
+            (width * 0.7, y + 0.04, lift * 0.82),
+            (width, y, bury),
+            (width * 0.55, y - 0.06, bury * 0.7),
+            (0, y - 0.08, bury * 0.65),
+            (-width * 0.55, y - 0.06, bury * 0.7),
+            (-width, y, bury),
+            (-width * 0.7, y + 0.04, lift * 0.82),
+        ])
+    obj = _loft('Canopy', rings, material)
+    bevel_object(obj, 0.008, 1)
     return obj
 
 
 def build_ship():
-    parts = [hull_mesh(), wing(1), wing(-1)]
-    parts.append(box('Canopy', (0, 0.85, 0.28), (0.34, 0.72, 0.16), MAT['Canopy']))
-    parts.append(box('Stripe', (0, 0.15, 0.22), (0.06, 2.3, 0.025), MAT['Accent']))
-    parts.append(box('Fin', (0, -1.35, 0.38), (0.045, 0.55, 0.42), MAT['Hull']))
-    parts.append(box('FinTip', (0, -1.5, 0.62), (0.03, 0.22, 0.08), MAT['Accent']))
+    """Guardian-style jumpship: same silhouette, chamfered skin, glass cockpit."""
+    hull = make_material('Hull', '#d7d3cb', 0.78, 0.12)
+    panel = make_material('Panel', '#c5c0b6', 0.82, 0.1)
+    accent = make_material('Accent', '#3f7f88', 0.62, 0.08)
+    canopy = make_material('Canopy', '#141c24', 0.08, 0.55)
+    dark = make_material('Dark', '#2a2724', 0.7, 0.22)
+    engine = make_material('Engine', '#d5e8ff', 0.28, 0.04, '#cfe4ff', 3.4)
+
+    parts = [hull_mesh(hull), nacelle_mesh(1, hull), nacelle_mesh(-1, hull), canopy_mesh(canopy)]
+    # Thin faction stripe along the spine, not a slab.
+    # Plates and the stripe are sunk into the skin so they don't read as floating sticks.
+    parts.append(box('Accent', (0.22, 0.2, 0.16), (0.018, 0.72, 0.03), accent))
+    parts.append(box('Panel', (0.04, -0.02, 0.3), (0.12, 0.26, 0.06), panel))
+    parts.append(box('PanelB', (-0.06, -0.42, 0.24), (0.1, 0.16, 0.05), panel))
+    parts.append(box('Intake', (0.32, 0.2, 0.02), (0.08, 0.18, 0.06), dark))
+    parts.append(box('IntakeB', (-0.32, 0.2, 0.02), (0.08, 0.18, 0.06), dark))
+    parts.append(box('Vent', (0.22, -0.55, -0.08), (0.1, 0.05, 0.04), dark))
+    parts.append(box('VentB', (-0.22, -0.55, -0.08), (0.1, 0.05, 0.04), dark))
     for side in (1, -1):
         parts.append(primitive(
             'cylinder', f'Engine{side}',
-            (side * 0.34, -1.72, -0.02),
+            (side * 0.72, -0.55, -0.04),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
-            material=MAT['Dark'],
-            vertices=8, radius=0.16, depth=0.62,
+            material=dark,
+            vertices=16, radius=0.14, depth=0.42,
         ))
         parts.append(primitive(
             'cylinder', f'Nozzle{side}',
-            (side * 0.34, -2.02, -0.02),
+            (side * 0.72, -0.78, -0.04),
             scale=(1, 1, 1),
             rotation=(math.pi / 2, 0, 0),
-            material=MAT['Engine'],
-            vertices=8, radius=0.09, depth=0.08,
+            material=engine,
+            vertices=16, radius=0.09, depth=0.07,
         ))
-    ship = join(parts, 'Ship')
+        parts.append(primitive(
+            'cylinder', f'Glow{side}',
+            (side * 0.72, -0.8, -0.04),
+            scale=(1, 1, 1),
+            rotation=(math.pi / 2, 0, 0),
+            material=engine,
+            vertices=12, radius=0.045, depth=0.03,
+        ))
+    ship = join(parts, 'Ship', smooth=True)
+    consistent_normals(ship)
+    shade_smooth(ship)
     center_ship(ship)
-    engines = []
-    for side in (1, -1):
-        # Nozzles were joined; record the designed rear point in the centered mesh.
-        engines.append(None)
-    # Measure actual rear-most vertices near each side for trail anchors.
     left = []
     right = []
     for vert in ship.data.vertices:
-        if vert.co.y < -1.3:
+        if abs(vert.co.x) > 0.4:
             (right if vert.co.x > 0 else left).append(vert.co)
+
+    def rear_cluster(group):
+        if not group:
+            return []
+        limit = min(vert.y for vert in group) + 0.28
+        return [vert for vert in group if vert.y <= limit]
+
+    left = rear_cluster(left)
+    right = rear_cluster(right)
+
     def anchor(group):
         if not group:
             return (0, -1.6, 0)
-        x = sum(v.x for v in group) / len(group)
-        y = min(v.y for v in group)
-        z = sum(v.z for v in group) / len(group)
-        return (x, y - 0.05, z)
+        x = sum(vert.x for vert in group) / len(group)
+        y = min(vert.y for vert in group)
+        z = sum(vert.z for vert in group) / len(group)
+        return (x, y - 0.04, z)
+
     meta = {
         'engines': [to_gltf(*anchor(right)), to_gltf(*anchor(left))],
     }
@@ -635,6 +772,19 @@ def build_monolith():
 def main():
     clear_scene()
     ensure_materials()
+    if '--ship-only' in sys.argv:
+        ship_meta = build_ship()
+        previous = {}
+        if os.path.isfile(META_PATH):
+            with open(META_PATH, encoding='utf-8') as handle:
+                previous = json.load(handle)
+        previous['ship'] = ship_meta
+        os.makedirs(os.path.dirname(META_PATH), exist_ok=True)
+        with open(META_PATH, 'w', encoding='utf-8') as handle:
+            json.dump(previous, handle, indent=2)
+            handle.write('\n')
+        print('meta', previous)
+        return
     meta = {
         'ship': build_ship(),
         'hauler': build_hauler(),
@@ -653,10 +803,14 @@ def main():
     build_arch()
     build_deposit()
     build_monolith()
+    os.makedirs(os.path.dirname(META_PATH), exist_ok=True)
     with open(META_PATH, 'w', encoding='utf-8') as handle:
         json.dump(meta, handle, indent=2)
         handle.write('\n')
     print('meta', meta)
+    if UNCOMPRESSED:
+        print('Uncompressed glTF export for Godot. Skipping Draco.')
+        return
     compress = os.path.join(os.path.dirname(__file__), 'compress.mjs')
     modules = os.path.join(os.path.dirname(__file__), 'node_modules')
     if os.path.isdir(modules):
