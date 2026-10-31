@@ -18,8 +18,9 @@ The game opens on a title drift past Mina. Click or press any key, and the view 
 - **Shift** boosts
 - **Space / Ctrl** rise and drop
 - **Esc** releases the mouse
+- **E** stands up from the pilot seat into the cabin. Walk with **WASD**, look with the mouse, and press **E** beside the seat to fly again. The ship keeps its velocity while you are up. On iPhone, the seat button stands and sits, a joystick walks, and dragging the right side of the screen looks.
 
-The desktop renderer is Forward+. iOS is set to the Mobile renderer for a later export. Physics is Jolt at 120 ticks per second. There is no HUD, landing, trading, or login in this milestone.
+The desktop renderer is Forward+. iOS is set to the Mobile renderer for a later export. Physics is Jolt at 120 ticks per second. There is no landing, trading, or login in this milestone. Speed stays on the pixel HUD, including while you walk the cabin.
 
 ## Seed check
 
@@ -39,7 +40,7 @@ godot --headless --export-debug "macOS" "build/macos/AKARI ONLINE.zip"
 
 ## Ship mesh
 
-Godot cannot import the Draco-compressed glBs. `assets/models/ship.glb` is the starter hull with Draco removed. To rebuild assets from Blender without compressing them:
+The player hull is `assets/ships/jumpship.glb` (nose at -Z, engines at +Z), scaled to the old chase-cam size. Godot cannot import the Draco-compressed glBs. `assets/models/ship.glb` is the previous starter hull with Draco removed. To rebuild assets from Blender without compressing them:
 
 ```
 blender -b --python tools/blender/build_assets.py -- --uncompressed

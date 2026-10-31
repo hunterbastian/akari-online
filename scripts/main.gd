@@ -7,7 +7,9 @@ const _PostProfile := preload("res://scripts/data/post_profile.gd")
 
 var _shot := false
 var _title_card := false
+var _cabin_view := ""
 var _shot_time := 0.0
+var _shot_frames := 0
 var _shot_saved := false
 var _world: SubViewport
 var _bounce: DirectionalLight3D
@@ -17,8 +19,9 @@ var _planet_radius := 24.0
 
 
 func _ready() -> void:
-	_shot = OS.get_environment("AKARI_SHOT") == "1"
+	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
+	_cabin_view = OS.get_environment("AKARI_CABIN")
 	DisplayServer.window_set_title("AKARI ONLINE")
 	_mount_world()
 	var system := Galaxy.system_by_id(GameState.system_id)
@@ -41,12 +44,12 @@ func _ready() -> void:
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
-	ship.set_meta("flight_active", _shot)
+	ship.set_meta("flight_active", _shot or not _cabin_view.is_empty())
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	_ship = ship
-	if _shot:
+	if _shot or not _cabin_view.is_empty():
 		_place_for_shot(ship, planet)
 	else:
 		ship.global_position = chart.spawn
@@ -60,11 +63,13 @@ func _ready() -> void:
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
-	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
+	if _shot and OS.get_environment("AKARI_HERO") == "1":
+		_frame_hero(ship, camera)
+	elif _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
 		_frame_side(ship, camera)
-	elif not _shot:
+	elif not _shot and _cabin_view.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -73,6 +78,14 @@ func _ready() -> void:
 	hud.name = "FlightHud"
 	add_child(hud)
 	hud.setup(ship)
+	var cabin_controls = load("res://scripts/ui/cabin_controls.gd").new()
+	cabin_controls.name = "CabinControls"
+	add_child(cabin_controls)
+	cabin_controls.setup(ship)
+	ship.set_chase_camera(camera)
+	ship.set_cabin_controls(cabin_controls)
+	if not _cabin_view.is_empty():
+		ship.start_cabin_view(_cabin_view)
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
 	_update_bounce()
@@ -156,14 +169,16 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _shot or _shot_saved:
+	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
-	var still_at := 8.0
+	_shot_frames += 1
+	var still_at := 8.0 if _cabin_view.is_empty() else 1.2
 	var still_env := OS.get_environment("AKARI_SHOT_AT")
 	if not still_env.is_empty():
 		still_at = float(still_env)
-	if _shot_time < still_at:
+	# Nested CRT viewports need a few real frames; a long first frame must not skip them.
+	if _shot_time < still_at or _shot_frames < 4:
 		return
 	_shot_saved = true
 	_capture.call_deferred()
@@ -211,6 +226,13 @@ func _frame_closeup(ship: Node3D, camera: Camera3D) -> void:
 		Vector3.ZERO,
 		30.0,
 	)
+
+
+func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	# Low front three-quarter, so the white nose and canopy take the sun.
+	_frame_portrait(ship, camera, forward * 7.4 + right * 5.6 + Vector3.UP * 1.7, forward * 0.8, 26.0)
 
 
 func _frame_side(ship: Node3D, camera: Camera3D) -> void:
