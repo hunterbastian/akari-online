@@ -144,6 +144,7 @@ static func generate_system(system: Dictionary) -> Dictionary:
 			"ringTilt": ring_tilt,
 			"seed": seed,
 			"resources": resources,
+			"moons": _make_moons(biome, rings, seed),
 		})
 
 		var length := position.length()
@@ -183,6 +184,31 @@ static func generate_system(system: Dictionary) -> Dictionary:
 		"deposits": deposits,
 		"belt": _make_belt(hash_string(str(system.id))),
 	}
+
+
+## Moons come from the planet's own fields, never from the shared RNG, so the
+## web-matched sequence above is untouched. Every world keeps its pale primary
+## moon; ringed worlds also hold a small dark shepherd moon well outside the rings.
+static func _make_moons(biome: Dictionary, rings: bool, seed: float) -> Array:
+	var moons: Array = [{
+		"kind": "primary",
+		"radius": 0.16,
+		"color": biome.moon,
+		"roughness": 0.92,
+		"craters": false,
+	}]
+	if rings:
+		moons.append({
+			"kind": "shepherd",
+			"radius": 0.1,
+			"orbit": 3.25,
+			"inclination": -0.3 - fmod(seed * 7.0, 1.0) * 0.12,
+			"lead": 1.2 + fmod(seed * 3.0, 1.0) * 0.25,
+			"color": "#627389",
+			"roughness": 0.97,
+			"craters": true,
+		})
+	return moons
 
 
 static func _pick_name(rng: Rng, used: Dictionary) -> String:

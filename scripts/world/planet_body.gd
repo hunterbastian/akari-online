@@ -1,11 +1,12 @@
 class_name PlanetBody
 extends Node3D
 
-## One seeded world: readable face, atmosphere rim, rings and moon when the seed says so.
+## One seeded world: readable face, atmosphere rim, rings and moons when the seed says so.
 
 const _PLANET_SHADER := preload("res://assets/shaders/planet.gdshader")
 const _ATMO_SHADER := preload("res://assets/shaders/atmosphere.gdshader")
 const _RING_SHADER := preload("res://assets/shaders/ring.gdshader")
+const _PostProfile := preload("res://scripts/data/post_profile.gd")
 
 var planet: Dictionary = {}
 var surface: MeshInstance3D
@@ -64,23 +65,12 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 		_add_ring(rings, radius * 1.42, radius * 1.62, ring_color, 0.55, data.position, radius, sun)
 		_add_ring(rings, radius * 1.72, radius * 2.22, band_color, 0.28, data.position, radius, sun)
 
-	var moon := MeshInstance3D.new()
-	moon.name = "Moon"
-	var moon_radius := radius * 0.16
-	var moon_mesh := SphereMesh.new()
-	moon_mesh.radius = moon_radius
-	moon_mesh.height = moon_radius * 2.0
-	moon_mesh.radial_segments = 20
-	moon_mesh.rings = 14
-	moon.mesh = moon_mesh
-	var moon_mat := StandardMaterial3D.new()
-	moon_mat.albedo_color = Color.html(data.moon)
-	moon_mat.metallic = 0.04
-	moon_mat.roughness = 0.92
-	moon.material_override = moon_mat
-	moon.position = _moon_offset(data)
-	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(moon)
+	var moons: Array = data.get("moons", [{"kind": "primary", "radius": 0.16, "color": data.moon, "roughness": 0.92, "craters": false}])
+	var primary := _moon_offset(data)
+	for i in moons.size():
+		var spec: Dictionary = moons[i]
+		var offset := primary if spec.kind == "primary" else _orbit_offset(spec, primary, radius)
+		_add_moon("Moon" if i == 0 else "Moon%d" % (i + 1), spec, offset, radius)
 
 
 func _process(delta: float) -> void:
@@ -157,6 +147,57 @@ func _quad(tool: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, no
 	tool.add_vertex(a)
 	tool.add_vertex(c)
 	tool.add_vertex(d)
+
+
+func _add_moon(moon_name: String, spec: Dictionary, offset: Vector3, planet_radius: float) -> void:
+	var high := _PostProfile.high_quality()
+	var moon := MeshInstance3D.new()
+	moon.name = moon_name
+	var moon_radius := planet_radius * float(spec.radius)
+	var moon_mesh := SphereMesh.new()
+	moon_mesh.radius = moon_radius
+	moon_mesh.height = moon_radius * 2.0
+	moon_mesh.radial_segments = 20 if high else 14
+	moon_mesh.rings = 14 if high else 9
+	moon.mesh = moon_mesh
+	var moon_mat := StandardMaterial3D.new()
+	moon_mat.albedo_color = Color.html(spec.color)
+	moon_mat.metallic = 0.04
+	moon_mat.roughness = float(spec.roughness)
+	if bool(spec.craters) and high:
+		# Cheap pocked look: one small cellular-noise texture, made once.
+		moon_mat.albedo_texture = _crater_texture()
+	moon.material_override = moon_mat
+	moon.position = offset
+	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(moon)
+
+
+func _crater_texture() -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE
+	noise.frequency = 0.035
+	noise.seed = int(planet.get("seed", 0.0) * 1000.0)
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.35, 0.6, 1.0])
+	ramp.colors = PackedColorArray([Color(0.45, 0.45, 0.47), Color(0.8, 0.8, 0.82), Color(1, 1, 1), Color(0.92, 0.92, 0.94)])
+	var texture := NoiseTexture2D.new()
+	texture.width = 256
+	texture.height = 128
+	texture.seamless = true
+	texture.noise = noise
+	texture.color_ramp = ramp
+	return texture
+
+
+## A secondary moon sits on its own wider, tilted orbit, a fixed lead angle
+## around from the primary so the two never line up.
+func _orbit_offset(spec: Dictionary, primary: Vector3, planet_radius: float) -> Vector3:
+	var base := atan2(primary.z, primary.x) + float(spec.lead)
+	var incl := float(spec.inclination)
+	var flat := Vector3(cos(base), 0.0, sin(base))
+	return (flat * cos(incl) + Vector3.UP * sin(incl)) * planet_radius * float(spec.orbit)
 
 
 func _moon_offset(data: Dictionary) -> Vector3:

@@ -54,6 +54,8 @@ func _run() -> int:
 	for i in planets.size():
 		failed += _planet(planets[i], expected_planets[i])
 
+	failed += _moons(planets)
+
 	var ship := Ships.get_ship("starter")
 	var speeds := FlightProfile.for_speed_stat(float(ship.stats.speed))
 	var want: Dictionary = expected.starter
@@ -98,6 +100,31 @@ func _planet(got: Dictionary, want: Dictionary) -> int:
 		failed += 1
 	if got.resources != want.resources:
 		push_error("%s resources" % label)
+		failed += 1
+	return failed
+
+
+## Moons are derived data (not part of the web parity set): every world has its
+## primary moon, ringed worlds (Mina in Sol) add a shepherd clear of the rings.
+func _moons(planets: Array) -> int:
+	var failed := 0
+	for planet in planets:
+		var moons: Array = planet.get("moons", [])
+		var want := 2 if bool(planet.rings) else 1
+		if moons.size() != want:
+			push_error("%s moon count %d != %d" % [planet.name, moons.size(), want])
+			failed += 1
+			continue
+		if moons[0].kind != "primary" or moons[0].color != planet.moon:
+			push_error("%s primary moon" % planet.name)
+			failed += 1
+		if want == 2:
+			var shepherd: Dictionary = moons[1]
+			if float(shepherd.orbit) <= 2.22 + 0.5 or float(shepherd.radius) >= float(moons[0].radius):
+				push_error("%s shepherd orbit/size" % planet.name)
+				failed += 1
+	if (planets[0].moons as Array).size() != 2:
+		push_error("Mina should have two moons")
 		failed += 1
 	return failed
 
