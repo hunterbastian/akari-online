@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 GameState="*res://scripts/autoloads/game_state.gd"
 Economy="*res://scripts/autoloads/economy.gd"
 SceneRouter="*res://scripts/autoloads/scene_router.gd"
+DevConsole="*res://scripts/autoloads/dev_console.gd"
 
 [display]
 

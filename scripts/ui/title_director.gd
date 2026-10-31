@@ -59,6 +59,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if _transition or _time < 0.45:
 		return
 	var pressed := false

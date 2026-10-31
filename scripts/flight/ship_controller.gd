@@ -24,6 +24,8 @@ var _shell: Array[GeometryInstance3D] = []
 var _paints: Array[ShaderMaterial] = []
 var _engine_anchors: Array[Vector3] = []
 var walking := false
+var dev_speed_mult := 1.0
+var dev_god := false
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
 var _trails: Array[MeshInstance3D] = []
@@ -54,7 +56,7 @@ func _ready() -> void:
 		_model = packed.instantiate()
 		_hull.add_child(_model)
 		_Dress.prepare(_model)
-		var high := _PostProfile.high_quality()
+		var high := _PostProfile.detailed()
 		_paints = _Dress.paint(_model, high)
 		_shell = _Dress.shell_nodes(_model)
 		_engine_anchors = _Dress.engine_anchors(_model)
@@ -69,7 +71,7 @@ func _ready() -> void:
 	_cabin.name = "Cabin"
 	_cabin.scale = Vector3.ONE / FlightProfile.JUMPSHIP_SCALE
 	_hull.add_child(_cabin)
-	_cabin.build(FlightProfile.JUMPSHIP_SCALE, _PostProfile.high_quality())
+	_cabin.build(FlightProfile.JUMPSHIP_SCALE, _PostProfile.detailed())
 	_paints.append_array(_cabin.paints)
 	if _PostProfile.high_quality():
 		_build_reflection_probe()
@@ -148,7 +150,14 @@ func _set_shell_hidden(hidden: bool) -> void:
 		part.visible = not hidden
 
 
+func dev_leave_cabin() -> void:
+	if walking:
+		_exit_cabin()
+
+
 func _input(event: InputEvent) -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if not active or _shot:
 		return
 	if event.is_action_pressed("interact"):
@@ -174,6 +183,10 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if not active:
+		return
+	if DevConsole.blocks_gameplay():
+		_mouse_dx = 0.0
+		_mouse_dy = 0.0
 		return
 	var step := minf(delta, FlightProfile.DT_CAP)
 	if walking:
@@ -216,6 +229,7 @@ func _process(delta: float) -> void:
 		speed = _speeds.boost if boosting else _speeds.cruise
 	elif throttle < 0.0:
 		speed = -_speeds.cruise * FlightProfile.REVERSE_SCALE
+	speed *= dev_speed_mult
 
 	if throttle != 0.0:
 		var desired := forward * speed
@@ -270,6 +284,8 @@ func _update_cabin() -> void:
 
 
 func _keep_off_star() -> void:
+	if dev_god:
+		return
 	var distance := global_position.length()
 	if distance >= FlightProfile.STAR_CLEARANCE or distance < 0.001:
 		return
@@ -280,6 +296,8 @@ func _keep_off_star() -> void:
 
 
 func _keep_off_planet() -> void:
+	if dev_god:
+		return
 	var offset := global_position - planet_position
 	var distance := offset.length()
 	var limit := planet_radius + FlightProfile.PLANET_CLEARANCE
@@ -368,7 +386,7 @@ func _additive(texture: Texture2D, color: Color, billboard: int) -> StandardMate
 
 func _build_engine_fx() -> void:
 	var dot := _soft_dot()
-	var high := _PostProfile.high_quality()
+	var high := _PostProfile.detailed()
 	for anchor in _engine_anchors:
 		# Hot glow at the nozzle.
 		var halo := MeshInstance3D.new()
@@ -419,7 +437,12 @@ func _build_speed_streaks() -> void:
 	_streaks.name = "SpeedStreaks"
 	_streaks.emitting = false
 	_streaks.local_coords = true
-	_streaks.amount = 70 if _PostProfile.high_quality() else 24
+	var streak_count := 24
+	if _PostProfile.high_quality():
+		streak_count = 70
+	elif _PostProfile.quality() == "med":
+		streak_count = 40
+	_streaks.amount = streak_count
 	_streaks.lifetime = 0.32
 	_streaks.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	_streaks.emission_box_extents = Vector3(7.0, 4.5, 10.0)

@@ -4,6 +4,7 @@ extends Node3D
 ## so the chase camera never sees it. Coordinates below are the glTF model's meters;
 ## build() scales them into this node's space (world meters under the counter-scale).
 
+const _Post := preload("res://scripts/data/post_profile.gd")
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Walker := preload("res://scripts/flight/cabin_walker.gd")
 const _CRT := preload("res://assets/shaders/crt_green.gdshader")
@@ -142,6 +143,8 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Typing only while the body is locked in the seat, so WASD still walks the aisle.
+	if DevConsole.blocks_gameplay():
+		return
 	if walker == null or not walker.locked or walker.eye == null or not walker.eye.current:
 		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:
@@ -171,6 +174,7 @@ func _build_hud(bezel: Material) -> void:
 	pivot.position = _v(0.0, 0.74, -1.90)
 	pivot.rotation.x = 0.2
 	add_child(pivot)
+	pivot.add_to_group("akari_hud")
 
 	var view_size := Vector2i(640, 360) if _high else Vector2i(512, 288)
 	var viewport := SubViewport.new()
@@ -204,7 +208,7 @@ func _build_hud(bezel: Material) -> void:
 	material.shader = _HUD
 	material.render_priority = 3
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.0035 if _high else 0.0)
+	material.set_shader_parameter("glow_spread", 0.0035 if _Post.high_quality() else 0.0)
 	material.set_shader_parameter("brightness", 1.55 if _high else 1.3)
 	material.set_shader_parameter("fresnel_strength", 0.28 if _high else 0.14)
 	material.set_shader_parameter("edge_glow", 0.5 if _high else 0.32)
@@ -233,6 +237,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
 	pivot.position = pos
 	pivot.rotation.x = 0.22
 	add_child(pivot)
+	pivot.add_to_group("akari_hud")
 
 	var pad := _scale * 0.045
 	var depth := _scale * 0.06
@@ -283,7 +288,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i, bezel: Material) -> void:
 	var material := ShaderMaterial.new()
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.004 if _high else 0.0)
+	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
 	material.set_shader_parameter("brightness", 1.3 if _high else 1.15)
 	material.set_shader_parameter("curvature", 0.04)
 	mesh_instance.material_override = material
@@ -461,7 +466,7 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	var material := ShaderMaterial.new()
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.004 if _high else 0.0)
+	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
 	material.set_shader_parameter("brightness", 1.3 if _high else 1.15)
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER

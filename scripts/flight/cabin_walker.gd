@@ -71,6 +71,8 @@ func near_point(point: Vector3, distance: float) -> bool:
 
 
 func _process(delta: float) -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if not active_walk or locked or eye == null:
 		return
 	if controls and controls.has_method("consume_look"):
