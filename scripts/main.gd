@@ -94,6 +94,10 @@ func _ready() -> void:
 	ship.set_cabin_controls(cabin_controls)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
+	var yard = load("res://scripts/ships/ship_yard.gd").new()
+	yard.name = "ShipYard"
+	_world.add_child(yard)
+	yard.setup(_planet_center, _planet_radius)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_add_sun_glare(camera, sun_dir)
@@ -313,7 +317,45 @@ func dev_teleport(spec: String) -> String:
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("aisle")
 		return "tp aisle"
+	if key == "gallery" or key == "hero" or key == "derelict":
+		return _frame_kit(key)
 	return "unknown tp target '%s'" % key
+
+
+func _frame_kit(kind: String) -> String:
+	var yard := _world.get_node_or_null("ShipYard")
+	if yard == null:
+		return "no ship yard"
+	_ship.set_flight_active(false)
+	_ship.visible = false
+	var focus := Vector3.ZERO
+	var distance := 34.0
+	var fov := 38.0
+	if kind == "gallery":
+		focus = yard.build_gallery()
+		distance = 58.0
+		fov = 56.0
+	elif kind == "hero":
+		focus = yard.build_showcase(5, "hauler")
+		distance = 8.5
+		fov = 22.0
+	else:
+		focus = yard.build_showcase(7, "derelict")
+		distance = 9.0
+		fov = 24.0
+	# Nose is -Z. Sit the camera in front of it, a little above and sun-side.
+	var sun := FlightProfile.SUN_OFFSET.normalized()
+	var view := (Vector3(-0.35, 0.28, -1.0) + sun * 0.25).normalized()
+	if kind == "gallery":
+		view = Vector3(0.1, 1.05, -0.38).normalized()
+	var eye := focus + view * distance
+	var camera := _world.get_node("ChaseCamera") as Camera3D
+	camera.set_script(null)
+	camera.current = true
+	camera.fov = fov
+	camera.global_position = eye
+	camera.look_at(focus, Vector3.UP)
+	return "framed %s" % kind
 
 
 func _tp_moon() -> String:
