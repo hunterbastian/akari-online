@@ -59,6 +59,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if _transition or _time < 0.45:
 		return
 	var pressed := false
@@ -99,6 +101,7 @@ func _build_camera() -> void:
 	_camera.current = true
 	_camera.fov = 42.0
 	_camera.near = 0.12
+	_camera.cull_mask &= ~(1 << 2)
 	_camera.far = 7000.0
 	# The 3D world lives in the low-res viewport. The title card stays on the root.
 	ship.get_parent().add_child(_camera)

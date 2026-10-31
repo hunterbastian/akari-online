@@ -25,6 +25,8 @@ const FOV_BOOST := 60.0
 const FOV_DAMP := 4.0
 const DT_CAP := 0.05
 const HULL_SCALE := 1.28
+## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.
+const JUMPSHIP_SCALE := 0.466
 const STAR_CLEARANCE := 12.0
 const PLANET_CLEARANCE := 3.0
 const SPAWN := Vector3(0, 6, 48)
@@ -32,7 +34,8 @@ const SPAWN := Vector3(0, 6, 48)
 const SUN_OFFSET := Vector3(28, 46, 18)
 
 ## Nozzle centers in glTF space. From the ship entry in model meta.
-const ENGINE_ANCHORS = [Vector3(0.8847, -0.1181, 1.105), Vector3(-0.8847, -0.1181, 1.105)]
+## Fallback nozzle mouths in jumpship.glb space. Dress code measures the real cores.
+const ENGINE_ANCHORS = [Vector3(-1.55, -0.04, 3.42), Vector3(1.55, -0.04, 3.42)]
 
 
 static func for_speed_stat(speed_stat: float = 1.0) -> Dictionary:
