@@ -64,34 +64,34 @@ func build(scale: float, high_quality: bool) -> void:
 	var cloth := _paint(Color(0.09, 0.092, 0.105), 0.72, 0.0)
 	var door := _paint(Color(0.12, 0.125, 0.138), 0.46, 0.2)
 
-	# Subfloor sits under the grate tiles. Ceiling stops where the canopy opens.
-	_box("Floor", _v(0.0, -0.52, -1.35), _v(2.08, 0.1, 3.2), wall, false)
-	_box("CeilingRear", _v(0.0, 1.58, -0.42), _v(2.08, 0.06, 1.45), wall, true)
-	_box("CeilingL", _v(-0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
-	_box("CeilingR", _v(0.78, 1.58, -2.05), _v(0.42, 0.06, 1.7), wall, true)
-	_box("WallL", _v(-1.02, 0.56, -1.35), _v(0.06, 2.08, 3.2), wall, true)
-	_box("WallR", _v(1.02, 0.56, -1.35), _v(0.06, 2.08, 3.2), wall, true)
-	_box("WallRear", _v(0.0, 0.56, 0.24), _v(2.08, 2.08, 0.07), wall, true)
-	_box("Kick", _v(0.0, -0.22, -2.72), _v(1.7, 0.42, 0.08), trim, true)
+	# Bigger on the inside. The hull outside this layer does not change.
+	_box("Floor", _v(0.0, -0.52, -1.7), _v(3.6, 0.1, 5.0), wall, false)
+	_box("CeilingRear", _v(0.0, 2.78, -1.7), _v(3.6, 0.08, 5.0), wall, true)
+	_box("CeilingL", _v(-1.35, 2.78, -3.5), _v(0.9, 0.08, 1.2), wall, true)
+	_box("CeilingR", _v(1.35, 2.78, -3.5), _v(0.9, 0.08, 1.2), wall, true)
+	_box("WallL", _v(-1.78, 1.12, -1.7), _v(0.08, 3.36, 5.0), wall, true)
+	_box("WallR", _v(1.78, 1.12, -1.7), _v(0.08, 3.36, 5.0), wall, true)
+	_box("WallRear", _v(0.0, 1.12, 0.78), _v(3.6, 3.36, 0.08), wall, true)
+	_box("Kick", _v(0.0, -0.22, -3.85), _v(2.4, 0.42, 0.08), trim, true)
 
-	_box("JumpSeat", _v(-0.82, -0.22, -2.02), _v(0.4, 0.22, 0.4), cloth, false)
+	_box("JumpSeat", _v(-1.35, -0.22, -3.15), _v(0.4, 0.22, 0.4), cloth, false)
 
-	_box("Door", _v(0.0, 0.42, 0.18), _v(0.62, 1.15, 0.04), door, false)
-	_box("DoorBar", _v(0.22, 0.48, 0.14), _v(0.16, 0.035, 0.035), trim, false)
-	_glow("DoorTell", _v(-0.22, 0.95, 0.14), _v(0.035, 0.035, 0.02), Color(1.15, 0.16, 0.07))
+	_box("Door", _v(0.0, 0.72, 0.7), _v(1.7, 2.2, 0.05), door, false)
+	_box("DoorBar", _v(0.0, 1.9, 0.64), _v(1.95, 0.1, 0.1), trim, false)
+	_glow("DoorTell", _v(-0.7, 1.95, 0.6), _v(0.04, 0.04, 0.02), Color(1.15, 0.16, 0.07))
 
-	_glass(_v(0.0, 0.78, -2.86), Vector2(1.55, 0.78) * _scale, 0.18)
-	_glass(_v(0.0, 1.32, -2.05), Vector2(1.35, 1.45) * _scale, 1.05)
+	_glass(_v(0.0, 1.05, -4.05), Vector2(2.4, 1.2) * _scale, 0.1)
+	_glass(_v(0.0, 2.15, -3.65), Vector2(1.8, 0.42) * _scale, 0.85)
 
 	# Practicals live in the block library. No floor-length colored strips.
 
 	var side_size := Vector2i(400, 272) if high_quality else Vector2i(320, 216)
 	var prompt_size := Vector2i(480, 360) if high_quality else Vector2i(360, 270)
-	_screen("Nav", _v(-0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "nav", side_size)
-	_screen("Drive", _v(0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "drive", side_size)
-	_screen("Bay", _v(0.0, 0.92, 0.1), Vector2(0.4, 0.28) * _scale, 0.0, PI, "bay", side_size)
+	_screen("Nav", _v(-0.85, 0.95, -3.4), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "nav", side_size)
+	_screen("Drive", _v(0.85, 0.95, -3.4), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "drive", side_size)
+	_screen("Bay", _v(0.0, 2.05, 0.62), Vector2(0.46, 0.3) * _scale, 0.0, PI, "bay", side_size)
 	# Chunky terminal on the dash. The forward window stays open.
-	_build_prompt(_v(0.0, 0.4, -1.98), prompt_size)
+	_build_prompt(_v(0.0, 0.42, -3.15), prompt_size)
 	_Blocks.dress(self)
 	_Detail.apply(self)
 	_build_walker()
@@ -131,14 +131,16 @@ func snap_view(mode: String) -> void:
 	show_hotbar = mode != "seat"
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.12, 0.0)
+	elif mode == "wide":
+		walker.snap(_v(0.0, 0.0, 0.05), standing_eye, -0.16, 0.0)
 	elif mode == "locker" or mode == "storage":
-		walker.snap(_v(0.2, 0.0, -0.72), standing_eye, -0.2, 1.57)
+		walker.snap(_v(0.15, 0.0, -0.55), standing_eye, -0.22, 1.35)
 	elif mode == "living":
-		walker.snap(_v(-0.02, 0.0, -0.95), standing_eye, -0.72, -1.4)
+		walker.snap(_v(0.15, 0.0, -1.85), standing_eye, -0.45, -1.2)
 	elif mode == "bench":
-		walker.snap(_v(0.05, 0.0, -1.0), standing_eye, -0.38, 0.7)
+		walker.snap(_v(-0.15, 0.0, -1.7), standing_eye, -0.35, 0.8)
 	elif mode == "rear":
-		walker.snap(_v(0.0, 0.0, -1.86), standing_eye, -0.18, PI)
+		walker.snap(_v(0.0, 0.0, -1.4), standing_eye, -0.12, PI)
 	elif mode == "crates":
 		walker.snap(_v(0.05, 0.0, -1.45), _scale * 1.35, -1.05, -2.45)
 	elif mode == "dash":
@@ -274,8 +276,8 @@ func _build_walker() -> void:
 	var floor_y := _scale * -0.4
 	standing_eye = _scale * 1.5
 	seated_eye = _scale * 1.12
-	seat_point = _v(0.0, 0.0, -1.22)
-	aisle_point = _v(0.0, 0.0, -0.72)
+	seat_point = _v(0.0, 0.0, -2.35)
+	aisle_point = _v(0.0, 0.0, -1.6)
 	sit_reach = _scale * 0.62
 	walker = _Walker.new()
 	walker.name = "Walker"
@@ -285,22 +287,20 @@ func _build_walker() -> void:
 	walker.radius = _scale * 0.24
 	walker._bob_amp = _scale * 0.028
 	walker.position = Vector3(aisle_point.x, floor_y, aisle_point.z)
-	walker.limit_min = _v(-0.48, 0.0, -2.0)
-	walker.limit_max = _v(0.46, 0.0, -0.02)
+	walker.limit_min = _v(-1.15, 0.0, -3.45)
+	walker.limit_max = _v(1.05, 0.0, 0.25)
 	walker.boxes = [
-		_aabb(_v(0.0, 0.0, -2.28), _v(1.4, 0.2, 0.62)),
-		_aabb(_v(0.0, 0.0, -1.52), _v(0.52, 0.2, 0.46)),
-		_aabb(_v(0.78, 0.0, -0.95), _v(0.46, 0.3, 1.0)),
-		_aabb(_v(0.76, 0.0, -0.32), _v(0.46, 0.3, 0.46)),
-		_aabb(_v(0.8, 0.0, -0.62), _v(0.32, 0.3, 0.32)),
-		_aabb(_v(-0.78, 0.0, -0.48), _v(0.46, 0.3, 0.48)),
-		_aabb(_v(-0.78, 0.0, -0.96), _v(0.46, 0.3, 0.48)),
-		_aabb(_v(-0.78, 0.0, -1.42), _v(0.46, 0.3, 0.68)),
-		_aabb(_v(-0.82, 0.0, -2.02), _v(0.45, 0.3, 0.45)),
-		_aabb(_v(-1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
-		_aabb(_v(1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
-		_aabb(_v(0.0, 0.0, 0.22), _v(2.2, 0.2, 0.16)),
-		_aabb(_v(0.0, 0.0, -2.95), _v(2.2, 0.2, 0.2)),
+		_aabb(_v(0.0, 0.0, -3.43), _v(2.2, 0.2, 0.7)),
+		_aabb(_v(0.0, 0.0, -2.67), _v(0.55, 0.2, 0.5)),
+		_aabb(_v(1.28, 0.0, -1.85), _v(0.75, 0.3, 1.15)),
+		_aabb(_v(-1.4, 0.0, -0.55), _v(0.8, 0.3, 0.85)),
+		_aabb(_v(-1.4, 0.0, -1.3), _v(0.8, 0.3, 0.85)),
+		_aabb(_v(-1.28, 0.0, -2.25), _v(0.75, 0.3, 0.7)),
+		_aabb(_v(-1.35, 0.0, -3.15), _v(0.5, 0.3, 0.5)),
+		_aabb(_v(-1.82, 0.0, -1.7), _v(0.2, 0.2, 5.1)),
+		_aabb(_v(1.82, 0.0, -1.7), _v(0.2, 0.2, 5.1)),
+		_aabb(_v(0.0, 0.0, 0.78), _v(3.7, 0.2, 0.2)),
+		_aabb(_v(0.0, 0.0, -4.1), _v(3.7, 0.2, 0.2)),
 	]
 	add_child(walker)
 

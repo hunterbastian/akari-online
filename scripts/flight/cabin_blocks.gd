@@ -60,6 +60,12 @@ static func texture(kind: String) -> Texture2D:
 			_paint_bunk(image)
 		"lamp":
 			_paint_lamp(image)
+		"steel":
+			_paint_steel(image)
+		"rollup":
+			_paint_rollup(image)
+		"concrete":
+			_paint_concrete(image)
 		_:
 			_paint_panel(image)
 	var image_texture := ImageTexture.create_from_image(image)
@@ -176,17 +182,17 @@ static func dress(cabin) -> void:
 
 
 static func _retile_shell(cabin) -> void:
-	_retile_named(cabin, "Floor", "grate")
+	_retile_named(cabin, "Floor", "concrete")
 	var shade_cast: bool = cabin._high
-	_retile_named(cabin, "WallL", "panel", shade_cast)
-	_retile_named(cabin, "WallR", "panel", shade_cast)
-	_retile_named(cabin, "WallRear", "panel", shade_cast)
-	_retile_named(cabin, "CeilingRear", "ceiling")
-	_retile_named(cabin, "CeilingL", "ceiling")
-	_retile_named(cabin, "CeilingR", "ceiling")
-	_retile_named(cabin, "Door", "locker")
+	_retile_named(cabin, "WallL", "concrete", shade_cast)
+	_retile_named(cabin, "WallR", "concrete", shade_cast)
+	_retile_named(cabin, "WallRear", "concrete", shade_cast)
+	_retile_named(cabin, "CeilingRear", "concrete")
+	_retile_named(cabin, "CeilingL", "concrete")
+	_retile_named(cabin, "CeilingR", "concrete")
+	_retile_named(cabin, "Door", "rollup")
 	_retile_named(cabin, "Kick", "hazard")
-	_retile_named(cabin, "DoorBar", "bezel")
+	_retile_named(cabin, "DoorBar", "steel")
 
 
 static func _retile_named(cabin, node_name: String, kind: String, cast_shadow: bool = false) -> void:
@@ -196,110 +202,91 @@ static func _retile_named(cabin, node_name: String, kind: String, cast_shadow: b
 
 
 static func _floor(cabin) -> void:
-	var xs: Array[float] = [-0.75, -0.25, 0.25, 0.75]
-	var zs: Array[float] = [-0.25, -0.75, -1.25, -1.75, -2.25]
+	var xs: Array[float] = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+	var zs: Array[float] = [0.25, -0.25, -0.75, -1.25, -1.75, -2.25, -2.75, -3.25]
 	for xi in xs.size():
 		for zi in zs.size():
 			var kind := "grate"
-			if zs[zi] > -0.4 and absf(xs[xi]) < 0.5:
+			var x: float = xs[xi]
+			var z: float = zs[zi]
+			if z > 0.0:
 				kind = "hazard"
-			place(cabin, "Tile%d_%d" % [xi, zi], Vector3(xs[xi], -0.44, zs[zi]), Vector3(0.5, 0.08, 0.5), kind)
+			elif absf(x) == 0.5 and zi % 2 == 0:
+				kind = "hazard"
+			elif x < -1.2 and z < -0.1 and z > -1.7 and (zi + xi) % 3 == 0:
+				kind = "hazard"
+			place(cabin, "Tile%d_%d" % [xi, zi], Vector3(x, -0.44, z), Vector3(0.5, 0.08, 0.5), kind)
 
 
-static func _walls(cabin, detailed: bool) -> void:
-	var zs: Array[float] = [-0.25, -0.75, -1.25, -1.75]
-	var ys: Array[float] = [-0.15, 0.35, 0.85, 1.25]
+static func _walls(cabin, _detailed: bool) -> void:
+	# A few high vents. The floor stays open; zones are not walled off.
+	var zs: Array[float] = [-0.4, -1.5, -2.6, -3.4]
 	var sides: Array[float] = [-1.0, 1.0]
 	for si in sides.size():
 		var sign: float = sides[si]
 		for zi in zs.size():
-			for yi in ys.size():
-				var y: float = ys[yi]
-				var z: float = zs[zi]
-				if _blocked(sign, y, z):
-					continue
-				var proud := (zi + yi) % 2 == 0
-				if not proud and not detailed:
-					continue
-				var depth := 0.18 if proud else 0.06
-				var kind := "panel"
-				if not proud:
-					kind = "vent"
-				elif yi == 0 and zi % 2 == 0:
-					kind = "hazard"
-				var center_x := sign * (0.99 - depth * 0.5)
-				place(cabin, "Wall%d_%d_%d" % [si, zi, yi], Vector3(center_x, y, z), Vector3(depth, 0.5, 0.5), kind, cabin._high)
+			place(cabin, "Vent%d_%d" % [si, zi], Vector3(sign * 1.68, 2.15, zs[zi]), Vector3(0.08, 0.42, 0.7), "vent", cabin._high)
 
 
-static func _blocked(sign: float, y: float, z: float) -> bool:
-	if z > -0.4 and y < 0.85:
-		return true
-	if sign < 0.0:
-		if z < -0.25 and z > -1.25 and y < 1.2:
-			return true
-		if z < -1.15 and z > -1.75 and y < 0.5:
-			return true
-	else:
-		if z < -0.05 and z > -0.55 and y < 0.75:
-			return true
-		if z < -0.5 and z > -1.45 and y < 0.6:
-			return true
-	return false
+static func _ceiling(cabin, _detailed: bool) -> void:
+	var zs: Array[float] = [0.35, -0.7, -1.75, -2.8, -3.55]
+	for i in zs.size():
+		var z: float = zs[i]
+		place(cabin, "Truss%d" % i, Vector3(0.0, 2.48, z), Vector3(3.35, 0.08, 0.08), "steel")
+		place(cabin, "TrussTop%d" % i, Vector3(0.0, 2.68, z), Vector3(3.35, 0.05, 0.05), "steel")
+		place(cabin, "TrussPostL%d" % i, Vector3(-1.15, 2.58, z), Vector3(0.06, 0.22, 0.06), "steel")
+		place(cabin, "TrussPostR%d" % i, Vector3(1.15, 2.58, z), Vector3(0.06, 0.22, 0.06), "steel")
+	place(cabin, "PipeL", Vector3(-1.45, 2.32, -1.7), Vector3(0.08, 0.08, 4.4), "steel")
+	place(cabin, "PipeR", Vector3(1.45, 2.32, -1.7), Vector3(0.08, 0.08, 4.4), "steel")
+	place(cabin, "PipeC", Vector3(0.0, 2.62, -1.7), Vector3(0.07, 0.07, 4.2), "bezel")
 
 
-static func _ceiling(cabin, detailed: bool) -> void:
-	if not detailed:
-		return
-	var cells: Array[Vector3] = [
-		Vector3(-0.75, 1.48, -0.25),
-		Vector3(0.25, 1.48, -0.25),
-		Vector3(-0.25, 1.48, -0.75),
-		Vector3(0.75, 1.48, -0.75),
-		Vector3(-0.75, 1.48, -1.25),
-		Vector3(0.75, 1.48, -1.25),
-		Vector3(-0.75, 1.48, -1.75),
-		Vector3(0.75, 1.48, -1.75),
-		Vector3(-0.75, 1.48, -2.25),
-		Vector3(0.75, 1.48, -2.25),
-	]
-	for i in cells.size():
-		var at: Vector3 = cells[i]
-		place(cabin, "CeilTile%d" % i, at, Vector3(0.5, 0.08, 0.5), "ceiling")
+static func _rack(cabin, prefix: String, at: Vector3, cast_shadow: bool) -> void:
+	place(cabin, prefix + "PostA", at + Vector3(-0.28, 0.7, -0.28), Vector3(0.06, 2.3, 0.06), "steel", cast_shadow)
+	place(cabin, prefix + "PostB", at + Vector3(0.28, 0.7, -0.28), Vector3(0.06, 2.3, 0.06), "steel", cast_shadow)
+	place(cabin, prefix + "PostC", at + Vector3(-0.28, 0.7, 0.28), Vector3(0.06, 2.3, 0.06), "steel", cast_shadow)
+	place(cabin, prefix + "PostD", at + Vector3(0.28, 0.7, 0.28), Vector3(0.06, 2.3, 0.06), "steel", cast_shadow)
+	for shelf in [0.15, 0.85, 1.55]:
+		place(cabin, "%sShelf%.0f" % [prefix, shelf * 10.0], at + Vector3(0.0, shelf, 0.0), Vector3(0.7, 0.05, 0.7), "steel", cast_shadow)
 
 
 static func _furniture(cabin) -> void:
-	# Zones sit on the walls. The center aisle, from the bay to the seat, stays open.
+	# Open floor. Racks, the bunk, and the bench mark the zones. Nothing crosses the aisle.
 	var shade_cast: bool = cabin._high
-	# Storage wall, left, aft of the workbench and clear of the door.
-	place(cabin, "LockerL", Vector3(-0.78, 0.22, -0.48), Vector3(0.4, 1.25, 0.42), "locker", shade_cast)
-	place(cabin, "LockerR", Vector3(-0.78, 0.22, -0.96), Vector3(0.4, 1.25, 0.42), "locker", shade_cast)
-	contact(cabin, Vector3(-0.78, 0.0, -0.48), Vector2(0.55, 0.55))
-	contact(cabin, Vector3(-0.78, 0.0, -0.96), Vector2(0.55, 0.55))
-	# Workbench nook, left, with a shelf for later clutter.
-	place(cabin, "BenchTop", Vector3(-0.78, -0.02, -1.42), Vector3(0.4, 0.08, 0.62), "panel", shade_cast)
-	place(cabin, "BenchLeg", Vector3(-0.9, -0.28, -1.42), Vector3(0.1, 0.42, 0.5), "bezel", shade_cast)
-	place(cabin, "BenchShelf", Vector3(-0.84, 0.78, -1.42), Vector3(0.26, 0.06, 0.55), "panel")
-	place(cabin, "BenchLamp", Vector3(-0.7, 0.66, -1.42), Vector3(0.14, 0.04, 0.28), "lamp")
-	place(cabin, "RackCrate", Vector3(-0.78, 0.9, -1.28), Vector3(0.2, 0.16, 0.2), "crate")
-	contact(cabin, Vector3(-0.78, 0.0, -1.42), Vector2(0.5, 0.72))
-	# Living nook, right, aft of the pilot seat so the seat stays in the aisle.
-	place(cabin, "BunkBase", Vector3(0.78, -0.3, -0.95), Vector3(0.4, 0.16, 0.95), "bezel", shade_cast)
-	place(cabin, "BunkPad", Vector3(0.78, -0.16, -0.95), Vector3(0.38, 0.12, 0.9), "bunk", shade_cast)
-	place(cabin, "BunkPillow", Vector3(0.78, -0.06, -1.32), Vector3(0.34, 0.1, 0.22), "bunk", shade_cast)
-	place(cabin, "BunkRail", Vector3(0.6, 0.02, -0.95), Vector3(0.04, 0.22, 0.9), "bezel")
-	contact(cabin, Vector3(0.78, 0.0, -0.95), Vector2(0.55, 1.15))
-	# Rear bay. Crates hug the right wall, not the door.
-	place(cabin, "CrateA", Vector3(0.76, -0.18, -0.32), Vector3(0.4, 0.4, 0.4), "crate", shade_cast)
-	place(cabin, "CrateB", Vector3(0.76, 0.22, -0.32), Vector3(0.4, 0.4, 0.4), "crate", shade_cast)
-	place(cabin, "CrateL", Vector3(0.8, -0.3, -0.62), Vector3(0.26, 0.22, 0.26), "crate", shade_cast)
-	contact(cabin, Vector3(0.76, 0.0, -0.32), Vector2(0.58, 0.58))
-	contact(cabin, Vector3(0.8, 0.0, -0.62), Vector2(0.36, 0.36))
-	# Blocky practicals. The bulb meshes are the light you can see.
-	place(cabin, "LivingLamp", Vector3(0.0, 1.44, -1.05), Vector3(0.1, 0.05, 0.8), "lamp")
-	place(cabin, "CockpitLamp", Vector3(0.0, 1.4, -2.18), Vector3(0.62, 0.05, 0.08), "lamp")
-	place(cabin, "BayLamp", Vector3(0.0, 1.4, -0.12), Vector3(0.08, 0.05, 0.36), "lamp")
-	place(cabin, "ConduitL", Vector3(-0.55, 1.32, -1.15), Vector3(0.06, 0.06, 1.6), "bezel")
-	place(cabin, "ConduitR", Vector3(0.55, 1.32, -1.05), Vector3(0.06, 0.06, 1.4), "bezel")
+	_rack(cabin, "RackL", Vector3(-1.35, 0.0, -0.55), shade_cast)
+	_rack(cabin, "RackR", Vector3(-1.35, 0.0, -1.3), shade_cast)
+	# The named lockers are the faces you can open, on the aisle side of each rack.
+	place(cabin, "LockerL", Vector3(-1.0, 0.85, -0.55), Vector3(0.05, 1.5, 0.08), "locker", shade_cast)
+	place(cabin, "LockerR", Vector3(-1.0, 0.85, -1.3), Vector3(0.05, 1.5, 0.08), "locker", shade_cast)
+	place(cabin, "CrateA", Vector3(-1.35, 0.38, -0.55), Vector3(0.42, 0.36, 0.42), "crate", shade_cast)
+	place(cabin, "CrateB", Vector3(-1.35, 1.08, -0.55), Vector3(0.38, 0.32, 0.38), "crate", shade_cast)
+	place(cabin, "CrateL", Vector3(-1.35, 0.38, -1.3), Vector3(0.4, 0.34, 0.4), "crate", shade_cast)
+	place(cabin, "RackCrate", Vector3(-1.35, 1.08, -1.3), Vector3(0.32, 0.28, 0.32), "crate", shade_cast)
+	place(cabin, "Pallet", Vector3(-1.15, -0.38, -1.85), Vector3(0.7, 0.08, 0.7), "crate")
+	contact(cabin, Vector3(-1.35, 0.0, -0.55), Vector2(0.9, 0.9))
+	contact(cabin, Vector3(-1.35, 0.0, -1.3), Vector2(0.9, 0.9))
+	contact(cabin, Vector3(-1.15, 0.0, -1.85), Vector2(0.85, 0.85))
+	# Workbench, still on the left, with room to walk around it.
+	place(cabin, "BenchTop", Vector3(-1.28, 0.0, -2.25), Vector3(0.7, 0.08, 0.65), "panel", shade_cast)
+	place(cabin, "BenchLeg", Vector3(-1.5, -0.26, -2.25), Vector3(0.1, 0.46, 0.5), "steel", shade_cast)
+	place(cabin, "BenchShelf", Vector3(-1.45, 1.15, -2.25), Vector3(0.4, 0.05, 0.55), "steel")
+	contact(cabin, Vector3(-1.28, 0.0, -2.25), Vector2(0.85, 0.8))
+	# Bunk is a pallet bed on the right, not a walled nook.
+	place(cabin, "BunkBase", Vector3(1.28, -0.32, -1.85), Vector3(0.7, 0.1, 1.15), "steel", shade_cast)
+	place(cabin, "BunkPad", Vector3(1.28, -0.2, -1.85), Vector3(0.64, 0.12, 1.05), "bunk", shade_cast)
+	place(cabin, "BunkPillow", Vector3(1.28, -0.1, -2.28), Vector3(0.5, 0.1, 0.28), "bunk", shade_cast)
+	contact(cabin, Vector3(1.28, 0.0, -1.85), Vector2(0.9, 1.35))
+	# Hanging industrial lamps. Short rods drop them off the trusses.
+	var lamps: Array[Vector3] = [
+		Vector3(0.0, 1.72, -0.15),
+		Vector3(-0.55, 1.72, -0.9),
+		Vector3(0.45, 1.72, -1.9),
+		Vector3(0.0, 1.78, -3.05),
+	]
+	for i in lamps.size():
+		var at: Vector3 = lamps[i]
+		place(cabin, "HangRod%d" % i, Vector3(at.x, 2.25, at.z), Vector3(0.04, 0.9, 0.04), "steel")
+		place(cabin, "HangLamp%d" % i, at, Vector3(0.28, 0.08, 0.16), "lamp")
 
 
 static func _local_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, mat: Material, layer: int, stretch: bool) -> void:
@@ -334,21 +321,21 @@ static func _hits(point: Vector3, ignore: int) -> bool:
 static func _light_at(point: Vector3) -> Vector2:
 	var warm := 0.0
 	var lamps: Array[Vector3] = [
-		Vector3(0.0, 1.4, -1.05),
-		Vector3(0.0, 1.35, -2.18),
-		Vector3(-0.7, 0.7, -1.42),
-		Vector3(0.0, 1.35, -0.12),
+		Vector3(0.0, 1.72, -0.15),
+		Vector3(-0.55, 1.72, -0.9),
+		Vector3(0.45, 1.72, -1.9),
+		Vector3(0.0, 1.78, -3.05),
 	]
-	var reach: Array[float] = [1.45, 1.2, 0.85, 0.8]
+	var reach: Array[float] = [3.3, 3.1, 3.2, 3.0]
 	for i in lamps.size():
 		var fall := 1.0 - point.distance_to(lamps[i]) / reach[i]
 		warm = maxf(warm, clampf(fall, 0.0, 1.0))
 	var green := 0.0
 	var screens: Array[Vector3] = [
-		Vector3(-0.68, 0.75, -2.15),
-		Vector3(0.68, 0.75, -2.15),
-		Vector3(0.0, 0.4, -1.95),
-		Vector3(0.0, 0.85, 0.08),
+		Vector3(-0.85, 0.9, -3.35),
+		Vector3(0.85, 0.9, -3.35),
+		Vector3(0.0, 0.45, -3.1),
+		Vector3(0.0, 1.9, 0.55),
 	]
 	for screen in screens:
 		var fall := 1.0 - point.distance_to(screen) / 0.62
@@ -448,7 +435,7 @@ static func _face(verts: PackedVector3Array, normals: PackedVector3Array, uvs: P
 			var v := (half_v - tv) / cell if not stretch else (half_v - tv) / maxf(half_v * 2.0, 0.001)
 			uvs.append(Vector2(u, v))
 			var gltf_pos := ao_center + point / _scale
-			var nose := clampf((-gltf_pos.z + 0.15) / 2.7, 0.0, 1.0) if use_ao else 0.5
+			var nose := clampf((-gltf_pos.z - 0.2) / 4.2, 0.0, 1.0) if use_ao else 0.35
 			var light := _light_at(gltf_pos) if use_ao else Vector2(0.35, 0.0)
 			colors.append(Color(ao, nose, light.x, light.y))
 			row.append(index)
@@ -577,6 +564,36 @@ static func _paint_bunk(image: Image) -> void:
 	_rect(image, 1, 6, 14, 3, CLOTH)
 	_rect(image, 1, 8, 14, 1, Color("c4a574"))
 	_px(image, 4, 12, WEAR)
+
+
+static func _paint_steel(image: Image) -> void:
+	_fill(image, Color("6d737c"))
+	_rect(image, 0, 0, 16, 2, Color("9aa1ab"))
+	_rect(image, 0, 14, 16, 2, Color("3e444c"))
+	_px(image, 3, 4, Color("c5ccd4"))
+	_px(image, 12, 4, Color("c5ccd4"))
+	_px(image, 3, 11, Color("2c3138"))
+	_px(image, 12, 11, Color("2c3138"))
+
+
+static func _paint_rollup(image: Image) -> void:
+	_fill(image, Color("8a9098"))
+	for y in [0, 3, 6, 9, 12, 15]:
+		_rect(image, 0, y, 16, 1, Color("3a4048"))
+	_rect(image, 0, 0, 1, 16, Color("5c636c"))
+	_rect(image, 15, 0, 1, 16, Color("5c636c"))
+	_px(image, 8, 7, ACCENT)
+
+
+static func _paint_concrete(image: Image) -> void:
+	_fill(image, Color("8e8a84"))
+	_rect(image, 0, 7, 16, 1, Color("6a6660"))
+	_rect(image, 7, 0, 1, 16, Color("6a6660"))
+	_px(image, 3, 3, Color("6e6a64"))
+	_px(image, 12, 4, Color("a8a49c"))
+	_px(image, 5, 11, Color("5e5a54"))
+	_px(image, 11, 12, Color("b0aca4"))
+	_px(image, 14, 9, Color("7a766f"))
 
 
 static func _paint_lamp(image: Image) -> void:
