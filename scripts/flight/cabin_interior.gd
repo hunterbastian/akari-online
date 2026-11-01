@@ -83,8 +83,7 @@ func build(scale: float, high_quality: bool) -> void:
 	_glass(_v(0.0, 0.78, -2.86), Vector2(1.55, 0.78) * _scale, 0.18)
 	_glass(_v(0.0, 1.32, -2.05), Vector2(1.35, 1.45) * _scale, 1.05)
 
-	_glow("StripL", _v(-0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.85, 0.78, 0.62))
-	_glow("StripR", _v(0.9, -0.38, -1.3), _v(0.025, 0.012, 2.4), Color(0.45, 0.75, 0.95))
+	# Practicals live in the block library. No floor-length colored strips.
 
 	var side_size := Vector2i(400, 272) if high_quality else Vector2i(320, 216)
 	var prompt_size := Vector2i(480, 360) if high_quality else Vector2i(360, 270)
@@ -132,14 +131,16 @@ func snap_view(mode: String) -> void:
 	show_hotbar = mode != "seat"
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.12, 0.0)
-	elif mode == "locker":
-		walker.snap(_v(-0.05, 0.0, -0.78), standing_eye, -0.06, 2.2)
+	elif mode == "locker" or mode == "storage":
+		walker.snap(_v(0.2, 0.0, -0.72), standing_eye, -0.2, 1.57)
+	elif mode == "living":
+		walker.snap(_v(-0.02, 0.0, -0.95), standing_eye, -0.72, -1.4)
+	elif mode == "bench":
+		walker.snap(_v(0.05, 0.0, -1.0), standing_eye, -0.38, 0.7)
 	elif mode == "rear":
 		walker.snap(_v(0.0, 0.0, -1.86), standing_eye, -0.18, PI)
 	elif mode == "crates":
 		walker.snap(_v(0.05, 0.0, -1.45), _scale * 1.35, -1.05, -2.45)
-	elif mode == "storage":
-		walker.snap(_v(-0.05, 0.0, -1.62), _scale * 0.88, -0.32, -2.2)
 	elif mode == "dash":
 		walker.snap(_v(0.0, 0.0, -1.2), _scale * 0.92, -0.42, 0.0)
 	elif mode == "floor":
@@ -284,16 +285,17 @@ func _build_walker() -> void:
 	walker.radius = _scale * 0.24
 	walker._bob_amp = _scale * 0.028
 	walker.position = Vector3(aisle_point.x, floor_y, aisle_point.z)
-	walker.limit_min = _v(-0.7, 0.0, -2.05)
-	walker.limit_max = _v(0.38, 0.0, 0.02)
+	walker.limit_min = _v(-0.48, 0.0, -2.0)
+	walker.limit_max = _v(0.46, 0.0, -0.02)
 	walker.boxes = [
 		_aabb(_v(0.0, 0.0, -2.28), _v(1.4, 0.2, 0.62)),
-		_aabb(_v(0.0, 0.0, -1.55), _v(0.52, 0.2, 0.4)),
-		_aabb(_v(0.72, 0.0, -1.42), _v(0.55, 0.3, 1.05)),
-		_aabb(_v(0.72, 0.0, -0.62), _v(0.55, 0.3, 0.55)),
-		_aabb(_v(0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
-		_aabb(_v(-0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
-		_aabb(_v(-0.8, 0.0, -0.42), _v(0.32, 0.3, 0.32)),
+		_aabb(_v(0.0, 0.0, -1.52), _v(0.52, 0.2, 0.46)),
+		_aabb(_v(0.78, 0.0, -0.95), _v(0.46, 0.3, 1.0)),
+		_aabb(_v(0.76, 0.0, -0.32), _v(0.46, 0.3, 0.46)),
+		_aabb(_v(0.8, 0.0, -0.62), _v(0.32, 0.3, 0.32)),
+		_aabb(_v(-0.78, 0.0, -0.48), _v(0.46, 0.3, 0.48)),
+		_aabb(_v(-0.78, 0.0, -0.96), _v(0.46, 0.3, 0.48)),
+		_aabb(_v(-0.78, 0.0, -1.42), _v(0.46, 0.3, 0.68)),
 		_aabb(_v(-0.82, 0.0, -2.02), _v(0.45, 0.3, 0.45)),
 		_aabb(_v(-1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
 		_aabb(_v(1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),

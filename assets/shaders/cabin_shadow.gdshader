@@ -19,6 +19,6 @@ void fragment() {
 	if (cover < bayer) {
 		discard;
 	}
-	ALBEDO = vec3(0.1, 0.11, 0.12);
-	ALPHA = 0.72;
+	ALBEDO = vec3(0.03, 0.028, 0.025);
+	ALPHA = 0.84;
 }

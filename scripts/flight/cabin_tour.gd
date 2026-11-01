@@ -8,6 +8,7 @@ var _fired := {}
 var _ship: Node
 var _walk := false
 var _film := false
+var _zones := false
 var _seated := false
 var _outside := false
 var _inside := false
@@ -23,6 +24,22 @@ const _ORBIT := 14.0
 const _SIT := 11.4
 const _FLY := 15.6
 const _END := 36.5
+const _ZONE_SIT := 26.5
+const _ZONE_END := 32.0
+
+## Rear bay, storage wall, bunk, workbench, then the seat.
+const _ZONES := [
+	[0.0, 0.0, -0.32, PI, -0.14],
+	[3.5, 0.02, -0.38, PI, -0.04],
+	[6.0, 0.18, -0.7, 1.57, -0.22],
+	[9.5, 0.16, -0.72, 1.57, -0.12],
+	[11.5, -0.02, -0.95, -1.4, -0.7],
+	[15.5, 0.0, -0.98, -1.25, -0.45],
+	[17.5, 0.05, -1.02, 0.7, -0.38],
+	[21.0, 0.04, -1.05, 0.65, -0.28],
+	[23.5, 0.0, -1.2, 0.05, -0.1],
+	[26.2, 0.0, -1.22, 0.0, -0.12],
+]
 
 ## Local times, after the exterior orbit. Rear bay, then up the aisle to the seat.
 const _CABIN := [
@@ -51,6 +68,7 @@ func setup(ship: Node) -> void:
 	_ship = ship
 	_walk = OS.get_cmdline_user_args().has("--walk")
 	_film = OS.get_cmdline_user_args().has("--film")
+	_zones = OS.get_cmdline_user_args().has("--zones")
 	if _film:
 		var camera := _camera()
 		if camera:
@@ -68,6 +86,9 @@ func _process(delta: float) -> void:
 	var walker = cabin.walker
 	if _film:
 		_play_film(cabin, walker, delta)
+		return
+	if _zones:
+		_play_zones(cabin, walker, delta)
 		return
 	walker.locked = false
 	if walker.eye:
@@ -113,6 +134,27 @@ func _once(cabin, at: float, id: String, action: Callable) -> void:
 		return
 	_fired[id] = true
 	action.call()
+
+
+func _play_zones(cabin, walker, delta: float) -> void:
+	if _time < _ZONE_SIT:
+		walker.locked = true
+		if walker.eye:
+			walker.eye.current = true
+		_glide_keys(cabin, walker, delta, _ZONES, _time)
+	elif not _seated:
+		_seated = true
+		cabin.snap_view("seat")
+		if walker.eye:
+			walker.eye.current = true
+	elif walker.eye:
+		walker.eye.current = true
+		var u := clampf((_time - _ZONE_SIT) / (_ZONE_END - _ZONE_SIT), 0.0, 1.0)
+		walker.rotation.y = sin(u * TAU) * 0.32
+		walker.pitch = -0.12 + sin(u * PI) * 0.06
+		walker.eye.rotation.x = walker.pitch
+	if _time >= _ZONE_END:
+		get_tree().quit()
 
 
 func _camera() -> Camera3D:

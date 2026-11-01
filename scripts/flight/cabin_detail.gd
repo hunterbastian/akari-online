@@ -55,8 +55,9 @@ static func _grate_normal() -> Texture2D:
 
 
 static func _ceiling_lights(cabin) -> void:
-	cabin._glow("CeilStrip", cabin._v(0.0, 1.46, -1.15), cabin._v(0.08, 0.015, 0.55), Color(0.55, 0.32, 0.14))
-	cabin._glow("CeilSpot", cabin._v(0.0, 1.46, -1.85), cabin._v(0.16, 0.012, 0.1), Color(0.5, 0.28, 0.12))
+	cabin._glow("LivingBulb", cabin._v(0.0, 1.4, -1.05), cabin._v(0.05, 0.02, 0.55), Color(1.45, 1.05, 0.55))
+	cabin._glow("CockpitBulb", cabin._v(0.0, 1.36, -2.18), cabin._v(0.4, 0.018, 0.035), Color(1.25, 1.18, 0.95))
+	cabin._glow("BenchBulb", cabin._v(-0.7, 0.64, -1.42), cabin._v(0.08, 0.016, 0.16), Color(1.4, 1.02, 0.48))
 
 
 static func _seat(cabin, white: Material, cloth: Material, dark: Material) -> void:
@@ -110,22 +111,21 @@ static func _dash(cabin, white: Material, dark: Material) -> void:
 
 static func _props(cabin, white: Material, dark: Material, cloth: Material) -> void:
 	var offwhite := _flat(Color(0.82, 0.8, 0.76))
-	# Helmet on a hook above the wall rack.
-	_Blocks.retile(cabin._box("Hook", cabin._v(-0.78, 1.02, -1.62), cabin._v(0.1, 0.025, 0.04), dark, false), "bezel")
-	cabin._sphere("Helmet", cabin._v(-0.68, 0.88, -1.62), 0.09, offwhite)
-	_Blocks.retile(cabin._box("Visor", cabin._v(-0.6, 0.9, -1.62), cabin._v(0.035, 0.05, 0.09), dark, false), "bezel")
-	# Mug on the lower rack, clipboard on the locker, cartridges on the dash.
-	cabin._cyl("Mug", cabin._v(-0.58, 0.56, -1.42), 0.035, 0.07, Vector3.ZERO, offwhite)
-	_Blocks.retile(cabin._box("Clipboard", cabin._v(-0.46, 0.42, -0.4), cabin._v(0.16, 0.22, 0.012), white, false), "panel")
-	cabin._glow("Sticker", cabin._v(0.8, 0.9, -1.25), cabin._v(0.012, 0.1, 0.16), Color(0.95, 0.45, 0.18))
-	cabin._glow("StickerB", cabin._v(-0.8, 0.9, -0.75), cabin._v(0.012, 0.06, 0.1), Color(0.35, 0.75, 0.95))
-	cabin._cyl("Extinguisher", cabin._v(0.42, -0.18, -1.05), 0.05, 0.32, Vector3.ZERO, _flat(Color(0.72, 0.16, 0.12)))
-	_Blocks.retile(cabin._box("ExtHead", cabin._v(0.42, 0.02, -1.05), cabin._v(0.06, 0.05, 0.06), dark, false), "bezel")
+	# Helmet and mug live on the workbench, the spot meant for personal clutter.
+	_Blocks.retile(cabin._box("Hook", cabin._v(-0.86, 1.05, -1.55), cabin._v(0.08, 0.025, 0.04), dark, false), "bezel")
+	cabin._sphere("Helmet", cabin._v(-0.72, 0.95, -1.52), 0.09, offwhite)
+	_Blocks.retile(cabin._box("Visor", cabin._v(-0.64, 0.97, -1.52), cabin._v(0.035, 0.05, 0.09), dark, false), "bezel")
+	cabin._cyl("Mug", cabin._v(-0.64, 0.08, -1.32), 0.035, 0.07, Vector3.ZERO, offwhite)
+	_Blocks.retile(cabin._box("Clipboard", cabin._v(-0.56, 0.55, -0.48), cabin._v(0.02, 0.22, 0.16), white, false), "panel")
+	cabin._glow("Sticker", cabin._v(0.9, 0.85, -0.95), cabin._v(0.012, 0.1, 0.16), Color(0.72, 0.42, 0.22))
+	cabin._glow("StickerB", cabin._v(-0.56, 0.95, -0.72), cabin._v(0.012, 0.06, 0.1), Color(0.45, 0.62, 0.55))
+	cabin._cyl("Extinguisher", cabin._v(0.88, -0.18, -0.02), 0.05, 0.32, Vector3.ZERO, _flat(Color(0.62, 0.22, 0.16)))
+	_Blocks.retile(cabin._box("ExtHead", cabin._v(0.88, 0.02, -0.02), cabin._v(0.06, 0.05, 0.06), dark, false), "bezel")
 	for i in 5:
 		var tape: Material = dark if i % 2 == 0 else white
 		var tape_mesh: MeshInstance3D = cabin._box("Tape%d" % i, cabin._v(0.36 + float(i) * 0.045, 0.08, -2.2), cabin._v(0.03, 0.07, 0.055), tape, false)
 		_Blocks.retile(tape_mesh, "bezel" if i % 2 == 0 else "panel")
-	_Blocks.retile(cabin._box("BunkStrap", cabin._v(0.72, -0.08, -1.42), cabin._v(0.46, 0.02, 0.04), cloth, false), "bezel")
+	_Blocks.retile(cabin._box("BunkStrap", cabin._v(0.78, -0.08, -0.95), cabin._v(0.36, 0.02, 0.04), cloth, false), "bezel")
 
 
 static func _flat(color: Color) -> StandardMaterial3D:

@@ -9,16 +9,19 @@ const _SHADOW := preload("res://assets/shaders/cabin_shadow.gdshader")
 
 const CELL := 0.5
 
-const METAL := Color("8a8e94")
-const METAL_DK := Color("2e3238")
-const METAL_MD := Color("5c6168")
-const METAL_LT := Color("d5d8dc")
-const RIVET := Color("eef1f4")
-const HAZ := Color("b8923e")
-const CRATE := Color("8a7352")
-const CRATE_DK := Color("4a3d2e")
-const BUNK := Color("5e6570")
-const BUNK_DK := Color("3c424c")
+const BONE := Color("d9d3c4")
+const BONE_DK := Color("6e685c")
+const BONE_MD := Color("b3ab9c")
+const RIVET := Color("f4f0e6")
+const WEAR := Color("8a8172")
+const FLOOR := Color("1c1a18")
+const FLOOR_MD := Color("3a3632")
+const ACCENT := Color("8d6844")
+const CRATE := Color("8a6846")
+const CRATE_DK := Color("3e3124")
+const BUNK := Color("6e655c")
+const BUNK_DK := Color("3f3a34")
+const CLOTH := Color("8d7356")
 
 static var _scale := 1.0
 static var _tex: Dictionary = {}
@@ -55,6 +58,8 @@ static func texture(kind: String) -> Texture2D:
 			_paint_bezel(image)
 		"bunk":
 			_paint_bunk(image)
+		"lamp":
+			_paint_lamp(image)
 		_:
 			_paint_panel(image)
 	var image_texture := ImageTexture.create_from_image(image)
@@ -68,7 +73,12 @@ static func material(kind: String) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = _SHADE
 	mat.set_shader_parameter("albedo_tex", texture(kind))
-	mat.set_shader_parameter("lamp", 0.16 if kind == "ceiling" else 0.0)
+	var glow := 0.0
+	if kind == "ceiling":
+		glow = 0.1
+	elif kind == "lamp":
+		glow = 0.75
+	mat.set_shader_parameter("lamp", glow)
 	_mats[kind] = mat
 	return mat
 
@@ -163,11 +173,10 @@ static func dress(cabin) -> void:
 	_ceiling(cabin, cabin._high)
 	_furniture(cabin)
 	bake()
-	cabin._glow("BayStrip", cabin._v(0.0, 1.22, 0.1), cabin._v(0.62, 0.035, 0.025), Color(0.45, 0.9, 1.05))
 
 
 static func _retile_shell(cabin) -> void:
-	_retile_named(cabin, "Floor", "bezel")
+	_retile_named(cabin, "Floor", "grate")
 	var shade_cast: bool = cabin._high
 	_retile_named(cabin, "WallL", "panel", shade_cast)
 	_retile_named(cabin, "WallR", "panel", shade_cast)
@@ -223,14 +232,18 @@ static func _walls(cabin, detailed: bool) -> void:
 
 
 static func _blocked(sign: float, y: float, z: float) -> bool:
-	if z > -0.55 and y < 0.7:
+	if z > -0.4 and y < 0.85:
 		return true
-	if sign > 0.0 and z < -0.35 and z > -0.95 and y < 0.75:
-		return true
-	if sign > 0.0 and z < -0.85 and z > -1.95 and y < 0.2:
-		return true
-	if sign < 0.0 and z < -0.85 and z > -1.75 and y < 1.35:
-		return true
+	if sign < 0.0:
+		if z < -0.25 and z > -1.25 and y < 1.2:
+			return true
+		if z < -1.15 and z > -1.75 and y < 0.5:
+			return true
+	else:
+		if z < -0.05 and z > -0.55 and y < 0.75:
+			return true
+		if z < -0.5 and z > -1.45 and y < 0.6:
+			return true
 	return false
 
 
@@ -255,30 +268,38 @@ static func _ceiling(cabin, detailed: bool) -> void:
 
 
 static func _furniture(cabin) -> void:
-	# Lockers flank the bay door. Two 0.5m bays stacked read as one column.
+	# Zones sit on the walls. The center aisle, from the bay to the seat, stays open.
 	var shade_cast: bool = cabin._high
-	place(cabin, "LockerL", Vector3(-0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker", shade_cast)
-	place(cabin, "LockerR", Vector3(0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker", shade_cast)
-	contact(cabin, Vector3(-0.72, 0.0, -0.15), Vector2(0.72, 0.72))
-	contact(cabin, Vector3(0.72, 0.0, -0.15), Vector2(0.72, 0.72))
-	# Tucked on the left wall, aft of the aisle camera, so the forward view stays open.
-	place(cabin, "CrateL", Vector3(-0.8, -0.28, -0.42), Vector3(0.3, 0.24, 0.3), "crate", shade_cast)
-	contact(cabin, Vector3(-0.8, 0.0, -0.42), Vector2(0.28, 0.28))
-	place(cabin, "CrateA", Vector3(0.72, -0.15, -0.62), Vector3(0.5, 0.5, 0.5), "crate", shade_cast)
-	place(cabin, "CrateB", Vector3(0.72, 0.35, -0.62), Vector3(0.5, 0.5, 0.5), "crate", shade_cast)
-	contact(cabin, Vector3(0.72, 0.0, -0.62), Vector2(0.78, 0.78))
-	place(cabin, "BunkBase", Vector3(0.72, -0.32, -1.42), Vector3(0.5, 0.16, 1.0), "bezel", shade_cast)
-	place(cabin, "BunkPad", Vector3(0.72, -0.16, -1.42), Vector3(0.48, 0.14, 0.96), "bunk", shade_cast)
-	place(cabin, "BunkPillow", Vector3(0.72, -0.06, -1.84), Vector3(0.42, 0.1, 0.24), "bunk", shade_cast)
-	contact(cabin, Vector3(0.72, 0.0, -1.42), Vector2(0.72, 1.25))
-	# Wall rack on the left, inboard of the proud panels.
-	place(cabin, "RackBack", Vector3(-0.72, 0.78, -1.3), Vector3(0.06, 0.9, 0.7), "panel")
-	place(cabin, "RackLow", Vector3(-0.64, 0.48, -1.3), Vector3(0.14, 0.08, 0.66), "panel")
-	place(cabin, "RackHigh", Vector3(-0.64, 1.12, -1.3), Vector3(0.14, 0.08, 0.66), "panel")
-	place(cabin, "RackCrate", Vector3(0.55, -0.26, -0.48), Vector3(0.26, 0.26, 0.26), "crate")
-	place(cabin, "ConduitL", Vector3(-0.55, 1.28, -1.15), Vector3(0.08, 0.08, 1.7), "bezel")
-	place(cabin, "ConduitR", Vector3(0.55, 1.28, -1.05), Vector3(0.08, 0.08, 1.5), "bezel")
-	place(cabin, "ConduitDrop", Vector3(-0.55, 1.05, -0.45), Vector3(0.08, 0.4, 0.08), "bezel")
+	# Storage wall, left, aft of the workbench and clear of the door.
+	place(cabin, "LockerL", Vector3(-0.78, 0.22, -0.48), Vector3(0.4, 1.25, 0.42), "locker", shade_cast)
+	place(cabin, "LockerR", Vector3(-0.78, 0.22, -0.96), Vector3(0.4, 1.25, 0.42), "locker", shade_cast)
+	contact(cabin, Vector3(-0.78, 0.0, -0.48), Vector2(0.55, 0.55))
+	contact(cabin, Vector3(-0.78, 0.0, -0.96), Vector2(0.55, 0.55))
+	# Workbench nook, left, with a shelf for later clutter.
+	place(cabin, "BenchTop", Vector3(-0.78, -0.02, -1.42), Vector3(0.4, 0.08, 0.62), "panel", shade_cast)
+	place(cabin, "BenchLeg", Vector3(-0.9, -0.28, -1.42), Vector3(0.1, 0.42, 0.5), "bezel", shade_cast)
+	place(cabin, "BenchShelf", Vector3(-0.84, 0.78, -1.42), Vector3(0.26, 0.06, 0.55), "panel")
+	place(cabin, "BenchLamp", Vector3(-0.7, 0.66, -1.42), Vector3(0.14, 0.04, 0.28), "lamp")
+	place(cabin, "RackCrate", Vector3(-0.78, 0.9, -1.28), Vector3(0.2, 0.16, 0.2), "crate")
+	contact(cabin, Vector3(-0.78, 0.0, -1.42), Vector2(0.5, 0.72))
+	# Living nook, right, aft of the pilot seat so the seat stays in the aisle.
+	place(cabin, "BunkBase", Vector3(0.78, -0.3, -0.95), Vector3(0.4, 0.16, 0.95), "bezel", shade_cast)
+	place(cabin, "BunkPad", Vector3(0.78, -0.16, -0.95), Vector3(0.38, 0.12, 0.9), "bunk", shade_cast)
+	place(cabin, "BunkPillow", Vector3(0.78, -0.06, -1.32), Vector3(0.34, 0.1, 0.22), "bunk", shade_cast)
+	place(cabin, "BunkRail", Vector3(0.6, 0.02, -0.95), Vector3(0.04, 0.22, 0.9), "bezel")
+	contact(cabin, Vector3(0.78, 0.0, -0.95), Vector2(0.55, 1.15))
+	# Rear bay. Crates hug the right wall, not the door.
+	place(cabin, "CrateA", Vector3(0.76, -0.18, -0.32), Vector3(0.4, 0.4, 0.4), "crate", shade_cast)
+	place(cabin, "CrateB", Vector3(0.76, 0.22, -0.32), Vector3(0.4, 0.4, 0.4), "crate", shade_cast)
+	place(cabin, "CrateL", Vector3(0.8, -0.3, -0.62), Vector3(0.26, 0.22, 0.26), "crate", shade_cast)
+	contact(cabin, Vector3(0.76, 0.0, -0.32), Vector2(0.58, 0.58))
+	contact(cabin, Vector3(0.8, 0.0, -0.62), Vector2(0.36, 0.36))
+	# Blocky practicals. The bulb meshes are the light you can see.
+	place(cabin, "LivingLamp", Vector3(0.0, 1.44, -1.05), Vector3(0.1, 0.05, 0.8), "lamp")
+	place(cabin, "CockpitLamp", Vector3(0.0, 1.4, -2.18), Vector3(0.62, 0.05, 0.08), "lamp")
+	place(cabin, "BayLamp", Vector3(0.0, 1.4, -0.12), Vector3(0.08, 0.05, 0.36), "lamp")
+	place(cabin, "ConduitL", Vector3(-0.55, 1.32, -1.15), Vector3(0.06, 0.06, 1.6), "bezel")
+	place(cabin, "ConduitR", Vector3(0.55, 1.32, -1.05), Vector3(0.06, 0.06, 1.4), "bezel")
 
 
 static func _local_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, mat: Material, layer: int, stretch: bool) -> void:
@@ -308,6 +329,31 @@ static func _hits(point: Vector3, ignore: int) -> bool:
 		if absf(point.x - center.x) <= half.x and absf(point.y - center.y) <= half.y and absf(point.z - center.z) <= half.z:
 			return true
 	return false
+
+
+static func _light_at(point: Vector3) -> Vector2:
+	var warm := 0.0
+	var lamps: Array[Vector3] = [
+		Vector3(0.0, 1.4, -1.05),
+		Vector3(0.0, 1.35, -2.18),
+		Vector3(-0.7, 0.7, -1.42),
+		Vector3(0.0, 1.35, -0.12),
+	]
+	var reach: Array[float] = [1.45, 1.2, 0.85, 0.8]
+	for i in lamps.size():
+		var fall := 1.0 - point.distance_to(lamps[i]) / reach[i]
+		warm = maxf(warm, clampf(fall, 0.0, 1.0))
+	var green := 0.0
+	var screens: Array[Vector3] = [
+		Vector3(-0.68, 0.75, -2.15),
+		Vector3(0.68, 0.75, -2.15),
+		Vector3(0.0, 0.4, -1.95),
+		Vector3(0.0, 0.85, 0.08),
+	]
+	for screen in screens:
+		var fall := 1.0 - point.distance_to(screen) / 0.62
+		green = maxf(green, clampf(fall, 0.0, 1.0))
+	return Vector2(warm, green)
 
 
 static func _ao_level(gltf_pos: Vector3, normal: Vector3, ignore: int) -> float:
@@ -346,10 +392,10 @@ static func _ao_level(gltf_pos: Vector3, normal: Vector3, ignore: int) -> float:
 	if level <= 0:
 		return 1.0
 	if level == 1:
-		return 0.62
+		return 0.5
 	if level == 2:
-		return 0.42
-	return 0.28
+		return 0.32
+	return 0.18
 
 
 static func _unit_box(size: Vector3, stretch: bool, ao_center: Vector3 = Vector3.ZERO, ao_extent: Vector3 = Vector3.ZERO, ignore: int = -1) -> ArrayMesh:
@@ -401,9 +447,10 @@ static func _face(verts: PackedVector3Array, normals: PackedVector3Array, uvs: P
 			var u := (tu + half_u) / cell if not stretch else (tu + half_u) / maxf(half_u * 2.0, 0.001)
 			var v := (half_v - tv) / cell if not stretch else (half_v - tv) / maxf(half_v * 2.0, 0.001)
 			uvs.append(Vector2(u, v))
-			var gltf_z := ao_center.z + point.z / _scale
-			var nose := clampf((-gltf_z + 0.15) / 2.7, 0.0, 1.0) if use_ao else 0.5
-			colors.append(Color(ao, nose, 1.0, 1.0))
+			var gltf_pos := ao_center + point / _scale
+			var nose := clampf((-gltf_pos.z + 0.15) / 2.7, 0.0, 1.0) if use_ao else 0.5
+			var light := _light_at(gltf_pos) if use_ao else Vector2(0.35, 0.0)
+			colors.append(Color(ao, nose, light.x, light.y))
 			row.append(index)
 		grid.append(row)
 	for iu in steps_u:
@@ -437,55 +484,61 @@ static func _rect(image: Image, x: int, y: int, w: int, h: int, color: Color) ->
 
 
 static func _paint_panel(image: Image) -> void:
-	_fill(image, METAL)
-	_rect(image, 0, 0, 16, 1, METAL_DK)
-	_rect(image, 0, 15, 16, 1, METAL_DK)
-	_rect(image, 0, 0, 1, 16, METAL_DK)
-	_rect(image, 15, 0, 1, 16, METAL_DK)
-	_rect(image, 7, 1, 1, 14, METAL_MD)
+	_fill(image, BONE)
+	_rect(image, 0, 0, 16, 1, BONE_DK)
+	_rect(image, 0, 15, 16, 1, BONE_DK)
+	_rect(image, 0, 0, 1, 16, BONE_DK)
+	_rect(image, 15, 0, 1, 16, BONE_DK)
+	_rect(image, 0, 8, 16, 1, BONE_MD)
 	_px(image, 2, 2, RIVET)
 	_px(image, 13, 2, RIVET)
 	_px(image, 2, 13, RIVET)
 	_px(image, 13, 13, RIVET)
+	_px(image, 6, 4, WEAR)
+	_px(image, 7, 11, WEAR)
+	_px(image, 10, 5, BONE_MD)
 
 
 static func _paint_grate(image: Image) -> void:
-	_fill(image, METAL_DK)
-	_rect(image, 0, 0, 16, 2, METAL_MD)
-	_rect(image, 0, 14, 16, 2, METAL_MD)
-	_rect(image, 0, 0, 2, 16, METAL_MD)
-	_rect(image, 14, 0, 2, 16, METAL_MD)
+	_fill(image, FLOOR)
+	_rect(image, 0, 0, 16, 2, FLOOR_MD)
+	_rect(image, 0, 14, 16, 2, FLOOR_MD)
+	_rect(image, 0, 0, 2, 16, FLOOR_MD)
+	_rect(image, 14, 0, 2, 16, FLOOR_MD)
 	for i in [4, 5, 10, 11]:
-		_rect(image, 2, i, 12, 1, METAL_LT)
-		_rect(image, i, 2, 1, 12, METAL)
+		_rect(image, 2, i, 12, 1, Color("5a534a"))
+		_rect(image, i, 2, 1, 12, Color("2a2724"))
+	_px(image, 6, 7, WEAR)
+	_px(image, 9, 8, Color("121110"))
 
 
 static func _paint_hazard(image: Image) -> void:
 	for y in 16:
 		for x in 16:
 			var stripe := int((x + y) / 4) % 2 == 0
-			_px(image, x, y, HAZ if stripe else METAL_DK)
-	_rect(image, 0, 0, 16, 1, METAL_DK)
-	_rect(image, 0, 15, 16, 1, METAL_DK)
-	_rect(image, 0, 0, 1, 16, METAL_DK)
-	_rect(image, 15, 0, 1, 16, METAL_DK)
+			_px(image, x, y, ACCENT if stripe else FLOOR)
+	_rect(image, 0, 0, 16, 1, FLOOR)
+	_rect(image, 0, 15, 16, 1, FLOOR)
 
 
 static func _paint_vent(image: Image) -> void:
-	_fill(image, METAL)
-	_rect(image, 0, 0, 16, 1, METAL_DK)
-	_rect(image, 0, 15, 16, 1, METAL_DK)
-	_rect(image, 0, 0, 1, 16, METAL_DK)
-	_rect(image, 15, 0, 1, 16, METAL_DK)
+	_fill(image, Color("8c8578"))
+	_rect(image, 0, 0, 16, 1, BONE_DK)
+	_rect(image, 0, 15, 16, 1, BONE_DK)
+	_rect(image, 0, 0, 1, 16, BONE_DK)
+	_rect(image, 15, 0, 1, 16, BONE_DK)
 	for y in [3, 6, 9, 12]:
-		_rect(image, 2, y, 12, 2, METAL_DK)
+		_rect(image, 2, y, 12, 2, Color("2c2926"))
+	_px(image, 4, 1, RIVET)
+	_px(image, 11, 14, RIVET)
 
 
 static func _paint_locker(image: Image) -> void:
 	_paint_panel(image)
-	_rect(image, 3, 2, 1, 12, METAL_DK)
-	_rect(image, 12, 6, 2, 4, METAL_LT)
+	_rect(image, 2, 2, 1, 12, BONE_DK)
+	_rect(image, 12, 6, 2, 4, ACCENT)
 	_px(image, 12, 7, Color("c4a15a"))
+	_px(image, 8, 12, WEAR)
 
 
 static func _paint_crate(image: Image) -> void:
@@ -494,23 +547,25 @@ static func _paint_crate(image: Image) -> void:
 	_rect(image, 0, 14, 16, 2, CRATE_DK)
 	_rect(image, 0, 0, 2, 16, CRATE_DK)
 	_rect(image, 14, 0, 2, 16, CRATE_DK)
+	_rect(image, 0, 7, 16, 2, CRATE_DK)
 	for i in 12:
-		_px(image, 2 + i, 2 + i, CRATE_DK)
-		_px(image, 13 - i, 2 + i, CRATE_DK)
+		_px(image, 3 + i, 3, Color("a07a52"))
+	_px(image, 5, 10, Color("6a4e32"))
+	_px(image, 11, 11, Color("6a4e32"))
 
 
 static func _paint_ceiling(image: Image) -> void:
 	_paint_panel(image)
-	_rect(image, 6, 6, 4, 4, Color("f2efe4"))
-	_rect(image, 7, 7, 2, 2, Color("fff8e8"))
+	_rect(image, 6, 6, 4, 4, Color("efe4cc"))
+	_rect(image, 7, 7, 2, 2, Color("fff1d0"))
 
 
 static func _paint_bezel(image: Image) -> void:
-	_fill(image, Color("1a1d22"))
-	_rect(image, 0, 0, 16, 2, Color("3a3e46"))
-	_rect(image, 0, 14, 16, 2, Color("0c0e11"))
-	_px(image, 2, 3, Color("6a6e76"))
-	_px(image, 13, 3, Color("6a6e76"))
+	_fill(image, Color("241f1c"))
+	_rect(image, 0, 0, 16, 2, Color("4a433c"))
+	_rect(image, 0, 14, 16, 2, Color("120f0d"))
+	_px(image, 2, 3, Color("6e655c"))
+	_px(image, 13, 3, Color("6e655c"))
 
 
 static func _paint_bunk(image: Image) -> void:
@@ -519,5 +574,14 @@ static func _paint_bunk(image: Image) -> void:
 	_rect(image, 0, 15, 16, 1, BUNK_DK)
 	_rect(image, 0, 0, 1, 16, BUNK_DK)
 	_rect(image, 15, 0, 1, 16, BUNK_DK)
-	_rect(image, 1, 7, 14, 2, BUNK_DK)
-	_rect(image, 1, 8, 14, 1, Color("7d8794"))
+	_rect(image, 1, 6, 14, 3, CLOTH)
+	_rect(image, 1, 8, 14, 1, Color("c4a574"))
+	_px(image, 4, 12, WEAR)
+
+
+static func _paint_lamp(image: Image) -> void:
+	_fill(image, Color("3a342c"))
+	_rect(image, 2, 2, 12, 12, Color("f0d7a4"))
+	_rect(image, 5, 5, 6, 6, Color("fff4d4"))
+	_rect(image, 0, 0, 16, 1, Color("2a241c"))
+	_rect(image, 0, 15, 16, 1, Color("2a241c"))

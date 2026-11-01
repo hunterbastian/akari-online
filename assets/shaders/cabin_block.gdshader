@@ -34,10 +34,15 @@ void fragment() {
 		shade = 0.55;
 	}
 	vec3 col = tex * shade * v_ao;
-	// Window side a little brighter and cooler, the bay a touch warmer. Still flat.
-	vec3 warm = vec3(1.04, 1.0, 0.95);
-	vec3 cool = vec3(0.97, 1.015, 1.055);
-	col *= mix(warm, cool, v_nose) * mix(0.97, 1.06, v_nose);
+	// Flat zones, not light pools: window is brighter and cooler, lamps are warm,
+	// and the CRTs spill a little green onto whatever is next to them.
+	float warm = clamp(COLOR.b, 0.0, 1.0);
+	float crt = clamp(COLOR.a, 0.0, 1.0);
+	float zone = mix(0.56, 1.14, v_nose) * mix(0.78, 1.18, warm);
+	vec3 tint = mix(vec3(0.9, 0.87, 0.82), vec3(1.06, 0.97, 0.84), warm);
+	tint = mix(tint, vec3(0.84, 0.94, 1.06), v_nose * 0.6);
+	tint = mix(tint, vec3(0.72, 1.0, 0.78), crt * 0.42);
+	col *= zone * tint;
 	float core = smoothstep(0.78, 0.96, max(tex.r, max(tex.g, tex.b)));
 	col += vec3(1.0, 0.78, 0.45) * core * lamp;
 	ALBEDO = col;

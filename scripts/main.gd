@@ -28,7 +28,7 @@ var _planet_radius := 24.0
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
 	var user_args := OS.get_cmdline_user_args()
-	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film")
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -110,7 +110,9 @@ func _ready() -> void:
 		var args := OS.get_cmdline_user_args()
 		# The film tour opens on the exterior. Walk and the inventory tour start inside.
 		if not args.has("--film"):
-			var tour_view := "aisle" if args.has("--walk") else "rear"
+			var tour_view := "rear"
+			if args.has("--walk"):
+				tour_view = "aisle"
 			ship.start_cabin_view(tour_view)
 		var tour = load("res://scripts/flight/cabin_tour.gd").new()
 		tour.name = "CabinTour"
@@ -380,6 +382,16 @@ func dev_teleport(spec: String) -> String:
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("storage")
 		return "tp storage"
+	if key == "living":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("living")
+		return "tp living"
+	if key == "bench":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("bench")
+		return "tp bench"
 	return "unknown tp target '%s'" % key
 
 
@@ -459,6 +471,10 @@ func _read_cli() -> void:
 		_cabin_view = "locker"
 	elif at == "crates":
 		_cabin_view = "crates"
+	elif at == "living":
+		_cabin_view = "living"
+	elif at == "bench":
+		_cabin_view = "bench"
 	else:
 		_cabin_view = ""
 
