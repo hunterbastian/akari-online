@@ -8,6 +8,7 @@ uniform sampler2D albedo_tex : filter_nearest, repeat_enable;
 uniform float lamp = 0.0;
 
 varying float v_ao;
+varying float v_nose;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -18,6 +19,7 @@ const mat4 BAYER = mat4(
 
 void vertex() {
 	v_ao = COLOR.r;
+	v_nose = COLOR.g;
 }
 
 void fragment() {
@@ -32,6 +34,10 @@ void fragment() {
 		shade = 0.55;
 	}
 	vec3 col = tex * shade * v_ao;
+	// Window side a little brighter and cooler, the bay a touch warmer. Still flat.
+	vec3 warm = vec3(1.04, 1.0, 0.95);
+	vec3 cool = vec3(0.97, 1.015, 1.055);
+	col *= mix(warm, cool, v_nose) * mix(0.97, 1.06, v_nose);
 	float core = smoothstep(0.78, 0.96, max(tex.r, max(tex.g, tex.b)));
 	col += vec3(1.0, 0.78, 0.45) * core * lamp;
 	ALBEDO = col;

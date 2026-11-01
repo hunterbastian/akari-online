@@ -401,7 +401,9 @@ static func _face(verts: PackedVector3Array, normals: PackedVector3Array, uvs: P
 			var u := (tu + half_u) / cell if not stretch else (tu + half_u) / maxf(half_u * 2.0, 0.001)
 			var v := (half_v - tv) / cell if not stretch else (half_v - tv) / maxf(half_v * 2.0, 0.001)
 			uvs.append(Vector2(u, v))
-			colors.append(Color(ao, ao, ao, 1.0))
+			var gltf_z := ao_center.z + point.z / _scale
+			var nose := clampf((-gltf_z + 0.15) / 2.7, 0.0, 1.0) if use_ao else 0.5
+			colors.append(Color(ao, nose, 1.0, 1.0))
 			row.append(index)
 		grid.append(row)
 	for iu in steps_u:

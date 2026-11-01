@@ -7,12 +7,31 @@ var _time := 0.0
 var _fired := {}
 var _ship: Node
 var _walk := false
+var _film := false
+var _seated := false
+var _outside := false
+var _inside := false
 
 const _WALK := [
 	[0.0, 0.0, -0.45, 0.0, -0.06],
 	[3.5, 0.0, -1.15, 0.0, -0.02],
 	[6.5, 0.08, -1.55, 0.2, 0.02],
 	[10.0, -0.05, -1.05, -0.15, -0.08],
+]
+
+const _ORBIT := 14.0
+const _SIT := 11.4
+const _FLY := 15.6
+const _END := 36.5
+
+## Local times, after the exterior orbit. Rear bay, then up the aisle to the seat.
+const _CABIN := [
+	[0.0, 0.0, -0.2, PI, -0.16],
+	[2.2, 0.0, -0.22, PI, -0.06],
+	[4.4, 0.0, -0.32, 0.05, -0.08],
+	[7.2, 0.0, -0.68, -0.55, -0.18],
+	[9.2, 0.05, -1.05, 0.2, -0.04],
+	[11.2, 0.0, -1.24, 0.0, -0.12],
 ]
 
 const _KEYS := [
@@ -31,6 +50,12 @@ const _KEYS := [
 func setup(ship: Node) -> void:
 	_ship = ship
 	_walk = OS.get_cmdline_user_args().has("--walk")
+	_film = OS.get_cmdline_user_args().has("--film")
+	if _film:
+		var camera := _camera()
+		if camera:
+			camera.held = true
+			camera.current = true
 
 
 func _process(delta: float) -> void:
@@ -41,6 +66,9 @@ func _process(delta: float) -> void:
 	if cabin == null or cabin.walker == null or cabin.inventory == null:
 		return
 	var walker = cabin.walker
+	if _film:
+		_play_film(cabin, walker, delta)
+		return
 	walker.locked = false
 	if walker.eye:
 		walker.eye.current = true
@@ -87,6 +115,85 @@ func _once(cabin, at: float, id: String, action: Callable) -> void:
 	action.call()
 
 
+func _camera() -> Camera3D:
+	return _ship.get("_chase") as Camera3D
+
+
+func _play_film(cabin, walker, delta: float) -> void:
+	var camera := _camera()
+	if _time < _ORBIT:
+		_orbit(camera)
+	elif not _inside:
+		_inside = true
+		if camera:
+			camera.current = false
+		_ship.start_cabin_view("rear")
+	else:
+		var local := _time - _ORBIT
+		if local < _SIT:
+			walker.locked = true
+			if walker.eye:
+				walker.eye.current = true
+			_glide_keys(cabin, walker, delta, _CABIN, local)
+		elif not _seated:
+			_seated = true
+			cabin.snap_view("seat")
+			if walker.eye:
+				walker.eye.current = true
+		elif local < _FLY:
+			if walker.eye:
+				walker.eye.current = true
+				var u := clampf((local - _SIT) / (_FLY - _SIT), 0.0, 1.0)
+				walker.rotation.y = sin(u * TAU) * 0.28
+				walker.pitch = -0.12 + sin(u * PI) * 0.05
+				walker.eye.rotation.x = walker.pitch
+		elif not _outside:
+			_outside = true
+			if _ship.has_method("dev_leave_cabin"):
+				_ship.dev_leave_cabin()
+			_ship.demo_fly = true
+			if camera:
+				var forward: Vector3 = -_ship.global_basis.z
+				camera.global_position = _ship.global_position + Vector3.UP * 1.15 - forward * 7.6
+				camera.look_at(_ship.global_position + forward * 18.0, Vector3.UP)
+				camera.held = false
+				camera.current = true
+				camera.fov = 52.0
+	if _time >= _END:
+		get_tree().quit()
+
+
+func _orbit(camera: Camera3D) -> void:
+	if camera == null:
+		return
+	camera.held = true
+	camera.current = true
+	var u := clampf(_time / _ORBIT, 0.0, 1.0)
+	u = u * u * (3.0 - 2.0 * u)
+	# Behind the ship (Mina beyond the hull), around the side, to a sunlit front quarter.
+	var angle := lerpf(0.15, 2.45, u)
+	var radius := lerpf(12.0, 8.4, u)
+	var height := 1.35 + sin(u * PI) * 1.7
+	var forward: Vector3 = -_ship.global_basis.z
+	var right: Vector3 = _ship.global_basis.x
+	var offset: Vector3 = (-forward * cos(angle) + right * sin(angle)) * radius + Vector3.UP * height
+	camera.global_position = _ship.global_position + offset
+	camera.look_at(_ship.global_position + forward * 0.8 + Vector3.UP * 0.25, Vector3.UP)
+	camera.fov = lerpf(40.0, 32.0, u)
+
+
+func _glide_keys(cabin, walker, delta: float, keys: Array, time: float) -> void:
+	var pose := _sample(keys, time)
+	var target: Vector3 = cabin._v(float(pose[0]), 0.0, float(pose[1]))
+	var blend := 1.0 - exp(-3.2 * delta)
+	walker.position.x = lerpf(walker.position.x, target.x, blend)
+	walker.position.z = lerpf(walker.position.z, target.z, blend)
+	walker.rotation.y = lerp_angle(walker.rotation.y, float(pose[2]), blend)
+	walker.pitch = lerpf(walker.pitch, float(pose[3]), blend)
+	if walker.eye:
+		walker.eye.rotation.x = walker.pitch
+
+
 func _glide(cabin, walker, delta: float) -> void:
 	var pose := _pose(_time)
 	var target: Vector3 = cabin._v(float(pose[0]), 0.0, float(pose[1]))
@@ -101,6 +208,10 @@ func _glide(cabin, walker, delta: float) -> void:
 
 func _pose(time: float) -> Array:
 	var keys: Array = _WALK if _walk else _KEYS
+	return _sample(keys, time)
+
+
+func _sample(keys: Array, time: float) -> Array:
 	var prev: Array = keys[0]
 	for i in keys.size():
 		var row: Array = keys[i]

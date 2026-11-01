@@ -27,7 +27,8 @@ var _planet_radius := 24.0
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
-	_tour = OS.get_cmdline_user_args().has("--tour") or OS.get_cmdline_user_args().has("--walk")
+	var user_args := OS.get_cmdline_user_args()
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -69,7 +70,7 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
-	camera.set_meta("title_hold", not _shot)
+	camera.set_meta("title_hold", not _shot and not _tour)
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
@@ -106,16 +107,16 @@ func _ready() -> void:
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
 	if _tour:
-		var tour_view := "aisle" if OS.get_cmdline_user_args().has("--walk") else "rear"
-		ship.start_cabin_view(tour_view)
+		var args := OS.get_cmdline_user_args()
+		# The film tour opens on the exterior. Walk and the inventory tour start inside.
+		if not args.has("--film"):
+			var tour_view := "aisle" if args.has("--walk") else "rear"
+			ship.start_cabin_view(tour_view)
 		var tour = load("res://scripts/flight/cabin_tour.gd").new()
 		tour.name = "CabinTour"
 		add_child(tour)
 		tour.setup(ship)
 	_add_sun_glare(camera, sun_dir)
-	var grade = load("res://scripts/ui/cabin_grade.gd").new()
-	grade.name = "CabinGrade"
-	_world.add_child(grade)
 	_add_dither()
 	_update_bounce()
 	if OS.get_environment("AKARI_CONSOLE") == "1":
@@ -182,6 +183,11 @@ func _add_dither() -> void:
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var material := ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/film_dither.gdshader")
+	material.set_shader_parameter("dither_strength", 0.01)
+	material.set_shader_parameter("grain_strength", 0.014)
+	material.set_shader_parameter("quantize_steps", 36.0)
+	material.set_shader_parameter("vignette", 0.14)
+	material.set_shader_parameter("ca_strength", _PostProfile.film_ca())
 	rect.material = material
 	layer.add_child(rect)
 	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
@@ -288,6 +294,19 @@ func _frame_closeup(ship: Node3D, camera: Camera3D) -> void:
 	)
 
 
+func _frame_exterior(ship: Node3D) -> void:
+	var camera := ship.get("_chase") as Camera3D
+	if camera == null:
+		return
+	camera.held = true
+	camera.current = true
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	camera.fov = 34.0
+	camera.global_position = ship.global_position - forward * 8.2 + right * 6.4 + Vector3.UP * 2.2
+	camera.look_at(ship.global_position + forward * 5.5 + Vector3.UP * 0.3, Vector3.UP)
+
+
 func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
 	var forward := -ship.global_basis.z
 	var right := ship.global_basis.x
@@ -313,11 +332,13 @@ func dev_teleport(spec: String) -> String:
 		_ship.global_position = at
 		return "tp %s" % str(at)
 	var key := parts[0].to_lower()
-	if key == "planet":
+	if key == "planet" or key == "exterior":
 		_ship.dev_leave_cabin()
 		_ship.velocity = Vector3.ZERO
 		_place_for_shot(_ship, _planet)
-		return "tp planet"
+		if key == "exterior":
+			_frame_exterior(_ship)
+		return "tp " + key
 	if key == "moon":
 		return _tp_moon()
 	if key == "ship":
@@ -460,25 +481,28 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	environment.ambient_light_color = Color(0.36, 0.5, 0.72)
 	environment.ambient_light_energy = 0.045
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	environment.tonemap_mode = Environment.TONE_MAPPER_AGX
-	environment.tonemap_exposure = 1.0
-	environment.tonemap_white = 6.0
+	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	environment.tonemap_exposure = 1.04
+	environment.tonemap_white = 8.5
 
-	# Bloom only well above white: the sun, its glare and the engines. The frame itself stays crisp.
-	environment.glow_enabled = true
+	# Halation on the sun and bright highlights. Low quality skips it.
+	var low := not med and not high
+	environment.glow_enabled = not low
 	environment.glow_normalized = false
-	environment.glow_intensity = 0.65
-	environment.glow_strength = 0.9
-	environment.glow_bloom = 0.0
-	environment.glow_hdr_threshold = 2.4
-	environment.glow_hdr_scale = 2.2
-	environment.glow_hdr_luminance_cap = 24.0
+	environment.glow_intensity = 0.85 if high else 0.38
+	environment.glow_strength = 1.05 if high else 0.55
+	environment.glow_bloom = 0.06 if high else 0.0
+	environment.glow_hdr_threshold = 1.08 if high else 1.65
+	environment.glow_hdr_scale = 2.0
+	environment.glow_hdr_luminance_cap = 16.0
 	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	environment.set_glow_level(0, 0.0)
-	environment.set_glow_level(1, 0.6)
-	environment.set_glow_level(2, 0.8)
-	environment.set_glow_level(3, 0.35)
-	environment.set_glow_level(4, 0.12)
+	environment.set_glow_level(1, 0.35 if high else 0.15)
+	environment.set_glow_level(2, 0.55 if high else 0.3)
+	environment.set_glow_level(3, 0.7 if high else 0.2)
+	environment.set_glow_level(4, 0.45 if high else 0.0)
+	environment.set_glow_level(5, 0.22 if high else 0.0)
+	environment.set_glow_level(6, 0.08 if high else 0.0)
 
 	environment.ssao_enabled = med
 	environment.ssao_radius = 1.1
@@ -613,10 +637,10 @@ func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:
 		adapter = str(RenderingServer.get_video_adapter_name())
 	print("RENDER adapter=", adapter)
 	print(
-		"FEATURES quality=%s agx=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
+		"FEATURES quality=%s aces=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
 		% [
 			_PostProfile.quality(),
-			environment.tonemap_mode == Environment.TONE_MAPPER_AGX,
+			environment.tonemap_mode == Environment.TONE_MAPPER_ACES,
 			environment.glow_enabled,
 			environment.ssao_enabled,
 			environment.ssr_enabled,

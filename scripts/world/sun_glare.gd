@@ -12,6 +12,7 @@ var _planet_radius := 24.0
 var _root: Control
 var _core: TextureRect
 var _streak: TextureRect
+var _dirt: TextureRect
 var _shafts: Array[TextureRect] = []
 var _ghosts: Array[TextureRect] = []
 var _ghost_spec := [
@@ -40,6 +41,7 @@ func setup(view: SubViewport, sun_position: Vector3, planet_center: Vector3, pla
 	_core = _sprite(_radial(Color(1.0, 0.94, 0.84, 0.5), Color(0.55, 0.7, 1.0, 0.0), 0.0), additive)
 	if high:
 		_streak = _sprite(_radial(Color(0.78, 0.88, 1.0, 0.55), Color(0.4, 0.6, 1.0, 0.0), 0.0), additive)
+		_dirt = _sprite(_dirt_map(), additive)
 		for i in 6:
 			var shaft := _sprite(_linear_fade(Color(1.0, 0.95, 0.85, 0.07)), additive)
 			shaft.pivot_offset = Vector2.ZERO
@@ -77,6 +79,37 @@ func _radial(inner: Color, outer: Color, ring: float) -> GradientTexture2D:
 	texture.width = 128
 	texture.height = 128
 	return texture
+
+
+func _dirt_map() -> ImageTexture:
+	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var specks: Array = [
+		[18, 22, 7, Color(0.85, 0.78, 0.62, 0.22)],
+		[40, 16, 4, Color(0.7, 0.78, 0.9, 0.16)],
+		[46, 38, 9, Color(0.9, 0.84, 0.7, 0.14)],
+		[24, 44, 5, Color(0.75, 0.8, 0.9, 0.12)],
+		[12, 36, 3, Color(1.0, 0.95, 0.85, 0.18)],
+	]
+	for speck in specks:
+		var cx: int = speck[0]
+		var cy: int = speck[1]
+		var radius: int = speck[2]
+		var tint: Color = speck[3]
+		for y in range(cy - radius, cy + radius + 1):
+			for x in range(cx - radius, cx + radius + 1):
+				if x < 0 or y < 0 or x > 63 or y > 63:
+					continue
+				var fall := 1.0 - Vector2(x - cx, y - cy).length() / float(radius)
+				if fall <= 0.0:
+					continue
+				var pixel := image.get_pixel(x, y)
+				pixel.r = maxf(pixel.r, tint.r)
+				pixel.g = maxf(pixel.g, tint.g)
+				pixel.b = maxf(pixel.b, tint.b)
+				pixel.a = maxf(pixel.a, tint.a * fall)
+				image.set_pixel(x, y, pixel)
+	return ImageTexture.create_from_image(image)
 
 
 func _linear_fade(color: Color) -> GradientTexture2D:
@@ -127,6 +160,10 @@ func _process(delta: float) -> void:
 	if _streak:
 		var streak_w := unit * (0.28 if in_cabin else 1.5)
 		_place(_streak, screen, Vector2(streak_w, unit * 0.018), _visibility * 0.9)
+	if _dirt:
+		_dirt.visible = not in_cabin
+		if not in_cabin:
+			_place(_dirt, screen, Vector2.ONE * unit * 0.55, _visibility * 0.22)
 	if in_cabin:
 		for shaft in _shafts:
 			shaft.visible = false

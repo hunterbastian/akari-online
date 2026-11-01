@@ -5,7 +5,8 @@ extends RefCounted
 
 const DITHER_ENABLED := true
 ## Internal 3D resolution as a fraction of the window. UI stays at native size.
-const RENDER_SCALE := 0.7
+## The debug console `renderscale` overrides this at runtime.
+const RENDER_SCALE := 0.6
 
 ## Runtime overrides from the debug console. They survive a scene reload.
 static var runtime_quality := ""
@@ -62,3 +63,12 @@ static func high_quality() -> bool:
 
 static func detailed() -> bool:
 	return quality() != "low"
+
+
+## Edge chromatic aberration. Off on low so phones only pay for the grade.
+static func film_ca() -> float:
+	if quality() == "high":
+		return 0.002
+	if quality() == "med":
+		return 0.001
+	return 0.0
