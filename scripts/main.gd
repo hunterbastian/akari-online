@@ -344,6 +344,11 @@ func dev_teleport(spec: String) -> String:
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("dash")
 		return "tp dash"
+	if key == "crates":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("crates")
+		return "tp crates"
 	if key == "locker":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
@@ -431,6 +436,8 @@ func _read_cli() -> void:
 		_cabin_view = "storage"
 	elif at == "locker":
 		_cabin_view = "locker"
+	elif at == "crates":
+		_cabin_view = "crates"
 	else:
 		_cabin_view = ""
 

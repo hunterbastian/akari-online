@@ -15,6 +15,10 @@ static func apply(cabin) -> void:
 	_seat(cabin, white, cloth, dark)
 	_dash(cabin, white, dark)
 	_props(cabin, white, dark, cloth)
+	_Blocks.contact(cabin, Vector3(0.0, 0.0, -1.45), Vector2(0.62, 0.7))
+	_Blocks.contact(cabin, Vector3(-0.68, 0.0, -1.62), Vector2(0.26, 0.26))
+	_Blocks.contact(cabin, Vector3(-0.58, 0.0, -1.42), Vector2(0.18, 0.18))
+	_Blocks.bake()
 	_lights(cabin)
 
 
@@ -57,8 +61,8 @@ static func _ceiling_lights(cabin) -> void:
 
 static func _seat(cabin, white: Material, cloth: Material, dark: Material) -> void:
 	# Cushion forward of the hips. Backrest behind the eyes so it cannot cut the glass.
-	_Blocks.retile(cabin._box("Seat", cabin._v(0.0, -0.24, -1.52), cabin._v(0.5, 0.12, 0.42), cloth, false), "bunk")
-	_Blocks.retile(cabin._box("Backrest", cabin._v(0.0, 0.08, -1.08), cabin._v(0.46, 0.62, 0.07), cloth, false), "bunk")
+	_Blocks.retile(cabin._box("Seat", cabin._v(0.0, -0.24, -1.52), cabin._v(0.5, 0.12, 0.42), cloth, false), "bunk", cabin._high)
+	_Blocks.retile(cabin._box("Backrest", cabin._v(0.0, 0.08, -1.08), cabin._v(0.46, 0.62, 0.07), cloth, false), "bunk", cabin._high)
 	_Blocks.retile(cabin._box("Headrest", cabin._v(0.0, 0.46, -1.06), cabin._v(0.28, 0.14, 0.06), cloth, false), "bunk")
 	var left: MeshInstance3D = cabin._box("HarnessL", cabin._v(-0.1, 0.02, -1.28), cabin._v(0.025, 0.48, 0.018), dark, false)
 	left.rotation.x = 0.35
@@ -77,7 +81,7 @@ static func _seat(cabin, white: Material, cloth: Material, dark: Material) -> vo
 
 static func _dash(cabin, white: Material, dark: Material) -> void:
 	# Slim console. Switches sit beside the terminal so they don't cover the glass.
-	_Blocks.retile(cabin._box("Dash", cabin._v(0.0, -0.08, -2.28), cabin._v(1.32, 0.18, 0.58), white, false), "panel")
+	_Blocks.retile(cabin._box("Dash", cabin._v(0.0, -0.08, -2.28), cabin._v(1.32, 0.18, 0.58), white, false), "panel", cabin._high)
 	_Blocks.retile(cabin._box("DashLip", cabin._v(0.0, 0.02, -2.08), cabin._v(1.2, 0.035, 0.16), white, false), "panel")
 	_Blocks.retile(cabin._box("DashRail", cabin._v(0.0, 0.0, -2.5), cabin._v(1.28, 0.02, 0.03), dark, false), "bezel")
 	for i in 4:
@@ -132,6 +136,22 @@ static func _flat(color: Color) -> StandardMaterial3D:
 	return mat
 
 
-static func _lights(_cabin) -> void:
-	# Face shade and corner AO live in the block shader. No light pools.
-	pass
+static func _lights(cabin) -> void:
+	# One hard ceiling shadow on high quality. Low and med stay on AO and contact blobs.
+	if not cabin._high:
+		return
+	var spot := SpotLight3D.new()
+	spot.name = "CeilShadow"
+	spot.position = cabin._v(0.0, 1.9, -1.15)
+	spot.light_color = Color(1.0, 0.98, 0.94)
+	spot.light_energy = 0.8
+	spot.spot_range = cabin._scale * 5.0
+	spot.spot_angle = 62.0
+	spot.spot_attenuation = 0.05
+	spot.shadow_enabled = true
+	spot.shadow_bias = 0.04
+	spot.shadow_normal_bias = 0.8
+	spot.shadow_blur = 0.0
+	spot.light_specular = 0.0
+	cabin.add_child(spot)
+	spot.look_at(cabin.to_global(cabin._v(0.0, -0.2, -1.15)), Vector3.RIGHT)

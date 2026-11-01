@@ -5,6 +5,7 @@ extends RefCounted
 ## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel.
 
 const _SHADE := preload("res://assets/shaders/cabin_block.gdshader")
+const _SHADOW := preload("res://assets/shaders/cabin_shadow.gdshader")
 
 const CELL := 0.5
 
@@ -22,11 +23,15 @@ const BUNK_DK := Color("3c424c")
 static var _scale := 1.0
 static var _tex: Dictionary = {}
 static var _mats: Dictionary = {}
-static var _mesh_cache: Dictionary = {}
+static var _boxes: Array = []
+static var _records: Array = []
+static var _shadow_mat: ShaderMaterial
 
 
 static func prepare(scale: float) -> void:
 	_scale = scale
+	_boxes.clear()
+	_records.clear()
 
 
 static func texture(kind: String) -> Texture2D:
@@ -68,25 +73,76 @@ static func material(kind: String) -> ShaderMaterial:
 	return mat
 
 
-static func place(cabin, node_name: String, center: Vector3, size: Vector3, kind: String) -> MeshInstance3D:
+static func place(cabin, node_name: String, center: Vector3, size: Vector3, kind: String, cast_shadow: bool = false) -> MeshInstance3D:
+	var box_id := _stamp(center, size)
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = node_name
-	mesh_instance.mesh = _unit_box(cabin._v(size.x, size.y, size.z), false)
+	mesh_instance.mesh = _unit_box(cabin._v(size.x, size.y, size.z), false, center, size, box_id)
 	mesh_instance.position = cabin._v(center.x, center.y, center.z)
 	mesh_instance.material_override = material(kind)
+	mesh_instance.layers = cabin.INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	cabin.add_child(mesh_instance)
+	_records.append({
+		"node": mesh_instance,
+		"size": cabin._v(size.x, size.y, size.z),
+		"center": center,
+		"extent": size,
+		"stretch": false,
+		"box": box_id,
+	})
+	return mesh_instance
+
+
+static func retile(node: MeshInstance3D, kind: String, cast_shadow: bool = false) -> void:
+	var box := node.mesh as BoxMesh
+	if box == null:
+		return
+	var extent := box.size / _scale
+	var center := node.position / _scale
+	var box_id := _stamp(center, extent)
+	node.mesh = _unit_box(box.size, false, center, extent, box_id)
+	node.material_override = material(kind)
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_records.append({
+		"node": node,
+		"size": box.size,
+		"center": center,
+		"extent": extent,
+		"stretch": false,
+		"box": box_id,
+	})
+
+
+static func bake() -> void:
+	for rec in _records:
+		var record: Dictionary = rec
+		var node := record["node"] as MeshInstance3D
+		if node == null:
+			continue
+		var local_size: Vector3 = record["size"]
+		var center: Vector3 = record["center"]
+		var extent: Vector3 = record["extent"]
+		node.mesh = _unit_box(local_size, bool(record["stretch"]), center, extent, int(record["box"]))
+
+
+static func contact(cabin, center: Vector3, footprint: Vector2) -> void:
+	if _shadow_mat == null:
+		_shadow_mat = ShaderMaterial.new()
+		_shadow_mat.shader = _SHADOW
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "Contact"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(footprint.x, footprint.y) * cabin._scale
+	mesh_instance.mesh = quad
+	mesh_instance.position = cabin._v(center.x, -0.388, center.z)
+	mesh_instance.rotation.x = -PI * 0.5
+	mesh_instance.material_override = _shadow_mat
 	mesh_instance.layers = cabin.INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	cabin.add_child(mesh_instance)
-	return mesh_instance
-
-
-static func retile(node: MeshInstance3D, kind: String) -> void:
-	var box := node.mesh as BoxMesh
-	if box == null:
-		return
-	node.mesh = _unit_box(box.size, false)
-	node.material_override = material(kind)
 
 
 static func monitor_frame(parent: Node3D, size: Vector2, border: float, depth: float, layer: int) -> void:
@@ -106,14 +162,16 @@ static func dress(cabin) -> void:
 	_walls(cabin, cabin._high)
 	_ceiling(cabin, cabin._high)
 	_furniture(cabin)
+	bake()
 	cabin._glow("BayStrip", cabin._v(0.0, 1.22, 0.1), cabin._v(0.62, 0.035, 0.025), Color(0.45, 0.9, 1.05))
 
 
 static func _retile_shell(cabin) -> void:
 	_retile_named(cabin, "Floor", "bezel")
-	_retile_named(cabin, "WallL", "panel")
-	_retile_named(cabin, "WallR", "panel")
-	_retile_named(cabin, "WallRear", "panel")
+	var shade_cast: bool = cabin._high
+	_retile_named(cabin, "WallL", "panel", shade_cast)
+	_retile_named(cabin, "WallR", "panel", shade_cast)
+	_retile_named(cabin, "WallRear", "panel", shade_cast)
 	_retile_named(cabin, "CeilingRear", "ceiling")
 	_retile_named(cabin, "CeilingL", "ceiling")
 	_retile_named(cabin, "CeilingR", "ceiling")
@@ -122,10 +180,10 @@ static func _retile_shell(cabin) -> void:
 	_retile_named(cabin, "DoorBar", "bezel")
 
 
-static func _retile_named(cabin, node_name: String, kind: String) -> void:
+static func _retile_named(cabin, node_name: String, kind: String, cast_shadow: bool = false) -> void:
 	var node := cabin.get_node_or_null(NodePath(node_name)) as MeshInstance3D
 	if node:
-		retile(node, kind)
+		retile(node, kind, cast_shadow)
 
 
 static func _floor(cabin) -> void:
@@ -161,7 +219,7 @@ static func _walls(cabin, detailed: bool) -> void:
 				elif yi == 0 and zi % 2 == 0:
 					kind = "hazard"
 				var center_x := sign * (0.99 - depth * 0.5)
-				place(cabin, "Wall%d_%d_%d" % [si, zi, yi], Vector3(center_x, y, z), Vector3(depth, 0.5, 0.5), kind)
+				place(cabin, "Wall%d_%d_%d" % [si, zi, yi], Vector3(center_x, y, z), Vector3(depth, 0.5, 0.5), kind, cabin._high)
 
 
 static func _blocked(sign: float, y: float, z: float) -> bool:
@@ -198,15 +256,21 @@ static func _ceiling(cabin, detailed: bool) -> void:
 
 static func _furniture(cabin) -> void:
 	# Lockers flank the bay door. Two 0.5m bays stacked read as one column.
-	place(cabin, "LockerL", Vector3(-0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker")
-	place(cabin, "LockerR", Vector3(0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker")
+	var shade_cast: bool = cabin._high
+	place(cabin, "LockerL", Vector3(-0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker", shade_cast)
+	place(cabin, "LockerR", Vector3(0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker", shade_cast)
+	contact(cabin, Vector3(-0.72, 0.0, -0.15), Vector2(0.72, 0.72))
+	contact(cabin, Vector3(0.72, 0.0, -0.15), Vector2(0.72, 0.72))
 	# Tucked on the left wall, aft of the aisle camera, so the forward view stays open.
-	place(cabin, "CrateL", Vector3(-0.8, -0.28, -0.42), Vector3(0.3, 0.24, 0.3), "crate")
-	place(cabin, "CrateA", Vector3(0.72, -0.15, -0.62), Vector3(0.5, 0.5, 0.5), "crate")
-	place(cabin, "CrateB", Vector3(0.72, 0.35, -0.62), Vector3(0.5, 0.5, 0.5), "crate")
-	place(cabin, "BunkBase", Vector3(0.72, -0.32, -1.42), Vector3(0.5, 0.16, 1.0), "bezel")
-	place(cabin, "BunkPad", Vector3(0.72, -0.16, -1.42), Vector3(0.48, 0.14, 0.96), "bunk")
-	place(cabin, "BunkPillow", Vector3(0.72, -0.06, -1.84), Vector3(0.42, 0.1, 0.24), "bunk")
+	place(cabin, "CrateL", Vector3(-0.8, -0.28, -0.42), Vector3(0.3, 0.24, 0.3), "crate", shade_cast)
+	contact(cabin, Vector3(-0.8, 0.0, -0.42), Vector2(0.28, 0.28))
+	place(cabin, "CrateA", Vector3(0.72, -0.15, -0.62), Vector3(0.5, 0.5, 0.5), "crate", shade_cast)
+	place(cabin, "CrateB", Vector3(0.72, 0.35, -0.62), Vector3(0.5, 0.5, 0.5), "crate", shade_cast)
+	contact(cabin, Vector3(0.72, 0.0, -0.62), Vector2(0.78, 0.78))
+	place(cabin, "BunkBase", Vector3(0.72, -0.32, -1.42), Vector3(0.5, 0.16, 1.0), "bezel", shade_cast)
+	place(cabin, "BunkPad", Vector3(0.72, -0.16, -1.42), Vector3(0.48, 0.14, 0.96), "bunk", shade_cast)
+	place(cabin, "BunkPillow", Vector3(0.72, -0.06, -1.84), Vector3(0.42, 0.1, 0.24), "bunk", shade_cast)
+	contact(cabin, Vector3(0.72, 0.0, -1.42), Vector2(0.72, 1.25))
 	# Wall rack on the left, inboard of the proud panels.
 	place(cabin, "RackBack", Vector3(-0.72, 0.78, -1.3), Vector3(0.06, 0.9, 0.7), "panel")
 	place(cabin, "RackLow", Vector3(-0.64, 0.48, -1.3), Vector3(0.14, 0.08, 0.66), "panel")
@@ -220,7 +284,7 @@ static func _furniture(cabin) -> void:
 static func _local_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, mat: Material, layer: int, stretch: bool) -> void:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = node_name
-	mesh_instance.mesh = _unit_box(size, stretch)
+	mesh_instance.mesh = _unit_box(size, stretch, Vector3.ZERO, Vector3.ZERO)
 	mesh_instance.position = pos
 	mesh_instance.material_override = mat
 	mesh_instance.layers = layer
@@ -229,50 +293,129 @@ static func _local_box(parent: Node3D, node_name: String, size: Vector3, pos: Ve
 	parent.add_child(mesh_instance)
 
 
-static func _unit_box(size: Vector3, stretch: bool) -> ArrayMesh:
-	var key := "%.4f|%.4f|%.4f|%s" % [size.x, size.y, size.z, "1" if stretch else "0"]
-	if _mesh_cache.has(key):
-		return _mesh_cache[key]
-	var box := BoxMesh.new()
-	box.size = size
-	var arrays: Array = box.surface_get_arrays(0)
-	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var uvs := PackedVector2Array()
-	uvs.resize(verts.size())
+static func _stamp(center: Vector3, size: Vector3) -> int:
+	_boxes.append({"c": center, "h": size * 0.5})
+	return _boxes.size() - 1
+
+
+static func _hits(point: Vector3, ignore: int) -> bool:
+	for i in _boxes.size():
+		if i == ignore:
+			continue
+		var box: Dictionary = _boxes[i]
+		var center: Vector3 = box["c"]
+		var half: Vector3 = box["h"]
+		if absf(point.x - center.x) <= half.x and absf(point.y - center.y) <= half.y and absf(point.z - center.z) <= half.z:
+			return true
+	return false
+
+
+static func _ao_level(gltf_pos: Vector3, normal: Vector3, ignore: int) -> float:
+	# Three-neighbor test just outside the face: two edges and the corner.
+	var origin := gltf_pos + normal * 0.06
+	var axis_a := Vector3(1.0, 0.0, 0.0)
+	var axis_b := Vector3(0.0, 0.0, 1.0)
+	if absf(normal.y) > 0.5:
+		axis_a = Vector3(1.0, 0.0, 0.0)
+		axis_b = Vector3(0.0, 0.0, 1.0)
+	elif absf(normal.x) > 0.5:
+		axis_a = Vector3(0.0, 1.0, 0.0)
+		axis_b = Vector3(0.0, 0.0, 1.0)
+	else:
+		axis_a = Vector3(1.0, 0.0, 0.0)
+		axis_b = Vector3(0.0, 1.0, 0.0)
+	var reach := 0.2
+	var side_a := _hits(origin + axis_a * reach, ignore) or _hits(origin - axis_a * reach, ignore)
+	var side_b := _hits(origin + axis_b * reach, ignore) or _hits(origin - axis_b * reach, ignore)
+	var corner := false
+	if not (side_a and side_b):
+		corner = _hits(origin + axis_a * reach + axis_b * reach, ignore) or _hits(origin + axis_a * reach - axis_b * reach, ignore) or _hits(origin - axis_a * reach + axis_b * reach, ignore) or _hits(origin - axis_a * reach - axis_b * reach, ignore)
+	var level := 0
+	if side_a:
+		level += 1
+	if side_b:
+		level += 1
+	if side_a and side_b:
+		level = 3
+	elif corner:
+		level += 1
+	# Something close along the face normal: under a desk, bunk, or shelf.
+	if _hits(gltf_pos + normal * 0.22, ignore) or _hits(gltf_pos + normal * 0.4, ignore):
+		level += 1
+	level = mini(level, 3)
+	if level <= 0:
+		return 1.0
+	if level == 1:
+		return 0.62
+	if level == 2:
+		return 0.42
+	return 0.28
+
+
+static func _unit_box(size: Vector3, stretch: bool, ao_center: Vector3 = Vector3.ZERO, ao_extent: Vector3 = Vector3.ZERO, ignore: int = -1) -> ArrayMesh:
+	var use_ao := ao_extent.length_squared() > 0.0001
 	var cell := maxf(CELL * _scale, 0.001)
-	var hx := size.x * 0.5
-	var hy := size.y * 0.5
-	var hz := size.z * 0.5
-	var sx := maxf(size.x, 0.001)
-	var sy := maxf(size.y, 0.001)
-	var sz := maxf(size.z, 0.001)
-	for i in verts.size():
-		var p := verts[i]
-		var n := normals[i]
-		var u := 0.0
-		var v := 0.0
-		if absf(n.x) > 0.5:
-			var ru := 1.0 if stretch else sz / cell
-			var rv := 1.0 if stretch else sy / cell
-			u = (p.z + hz) / sz * ru
-			v = (hy - p.y) / sy * rv
-		elif absf(n.y) > 0.5:
-			var ru2 := 1.0 if stretch else sx / cell
-			var rv2 := 1.0 if stretch else sz / cell
-			u = (p.x + hx) / sx * ru2
-			v = (hz - p.z) / sz * rv2
-		else:
-			var ru3 := 1.0 if stretch else sx / cell
-			var rv3 := 1.0 if stretch else sy / cell
-			u = (p.x + hx) / sx * ru3
-			v = (hy - p.y) / sy * rv3
-		uvs[i] = Vector2(u, v)
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	_face(verts, normals, uvs, colors, indices, size, Vector3(0, 1, 0), Vector3(1, 0, 0), Vector3(0, 0, -1), stretch, use_ao, ao_center, cell, ignore)
+	_face(verts, normals, uvs, colors, indices, size, Vector3(0, -1, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), stretch, use_ao, ao_center, cell, ignore)
+	_face(verts, normals, uvs, colors, indices, size, Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0), stretch, use_ao, ao_center, cell, ignore)
+	_face(verts, normals, uvs, colors, indices, size, Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0), stretch, use_ao, ao_center, cell, ignore)
+	_face(verts, normals, uvs, colors, indices, size, Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 1, 0), stretch, use_ao, ao_center, cell, ignore)
+	_face(verts, normals, uvs, colors, indices, size, Vector3(0, 0, -1), Vector3(-1, 0, 0), Vector3(0, 1, 0), stretch, use_ao, ao_center, cell, ignore)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_mesh_cache[key] = mesh
 	return mesh
+
+
+static func _face(verts: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array, size: Vector3, normal: Vector3, axis_u: Vector3, axis_v: Vector3, stretch: bool, use_ao: bool, ao_center: Vector3, cell: float, ignore: int) -> void:
+	var half_n := absf(size.dot(normal)) * 0.5
+	var half_u := absf(size.dot(axis_u)) * 0.5
+	var half_v := absf(size.dot(axis_v)) * 0.5
+	var step := cell * 0.5
+	var steps_u := 1 if stretch else maxi(1, int(ceil(maxf(half_u * 2.0, 0.001) / step)))
+	var steps_v := 1 if stretch else maxi(1, int(ceil(maxf(half_v * 2.0, 0.001) / step)))
+	var grid: Array = []
+	for iu in steps_u + 1:
+		var row: Array = []
+		var tu := lerpf(-half_u, half_u, float(iu) / float(steps_u))
+		for iv in steps_v + 1:
+			var tv := lerpf(-half_v, half_v, float(iv) / float(steps_v))
+			var point := normal * half_n + axis_u * tu + axis_v * tv
+			var ao := 1.0
+			if use_ao:
+				ao = _ao_level(ao_center + point / _scale, normal, ignore)
+			var index := verts.size()
+			verts.append(point)
+			normals.append(normal)
+			var u := (tu + half_u) / cell if not stretch else (tu + half_u) / maxf(half_u * 2.0, 0.001)
+			var v := (half_v - tv) / cell if not stretch else (half_v - tv) / maxf(half_v * 2.0, 0.001)
+			uvs.append(Vector2(u, v))
+			colors.append(Color(ao, ao, ao, 1.0))
+			row.append(index)
+		grid.append(row)
+	for iu in steps_u:
+		for iv in steps_v:
+			var a: int = grid[iu][iv]
+			var b: int = grid[iu + 1][iv]
+			var c: int = grid[iu + 1][iv + 1]
+			var d: int = grid[iu][iv + 1]
+			indices.append(a)
+			indices.append(c)
+			indices.append(b)
+			indices.append(a)
+			indices.append(d)
+			indices.append(c)
 
 
 static func _fill(image: Image, color: Color) -> void:

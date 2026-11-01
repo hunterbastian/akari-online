@@ -136,6 +136,8 @@ func snap_view(mode: String) -> void:
 		walker.snap(_v(-0.05, 0.0, -0.78), standing_eye, -0.06, 2.2)
 	elif mode == "rear":
 		walker.snap(_v(0.0, 0.0, -1.86), standing_eye, -0.18, PI)
+	elif mode == "crates":
+		walker.snap(_v(0.05, 0.0, -1.45), _scale * 1.35, -1.05, -2.45)
 	elif mode == "storage":
 		walker.snap(_v(-0.05, 0.0, -1.62), _scale * 0.88, -0.32, -2.2)
 	elif mode == "dash":

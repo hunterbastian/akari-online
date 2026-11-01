@@ -406,7 +406,9 @@ func _spawn(kind: String, local: Vector3, spawned: bool) -> void:
 	local = _cabin._v(gltf.x, gltf.y, gltf.z)
 	var nodes: Array = []
 	if kind == "crate":
-		nodes.append(_Blocks.place(_cabin, node_name, gltf, Vector3(0.5, 0.5, 0.5), "crate"))
+		nodes.append(_Blocks.place(_cabin, node_name, gltf, Vector3(0.5, 0.5, 0.5), "crate", _cabin._high))
+		_Blocks.contact(_cabin, Vector3(gltf.x, 0.0, gltf.z), Vector2(0.62, 0.62))
+		_Blocks.bake()
 	elif kind == "mug":
 		nodes.append(_cabin._cyl(node_name, local, 0.035, 0.07, Vector3.ZERO, _flat))
 	elif kind == "helmet":
