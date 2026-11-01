@@ -13,6 +13,7 @@ const _Plate := preload("res://scripts/ui/hud_plate.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
+const _Inv := preload("res://scripts/flight/cabin_inventory.gd")
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -44,6 +45,7 @@ var _whine_phase := 0.0
 var _step_acc := 0.0
 var _last_walk := Vector3.ZERO
 var _shot_hold := false
+var inventory
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -96,6 +98,10 @@ func build(scale: float, high_quality: bool) -> void:
 	_Blocks.dress(self)
 	_Detail.apply(self)
 	_build_walker()
+	inventory = _Inv.new()
+	inventory.name = "Inventory"
+	add_child(inventory)
+	inventory.setup(self)
 	_setup_audio()
 
 
@@ -121,13 +127,17 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 
 func snap_view(mode: String) -> void:
 	if mode == "seat":
-		walker.snap(seat_point, seated_eye, -0.1, 0.0)
+		walker.snap(seat_point, seated_eye, -0.12, 0.0)
+	elif mode == "locker":
+		walker.snap(_v(-0.05, 0.0, -0.78), standing_eye, -0.06, 2.2)
 	elif mode == "rear":
 		walker.snap(_v(0.0, 0.0, -1.86), standing_eye, -0.18, PI)
 	elif mode == "storage":
 		walker.snap(_v(-0.05, 0.0, -1.62), _scale * 0.88, -0.32, -2.2)
 	elif mode == "dash":
 		walker.snap(_v(0.0, 0.0, -1.2), _scale * 0.92, -0.42, 0.0)
+	elif mode == "floor":
+		walker.snap(_v(0.2, 0.0, -0.5), _scale * 1.05, -0.72, 1.05)
 	else:
 		walker.snap(aisle_point, standing_eye, -0.02, 0.0)
 
@@ -332,7 +342,7 @@ func _build_walker() -> void:
 		_aabb(_v(0.72, 0.0, -0.62), _v(0.55, 0.3, 0.55)),
 		_aabb(_v(0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
 		_aabb(_v(-0.72, 0.0, -0.15), _v(0.55, 0.3, 0.55)),
-		_aabb(_v(-0.55, 0.0, -0.62), _v(0.45, 0.3, 0.45)),
+		_aabb(_v(-0.8, 0.0, -0.42), _v(0.32, 0.3, 0.32)),
 		_aabb(_v(-0.82, 0.0, -2.02), _v(0.45, 0.3, 0.45)),
 		_aabb(_v(-1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),
 		_aabb(_v(1.05, 0.0, -1.35), _v(0.16, 0.2, 3.3)),

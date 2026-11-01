@@ -170,7 +170,7 @@ func _register_builtins() -> void:
 	register_command("help", _cmd_help, "List commands, or help <command>")
 	register_command("clear", _cmd_clear, "Clear the scrollback")
 	register_command("fps", _cmd_fps, "Toggle the FPS, draw-call and memory overlay")
-	register_command("tp", _cmd_tp, "tp <planet|moon|ship|cabin|aisle|rear|dash|storage> or tp x y z")
+	register_command("tp", _cmd_tp, "tp <planet|moon|ship|cabin|aisle|rear|dash|storage|locker> or tp x y z")
 	register_command("speed", _cmd_speed, "speed <mult>  flight speed multiplier")
 	register_command("timescale", _cmd_timescale, "timescale <x>  Engine.time_scale")
 	register_command("noclip", _cmd_freecam, "Toggle the free camera (WASD, mouse, shift)")
@@ -184,6 +184,9 @@ func _register_builtins() -> void:
 	register_command("reload", _cmd_reload, "Reload the current scene")
 	register_command("screenshot", _cmd_shot, "screenshot [scale]  PNG in user://screenshots")
 	register_command("quit", _cmd_quit, "Quit the game")
+	register_command("give", _cmd_give, "give <helmet|mug|cartridge|crate> [n]")
+	register_command("inv", _cmd_inv, "List hotbar, pack, lockers, and dropped piles")
+	register_command("clearinv", _cmd_clearinv, "Empty carried slots, lockers, and dropped piles")
 
 
 func _build_ui() -> void:
@@ -475,7 +478,9 @@ func _complete_arg(command_name: String) -> void:
 	var options: PackedStringArray = PackedStringArray()
 	match command_name:
 		"tp":
-			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "rear", "dash", "storage"])
+			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "rear", "dash", "storage", "locker"])
+		"give":
+			options = PackedStringArray(["helmet", "mug", "cartridge", "crate"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
 		"dither", "hud":
@@ -537,6 +542,56 @@ func _cmd_clear(_args: PackedStringArray) -> void:
 		_log.clear()
 
 
+func _cmd_give(args: PackedStringArray) -> void:
+	var inv = _inventory()
+	if inv == null:
+		_echo("no cabin", "err")
+		return
+	if args.is_empty():
+		_echo("give <helmet|mug|cartridge|crate> [n]", "warn")
+		return
+	var count := 1
+	if args.size() > 1:
+		if not args[1].is_valid_int():
+			_echo("give count needs an integer", "err")
+			return
+		count = int(args[1])
+	var kind := args[0].to_lower()
+	if inv.give(kind, count):
+		_echo("give %s x%d" % [kind, count])
+	else:
+		_echo("no slot for %s" % kind, "err")
+
+
+func _cmd_inv(_args: PackedStringArray) -> void:
+	var inv = _inventory()
+	if inv == null:
+		_echo("no cabin", "err")
+		return
+	var lines: PackedStringArray = inv.list_lines()
+	for line in lines:
+		_echo(line)
+
+
+func _cmd_clearinv(_args: PackedStringArray) -> void:
+	var inv = _inventory()
+	if inv == null:
+		_echo("no cabin", "err")
+		return
+	inv.clear_all()
+	_echo("inventory cleared")
+
+
+func _inventory():
+	var ship := _ship()
+	if ship == null:
+		return null
+	var cabin = ship.get("_cabin")
+	if cabin == null:
+		return null
+	return cabin.get("inventory")
+
+
 func _cmd_fps(_args: PackedStringArray) -> void:
 	_fps_on = not _fps_on
 	if _fps_label:
@@ -550,7 +605,7 @@ func _cmd_tp(args: PackedStringArray) -> void:
 		_echo("no flight scene", "err")
 		return
 	if args.is_empty():
-		_echo("tp <planet|moon|ship|cabin|aisle|rear|dash|storage> or tp x y z", "warn")
+		_echo("tp <planet|moon|ship|cabin|aisle|rear|dash|storage|locker> or tp x y z", "warn")
 		return
 	var spec := " ".join(args)
 	var message := str(scene.dev_teleport(spec))

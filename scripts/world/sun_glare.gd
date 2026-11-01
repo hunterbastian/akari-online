@@ -107,6 +107,13 @@ func _process(delta: float) -> void:
 		if inside and not _eclipsed(camera.global_position):
 			var center_dist := (screen - size * 0.5).length() / size.length()
 			target = clampf(1.15 - center_dist * 1.2, 0.0, 1.0)
+			# The combiner sits in the middle of the cabin view. Keep the glare off that glass.
+			if camera.is_in_group("cabin_eye"):
+				var glass := Rect2(size.x * 0.28, size.y * 0.26, size.x * 0.44, size.y * 0.46)
+				if glass.has_point(screen):
+					target = 0.0
+				else:
+					target *= 0.3
 	# Quick in, slower out, so the glare does not pop when Mina's limb crosses the sun.
 	var rate := 10.0 if target > _visibility else 4.0
 	_visibility = lerpf(_visibility, target, 1.0 - exp(-rate * delta))
@@ -114,9 +121,30 @@ func _process(delta: float) -> void:
 	if not _root.visible:
 		return
 	var unit := size.y
-	_place(_core, screen, Vector2.ONE * unit * 0.42, _visibility)
+	var core := 0.16 if camera != null and camera.is_in_group("cabin_eye") else 0.42
+	_place(_core, screen, Vector2.ONE * unit * core, _visibility)
+	var in_cabin := camera != null and camera.is_in_group("cabin_eye")
 	if _streak:
-		_place(_streak, screen, Vector2(unit * 1.5, unit * 0.022), _visibility * 0.9)
+		var streak_w := unit * (0.28 if in_cabin else 1.5)
+		_place(_streak, screen, Vector2(streak_w, unit * 0.018), _visibility * 0.9)
+	if in_cabin:
+		for shaft in _shafts:
+			shaft.visible = false
+	else:
+		_place_shafts(screen, unit)
+	var axis := size * 0.5 - screen
+	for i in _ghosts.size():
+		var ghost := _ghosts[i]
+		if in_cabin:
+			ghost.visible = false
+			continue
+		var spec: Array = _ghost_spec[i]
+		var at: Vector2 = screen + axis * float(spec[0]) * 2.0
+		ghost.visible = true
+		_place(ghost, at, Vector2.ONE * unit * float(spec[1]) * 2.0, _visibility)
+
+
+func _place_shafts(screen: Vector2, unit: float) -> void:
 	for i in _shafts.size():
 		var shaft := _shafts[i]
 		var angle := 0.35 + float(i) * TAU / float(_shafts.size()) + sin(float(i) * 3.7) * 0.4
@@ -126,11 +154,7 @@ func _process(delta: float) -> void:
 		shaft.pivot_offset = Vector2(0.0, shaft.size.y * 0.5)
 		shaft.rotation = angle
 		shaft.modulate = Color(1, 1, 1, _visibility)
-	var axis := size * 0.5 - screen
-	for i in _ghosts.size():
-		var spec: Array = _ghost_spec[i]
-		var at: Vector2 = screen + axis * float(spec[0]) * 2.0
-		_place(_ghosts[i], at, Vector2.ONE * unit * float(spec[1]) * 2.0, _visibility)
+		shaft.visible = true
 
 
 func _place(rect: TextureRect, center: Vector2, extent: Vector2, alpha: float) -> void:

@@ -11,6 +11,7 @@ var _touch := false
 var _base: Control
 var _knob: Control
 var _button: Button
+var _use: Button
 var _dragging := false
 var _look_id := -1
 
@@ -21,6 +22,7 @@ func setup(ship: Node) -> void:
 	_touch = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available() or OS.get_environment("AKARI_TOUCH") == "1"
 	_build_stick()
 	_build_button()
+	_build_use()
 	visible = _touch
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -75,6 +77,27 @@ func _build_button() -> void:
 	add_child(_button)
 
 
+func _build_use() -> void:
+	_use = Button.new()
+	_use.name = "Use"
+	_use.text = "USE"
+	_use.focus_mode = Control.FOCUS_NONE
+	_use.add_theme_font_override("font", _PIXEL.font())
+	_use.add_theme_font_size_override("font_size", 22)
+	_use.add_theme_color_override("font_color", Color(0.62, 1.0, 0.7))
+	_use.add_theme_color_override("font_hover_color", Color(0.8, 1.0, 0.85))
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.08, 0.07, 0.72)
+	style.border_color = Color(0.45, 0.8, 0.55, 0.9)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(2)
+	_use.add_theme_stylebox_override("normal", style)
+	_use.add_theme_stylebox_override("hover", style)
+	_use.add_theme_stylebox_override("pressed", style)
+	_use.pressed.connect(_on_use)
+	add_child(_use)
+
+
 func _layout() -> void:
 	var view := get_viewport().get_visible_rect().size
 	var margin := 28.0
@@ -83,6 +106,8 @@ func _layout() -> void:
 	_knob.position = (_base.size - _knob.size) * 0.5
 	_button.position = Vector2(view.x - margin - 84.0, view.y - margin - 84.0)
 	_button.size = Vector2(84, 84)
+	_use.position = Vector2(view.x - margin - 84.0, view.y - margin - 180.0)
+	_use.size = Vector2(84, 84)
 
 
 func _process(_delta: float) -> void:
@@ -93,6 +118,7 @@ func _process(_delta: float) -> void:
 	visible = flying
 	var walking := bool(_ship.get("walking"))
 	_base.visible = walking
+	_use.visible = walking
 	_button.text = "SIT" if walking else "E"
 	if not _dragging:
 		_stick = Vector2.ZERO
@@ -102,6 +128,11 @@ func _process(_delta: float) -> void:
 func _on_seat() -> void:
 	if _ship and _ship.has_method("toggle_seat"):
 		_ship.toggle_seat()
+
+
+func _on_use() -> void:
+	if _ship and _ship.has_method("try_cabin_use"):
+		_ship.try_cabin_use()
 
 
 func _on_stick(event: InputEvent) -> void:

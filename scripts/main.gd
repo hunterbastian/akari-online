@@ -13,6 +13,8 @@ var _shot_frames := 0
 var _shot_saved := false
 var _cli_shot := ""
 var _cli_at := ""
+var _cli_hold := ""
+var _cli_floor := ""
 var _world: SubViewport
 var _bounce: DirectionalLight3D
 var _ship: Node3D
@@ -92,10 +94,15 @@ func _ready() -> void:
 	cabin_controls.setup(ship)
 	ship.set_chase_camera(camera)
 	ship.set_cabin_controls(cabin_controls)
+	var inventory_hud = load("res://scripts/ui/inventory_hud.gd").new()
+	inventory_hud.name = "InventoryHud"
+	add_child(inventory_hud)
+	inventory_hud.bind(ship)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
+	_apply_shot_inventory()
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
 	_update_bounce()
@@ -323,6 +330,11 @@ func dev_teleport(spec: String) -> String:
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("dash")
 		return "tp dash"
+	if key == "locker":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("locker")
+		return "tp locker"
 	if key == "storage":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
@@ -349,6 +361,27 @@ func _tp_moon() -> String:
 	return "tp moon"
 
 
+func _apply_shot_inventory() -> void:
+	if _ship == null:
+		return
+	var cabin = _ship.get("_cabin")
+	if cabin == null or cabin.inventory == null:
+		return
+	var inv = cabin.inventory
+	if not _cli_hold.is_empty():
+		inv.give(_cli_hold.to_lower(), 1)
+	if not _cli_floor.is_empty():
+		inv.give(_cli_floor.to_lower(), 1)
+		inv.select(0)
+		inv.drop_selected()
+		cabin.snap_view("floor")
+	if _cabin_view == "locker" or _cli_at == "locker":
+		cabin.snap_view("locker")
+		inv.store("LockerL", "crate", 1)
+		inv.store("LockerL", "cartridge", 2)
+		inv.open("LockerL")
+
+
 func _read_cli() -> void:
 	var args := OS.get_cmdline_user_args()
 	var i := 0
@@ -360,6 +393,12 @@ func _read_cli() -> void:
 			i += 2
 		elif arg == "--at" and i + 1 < args.size():
 			_cli_at = str(args[i + 1])
+			i += 2
+		elif arg == "--hold" and i + 1 < args.size():
+			_cli_hold = str(args[i + 1])
+			i += 2
+		elif arg == "--floor" and i + 1 < args.size():
+			_cli_floor = str(args[i + 1])
 			i += 2
 		else:
 			i += 1
@@ -376,6 +415,8 @@ func _read_cli() -> void:
 		_cabin_view = "dash"
 	elif at == "storage":
 		_cabin_view = "storage"
+	elif at == "locker":
+		_cabin_view = "locker"
 	else:
 		_cabin_view = ""
 

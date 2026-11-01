@@ -31,6 +31,7 @@ func _ready() -> void:
 	eye.near = 0.02
 	eye.far = 7000.0
 	eye.current = false
+	eye.add_to_group("cabin_eye")
 	add_child(eye)
 	eye.position = Vector3(0.0, eye_height, 0.0)
 

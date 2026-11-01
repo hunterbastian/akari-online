@@ -214,7 +214,8 @@ static func _furniture(cabin) -> void:
 	# Lockers flank the bay door. Two 0.5m bays stacked read as one column.
 	place(cabin, "LockerL", Vector3(-0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker")
 	place(cabin, "LockerR", Vector3(0.72, 0.1, -0.15), Vector3(0.5, 1.0, 0.5), "locker")
-	place(cabin, "CrateL", Vector3(-0.55, -0.22, -0.62), Vector3(0.4, 0.36, 0.4), "crate")
+	# Tucked on the left wall, aft of the aisle camera, so the forward view stays open.
+	place(cabin, "CrateL", Vector3(-0.8, -0.28, -0.42), Vector3(0.3, 0.24, 0.3), "crate")
 	place(cabin, "CrateA", Vector3(0.72, -0.15, -0.62), Vector3(0.5, 0.5, 0.5), "crate")
 	place(cabin, "CrateB", Vector3(0.72, 0.35, -0.62), Vector3(0.5, 0.5, 0.5), "crate")
 	place(cabin, "BunkBase", Vector3(0.72, -0.32, -1.42), Vector3(0.5, 0.16, 1.0), "bezel")
@@ -224,7 +225,7 @@ static func _furniture(cabin) -> void:
 	place(cabin, "RackBack", Vector3(-0.72, 0.78, -1.3), Vector3(0.06, 0.9, 0.7), "panel")
 	place(cabin, "RackLow", Vector3(-0.64, 0.48, -1.3), Vector3(0.14, 0.08, 0.66), "panel")
 	place(cabin, "RackHigh", Vector3(-0.64, 1.12, -1.3), Vector3(0.14, 0.08, 0.66), "panel")
-	place(cabin, "RackCrate", Vector3(-0.6, 0.76, -1.22), Vector3(0.36, 0.4, 0.36), "crate")
+	place(cabin, "RackCrate", Vector3(0.55, -0.26, -0.48), Vector3(0.26, 0.26, 0.26), "crate")
 	place(cabin, "ConduitL", Vector3(-0.55, 1.28, -1.15), Vector3(0.08, 0.08, 1.7), "bezel")
 	place(cabin, "ConduitR", Vector3(0.55, 1.28, -1.05), Vector3(0.08, 0.08, 1.5), "bezel")
 	place(cabin, "ConduitDrop", Vector3(-0.55, 1.05, -0.45), Vector3(0.08, 0.4, 0.08), "bezel")

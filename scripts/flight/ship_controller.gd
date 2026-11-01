@@ -99,6 +99,10 @@ func near_seat() -> bool:
 	return walking and _cabin != null and _cabin.walker.near_point(_cabin.seat_point, _cabin.sit_reach)
 
 
+func try_cabin_use() -> bool:
+	return walking and _cabin != null and _cabin.inventory != null and _cabin.inventory.try_interact()
+
+
 func toggle_seat() -> void:
 	if not active or _shot:
 		return
@@ -116,6 +120,9 @@ func start_cabin_view(mode: String) -> void:
 	_enter_cabin()
 	if _cabin:
 		_cabin.snap_view(mode)
+	# The nose points at the sun in the cabin shots. Yaw it so the bloom sits beside the glass.
+	if mode == "seat":
+		global_rotate(Vector3.UP, 0.62)
 
 
 func _enter_cabin() -> void:
@@ -161,8 +168,19 @@ func _input(event: InputEvent) -> void:
 	if not active or _shot:
 		return
 	if event.is_action_pressed("interact"):
+		if walking and _cabin and _cabin.inventory and _cabin.inventory.try_interact():
+			return
 		toggle_seat()
 		return
+	if walking and _cabin and _cabin.inventory and _cabin.walker and not _cabin.walker.locked:
+		if event is InputEventKey and event.pressed and not event.echo:
+			var key := event as InputEventKey
+			if key.keycode >= KEY_1 and key.keycode <= KEY_5:
+				_cabin.inventory.select(key.keycode - KEY_1)
+				return
+			if key.keycode == KEY_Q:
+				_cabin.inventory.drop_selected()
+				return
 	if walking:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			if DisplayServer.get_name() != "headless":
