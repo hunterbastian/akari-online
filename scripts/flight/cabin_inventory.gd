@@ -134,6 +134,14 @@ func drop_selected() -> bool:
 	return true
 
 
+func pickup_kind(kind: String) -> bool:
+	for i in _world.size():
+		var rec: Dictionary = _world[i]
+		if bool(rec["alive"]) and str(rec["id"]) == kind:
+			return _take(i)
+	return false
+
+
 func try_interact() -> bool:
 	if _cabin == null or _cabin.walker == null or _cabin.walker.locked:
 		return false

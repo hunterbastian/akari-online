@@ -15,6 +15,7 @@ var _cli_shot := ""
 var _cli_at := ""
 var _cli_hold := ""
 var _cli_floor := ""
+var _tour := false
 var _world: SubViewport
 var _bounce: DirectionalLight3D
 var _ship: Node3D
@@ -26,6 +27,7 @@ var _planet_radius := 24.0
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
+	_tour = OS.get_cmdline_user_args().has("--tour")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -52,12 +54,12 @@ func _ready() -> void:
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
-	ship.set_meta("flight_active", _shot or not _cabin_view.is_empty())
+	ship.set_meta("flight_active", _shot or _tour or not _cabin_view.is_empty())
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	_ship = ship
-	if _shot or not _cabin_view.is_empty():
+	if _shot or _tour or not _cabin_view.is_empty():
 		_place_for_shot(ship, planet)
 	else:
 		ship.global_position = chart.spawn
@@ -77,7 +79,7 @@ func _ready() -> void:
 		_frame_closeup(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
 		_frame_side(ship, camera)
-	elif not _shot and _cabin_view.is_empty():
+	elif not _shot and not _tour and _cabin_view.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -103,7 +105,16 @@ func _ready() -> void:
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
+	if _tour:
+		ship.start_cabin_view("rear")
+		var tour = load("res://scripts/flight/cabin_tour.gd").new()
+		tour.name = "CabinTour"
+		add_child(tour)
+		tour.setup(ship)
 	_add_sun_glare(camera, sun_dir)
+	var grade = load("res://scripts/ui/cabin_grade.gd").new()
+	grade.name = "CabinGrade"
+	_world.add_child(grade)
 	_add_dither()
 	_update_bounce()
 	if OS.get_environment("AKARI_CONSOLE") == "1":
@@ -198,6 +209,8 @@ func _update_bounce() -> void:
 
 func _process(delta: float) -> void:
 	_update_bounce()
+	if _tour:
+		return
 	if not _cli_shot.is_empty():
 		if _shot_saved:
 			return

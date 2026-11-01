@@ -8,8 +8,6 @@ const _Post := preload("res://scripts/data/post_profile.gd")
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Walker := preload("res://scripts/flight/cabin_walker.gd")
 const _CRT := preload("res://assets/shaders/crt_green.gdshader")
-const _HUD := preload("res://assets/shaders/hud_glass.gdshader")
-const _Plate := preload("res://scripts/ui/hud_plate.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
@@ -30,7 +28,9 @@ var _high := true
 var _shadowers: Array[MeshInstance3D] = []
 var _lines := {}
 var _font: FontFile
-var _plate: Control
+var _term_header: Label
+var _pitch_deg := 0
+var _yaw_deg := 0
 var _command := ""
 var _cursor_on := true
 var _cursor_time := 0.0
@@ -61,7 +61,6 @@ func build(scale: float, high_quality: bool) -> void:
 	var wall := _paint(Color(0.16, 0.165, 0.175), 0.5, 0.1)
 	var trim := _paint(Color(0.2, 0.208, 0.22), 0.4, 0.12)
 	var cloth := _paint(Color(0.09, 0.092, 0.105), 0.72, 0.0)
-	var bezel := _paint(Color(0.07, 0.074, 0.082), 0.38, 0.18)
 	var door := _paint(Color(0.12, 0.125, 0.138), 0.46, 0.2)
 
 	# Subfloor sits under the grate tiles. Ceiling stops where the canopy opens.
@@ -91,9 +90,7 @@ func build(scale: float, high_quality: bool) -> void:
 	_screen("Nav", _v(-0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "nav", side_size)
 	_screen("Drive", _v(0.68, 0.82, -2.2), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "drive", side_size)
 	_screen("Bay", _v(0.0, 0.92, 0.1), Vector2(0.4, 0.28) * _scale, 0.0, PI, "bay", side_size)
-	# Same tilt family as the readable CRTs, dropped into the window above the dash.
-	_build_hud(bezel)
-	# Chunky terminal on the dash. The frame is a thin bezel, not a hood.
+	# Chunky terminal on the dash. The forward window stays open.
 	_build_prompt(_v(0.0, 0.4, -1.98), prompt_size)
 	_Blocks.dress(self)
 	_Detail.apply(self)
@@ -113,16 +110,21 @@ func set_walking(on: bool) -> void:
 		mesh.cast_shadow = mode
 
 
-func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String, hull: int, autopilot: String) -> void:
+func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String, hull: int, autopilot: String, pitch_deg: int, yaw_deg: int) -> void:
 	var spd := "%03d" % int(round(speed))
 	var rng := "%05d" % int(round(maxf(mina_range, 0.0)))
 	var thr := "%04.2f" % clampf(throttle, 0.0, 1.0)
+	var name := ship_name.to_upper()
+	if name.length() > 12:
+		name = name.substr(0, 12)
+	var auto := "HOLD" if autopilot == "HOLD" else "STBY"
+	_pitch_deg = pitch_deg
+	_yaw_deg = yaw_deg
 	# No fuel tank yet. 1.00 is a full cell until that system exists.
-	if _plate and _plate.has_method("set_readout"):
-		_plate.set_readout(ship_name, hull, speed, mina_range, 1.0, autopilot, "NONE")
-	_set_line("nav", "NAV\nMINA\nRNG %s\nBRG FWD\nLINK" % rng)
-	_set_line("drive", "DRIVE\nSPD %s\nTHR %s\nNOM" % [spd, thr])
+	_set_line("nav", "NAV\n%s\nHULL %d\nMINA %s\nBRG FWD" % [name, hull, rng])
+	_set_line("drive", "DRIVE\nSPD %s\nFUEL 1.00\nTHR %s\nAP %s" % [spd, thr, auto])
 	_set_line("bay", "BAY\nSEALED\nCORE\n312")
+	_refresh_header()
 
 
 func snap_view(mode: String) -> void:
@@ -183,70 +185,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _refresh_prompt() -> void:
 	var cursor := "_" if _cursor_on else " "
+	_refresh_header()
 	_set_line("terminal", ">" + _command + cursor)
 
 
-func _build_hud(bezel: Material) -> void:
-	# glTF meters. Seated eye is (0, 0.72, -1.22) looking along pitch -0.22.
-	var pivot := Node3D.new()
-	pivot.name = "HudGlass"
-	pivot.position = _v(0.0, 0.74, -1.90)
-	pivot.rotation.x = 0.2
-	add_child(pivot)
-	pivot.add_to_group("akari_hud")
-
-	var view_size := Vector2i(640, 360) if _high else Vector2i(512, 288)
-	var viewport := SubViewport.new()
-	viewport.name = "HudView"
-	viewport.size = view_size
-	viewport.disable_3d = true
-	viewport.transparent_bg = false
-	viewport.handle_input_locally = false
-	viewport.gui_disable_input = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
-	var background := ColorRect.new()
-	background.color = Color(0, 0, 0, 1)
-	background.size = Vector2(view_size)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	viewport.add_child(background)
-	var plate = _Plate.new()
-	plate.name = "Plate"
-	plate.size = Vector2(view_size)
-	plate.setup(_font)
-	viewport.add_child(plate)
-	add_child(viewport)
-	_plate = plate
-
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = "HudPlate"
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.86, 0.48375) * _scale
-	mesh_instance.mesh = quad
-	var material := ShaderMaterial.new()
-	material.shader = _HUD
-	material.render_priority = 3
-	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.0035 if _Post.high_quality() else 0.0)
-	material.set_shader_parameter("brightness", 1.55 if _high else 1.3)
-	material.set_shader_parameter("fresnel_strength", 0.28 if _high else 0.14)
-	material.set_shader_parameter("edge_glow", 0.5 if _high else 0.32)
-	mesh_instance.material_override = material
-	mesh_instance.layers = INTERIOR_LAYER
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	pivot.add_child(mesh_instance)
-
-	var rail := MeshInstance3D.new()
-	rail.name = "HudRail"
-	var rail_box := BoxMesh.new()
-	rail_box.size = Vector3(quad.size.x + _scale * 0.02, _scale * 0.012, _scale * 0.014)
-	rail.mesh = rail_box
-	rail.position = Vector3(0.0, -quad.size.y * 0.5 - _scale * 0.004, 0.0)
-	rail.material_override = bezel
-	rail.layers = INTERIOR_LAYER
-	rail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	pivot.add_child(rail)
+func _refresh_header() -> void:
+	if _term_header == null:
+		return
+	_term_header.text = "ROUTE NONE\nPIT %+03d\nYAW %03d" % [_pitch_deg, _yaw_deg]
 
 
 func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
@@ -282,9 +228,10 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	header.add_theme_font_override("font", _font)
 	header.add_theme_font_size_override("font_size", 32 if view_size.y >= 300 else 24)
 	header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
-	header.text = "TERM\nREADY"
+	header.text = "ROUTE NONE\nPIT +00\nYAW 000"
 	header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(header)
+	_term_header = header
 	var label := Label.new()
 	label.position = Vector2(28, view_size.y * 0.46)
 	label.size = Vector2(view_size.x - 56, 80)
@@ -554,14 +501,15 @@ func _glass(pos: Vector3, size: Vector2, tilt: float) -> void:
 	add_child(mesh_instance)
 
 
-func _omni(pos: Vector3, color: Color, energy: float, range: float) -> void:
+func _omni(pos: Vector3, color: Color, energy: float, range_m: float, attenuation: float = 2.0) -> void:
 	var light := OmniLight3D.new()
 	light.position = pos
 	light.light_color = color
 	light.light_energy = energy
-	light.omni_range = range
+	light.omni_range = range_m
+	light.omni_attenuation = attenuation
 	light.shadow_enabled = false
-	light.light_specular = 0.4
+	light.light_specular = 0.15
 	add_child(light)
 
 
@@ -593,7 +541,7 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	label.size = Vector2(view_size) - Vector2(28, 20)
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 32 if view_size.y >= 250 else 24)
+	label.add_theme_font_size_override("font_size", 24 if view_size.y >= 250 else 16)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = "AKARI"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

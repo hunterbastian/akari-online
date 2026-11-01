@@ -76,8 +76,8 @@ static func material(kind: String) -> StandardMaterial3D:
 	elif kind == "ceiling":
 		mat.emission_enabled = true
 		mat.emission_texture = mat.albedo_texture
-		mat.emission = Color(0.85, 0.78, 0.6)
-		mat.emission_energy_multiplier = 0.45
+		mat.emission = Color(0.7, 0.5, 0.28)
+		mat.emission_energy_multiplier = 0.12
 	_mats[kind] = mat
 	return mat
 

@@ -298,7 +298,9 @@ func _update_cabin() -> void:
 		var autopilot := "STANDBY"
 		if walking and _cabin.walker != null and not _cabin.walker.locked:
 			autopilot = "HOLD"
-		_cabin.update_readouts(velocity.length(), thrust, mina_range, str(ship.name), hull, autopilot)
+		var pitch_deg := int(round(rad_to_deg(rotation.x)))
+		var yaw_deg := int(round(rad_to_deg(rotation.y)))
+		_cabin.update_readouts(velocity.length(), thrust, mina_range, str(ship.name), hull, autopilot, pitch_deg, yaw_deg)
 
 
 func _keep_off_star() -> void:

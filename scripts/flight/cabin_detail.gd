@@ -51,8 +51,8 @@ static func _grate_normal() -> Texture2D:
 
 
 static func _ceiling_lights(cabin) -> void:
-	cabin._glow("CeilStrip", cabin._v(0.0, 1.46, -1.15), cabin._v(0.08, 0.015, 1.35), Color(1.05, 0.9, 0.7))
-	cabin._glow("CeilSpot", cabin._v(0.35, 1.47, -1.9), cabin._v(0.22, 0.012, 0.08), Color(1.1, 0.78, 0.45))
+	cabin._glow("CeilStrip", cabin._v(0.0, 1.46, -1.15), cabin._v(0.1, 0.02, 0.7), Color(1.35, 0.72, 0.32))
+	cabin._glow("CeilSpot", cabin._v(0.0, 1.46, -1.85), cabin._v(0.28, 0.02, 0.16), Color(1.4, 0.62, 0.22))
 
 
 static func _seat(cabin, white: Material, cloth: Material, dark: Material) -> void:
@@ -134,41 +134,33 @@ static func _flat(color: Color) -> StandardMaterial3D:
 
 
 static func _lights(cabin) -> void:
-	# Warm practical, a bay light so the door isn't a blue wash, and monitor spill.
-	# The extra fill and the sun shaft stay on the detailed quality.
-	cabin._omni(cabin._v(0.0, 1.25, -1.5), Color(1.0, 0.78, 0.55), 0.42, 1.8)
-	cabin._omni(cabin._v(0.0, 0.95, -0.15), Color(0.82, 0.88, 0.96), 0.7, 2.4)
-	cabin._omni(cabin._v(0.0, 0.5, -1.9), Color(0.35, 0.95, 0.5), 0.28, 1.2)
+	# Short warm pools. Corners stay dark between them. Low quality stops here.
+	cabin._omni(cabin._v(0.0, 1.2, -1.15), Color(1.0, 0.55, 0.22), 0.95, 0.62, 2.8)
+	cabin._omni(cabin._v(0.0, 0.45, -1.9), Color(0.25, 0.95, 0.45), 0.45, 0.42, 2.4)
+	cabin._omni(cabin._v(0.15, 0.9, 0.0), Color(1.0, 0.28, 0.06), 1.15, 0.5, 2.6)
 	if not cabin._high:
 		return
-	cabin._omni(cabin._v(0.0, 1.05, -1.7), Color(0.45, 0.62, 1.0), 0.22, 1.8)
-	cabin._omni(cabin._v(-0.2, 0.9, -1.5), Color(1.0, 0.62, 0.32), 0.2, 1.05)
-	var spot := SpotLight3D.new()
-	spot.name = "SunShaft"
-	spot.position = cabin._v(0.15, 1.42, -2.45)
-	spot.light_color = Color(1.0, 0.94, 0.82)
-	spot.light_energy = 1.6
-	spot.spot_range = 2.4
-	spot.spot_angle = 22.0
-	spot.spot_attenuation = 0.6
-	spot.shadow_enabled = false
-	spot.light_specular = 0.35
-	cabin.add_child(spot)
-	spot.look_at(cabin.to_global(cabin._v(0.0, 0.35, -1.45)), Vector3.UP)
+	cabin._omni(cabin._v(0.1, 1.15, -1.9), Color(1.0, 0.62, 0.28), 0.55, 0.5, 2.8)
+	cabin._omni(cabin._v(-0.4, 0.65, -1.55), Color(0.2, 0.7, 1.0), 0.35, 0.4, 2.6)
+	_haze(cabin, cabin._v(0.0, 0.95, -1.15), Vector2(cabin._scale * 0.9, cabin._scale * 0.7), Color(1.0, 0.62, 0.28, 0.05))
+	_haze(cabin, cabin._v(0.0, 0.7, -0.15), Vector2(cabin._scale * 0.55, cabin._scale * 0.8), Color(1.0, 0.35, 0.1, 0.055))
+	_haze(cabin, cabin._v(0.0, 0.55, -1.85), Vector2(cabin._scale * 0.45, cabin._scale * 0.35), Color(0.3, 1.0, 0.5, 0.04))
+
+
+static func _haze(cabin, pos: Vector3, size: Vector2, color: Color) -> void:
 	var shaft := MeshInstance3D.new()
-	shaft.name = "Shaft"
 	var quad := QuadMesh.new()
-	quad.size = Vector2(cabin._scale * 0.55, cabin._scale * 1.35)
+	quad.size = size
 	shaft.mesh = quad
-	shaft.position = cabin._v(0.1, 0.85, -2.15)
-	shaft.rotation = Vector3(0.9, 0.15, 0.0)
+	shaft.position = pos
+	shaft.rotation.x = 1.15
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	material.albedo_color = Color(1.0, 0.92, 0.75, 0.045)
+	material.albedo_color = color
 	shaft.material_override = material
 	shaft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shaft.layers = cabin.INTERIOR_LAYER
