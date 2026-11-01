@@ -46,6 +46,7 @@ var _step_acc := 0.0
 var _last_walk := Vector3.ZERO
 var _shot_hold := false
 var inventory
+var show_hotbar := true
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -128,6 +129,7 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 
 
 func snap_view(mode: String) -> void:
+	show_hotbar = mode != "seat"
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.12, 0.0)
 	elif mode == "locker":

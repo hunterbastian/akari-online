@@ -42,7 +42,11 @@ func bind(ship: Node) -> void:
 func _process(_delta: float) -> void:
 	_inv = _inventory()
 	var walking := _ship != null and bool(_ship.get("walking"))
-	visible = walking and _inv != null
+	var seated := false
+	var cabin = _inventory_cabin()
+	if cabin != null:
+		seated = not bool(cabin.get("show_hotbar"))
+	visible = walking and _inv != null and not seated
 	if not visible or _inv == null:
 		return
 	if bool(_inv.dirty) and _drag.is_empty():
@@ -50,10 +54,14 @@ func _process(_delta: float) -> void:
 		_rebuild()
 
 
-func _inventory():
+func _inventory_cabin():
 	if _ship == null:
 		return null
-	var cabin = _ship.get("_cabin")
+	return _ship.get("_cabin")
+
+
+func _inventory():
+	var cabin = _inventory_cabin()
 	if cabin == null:
 		return null
 	return cabin.get("inventory")

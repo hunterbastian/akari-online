@@ -6,6 +6,14 @@ extends Node
 var _time := 0.0
 var _fired := {}
 var _ship: Node
+var _walk := false
+
+const _WALK := [
+	[0.0, 0.0, -0.45, 0.0, -0.06],
+	[3.5, 0.0, -1.15, 0.0, -0.02],
+	[6.5, 0.08, -1.55, 0.2, 0.02],
+	[10.0, -0.05, -1.05, -0.15, -0.08],
+]
 
 const _KEYS := [
 	[0.0, 0.0, -1.7, PI, -0.1],
@@ -22,6 +30,7 @@ const _KEYS := [
 
 func setup(ship: Node) -> void:
 	_ship = ship
+	_walk = OS.get_cmdline_user_args().has("--walk")
 
 
 func _process(delta: float) -> void:
@@ -36,6 +45,10 @@ func _process(delta: float) -> void:
 	if walker.eye:
 		walker.eye.current = true
 	_glide(cabin, walker, delta)
+	if _walk:
+		if _time >= 10.2:
+			get_tree().quit()
+		return
 	_once(cabin, 7.6, "helm", func() -> void: cabin.inventory.pickup_kind("helmet"))
 	_once(cabin, 9.1, "mug", func() -> void: cabin.inventory.pickup_kind("mug"))
 	_once(cabin, 9.8, "s1", func() -> void: cabin.inventory.select(0))
@@ -87,9 +100,10 @@ func _glide(cabin, walker, delta: float) -> void:
 
 
 func _pose(time: float) -> Array:
-	var prev: Array = _KEYS[0]
-	for i in _KEYS.size():
-		var row: Array = _KEYS[i]
+	var keys: Array = _WALK if _walk else _KEYS
+	var prev: Array = keys[0]
+	for i in keys.size():
+		var row: Array = keys[i]
 		if time < float(row[0]):
 			var span := maxf(float(row[0]) - float(prev[0]), 0.001)
 			var u := clampf((time - float(prev[0])) / span, 0.0, 1.0)

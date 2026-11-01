@@ -45,5 +45,6 @@ void fragment() {
 	}
 	// Unshaded albedo carries the phosphor. Emission adds the soft glow on Forward+.
 	ALBEDO = col;
-	EMISSION = col * 0.8;
+	// Only the bright phosphor crosses the bloom threshold. The dark glass stays flat.
+	EMISSION = max(col - vec3(0.45), vec3(0.0)) * 2.4;
 }

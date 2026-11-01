@@ -27,7 +27,7 @@ var _planet_radius := 24.0
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
-	_tour = OS.get_cmdline_user_args().has("--tour")
+	_tour = OS.get_cmdline_user_args().has("--tour") or OS.get_cmdline_user_args().has("--walk")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -106,7 +106,8 @@ func _ready() -> void:
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
 	if _tour:
-		ship.start_cabin_view("rear")
+		var tour_view := "aisle" if OS.get_cmdline_user_args().has("--walk") else "rear"
+		ship.start_cabin_view(tour_view)
 		var tour = load("res://scripts/flight/cabin_tour.gd").new()
 		tour.name = "CabinTour"
 		add_child(tour)

@@ -4,6 +4,8 @@ extends RefCounted
 ## Each face gets its own 16x16 (nearest) so panel borders land on the block edge.
 ## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel.
 
+const _SHADE := preload("res://assets/shaders/cabin_block.gdshader")
+
 const CELL := 0.5
 
 const METAL := Color("8a8e94")
@@ -55,29 +57,13 @@ static func texture(kind: String) -> Texture2D:
 	return image_texture
 
 
-static func material(kind: String) -> StandardMaterial3D:
+static func material(kind: String) -> ShaderMaterial:
 	if _mats.has(kind):
 		return _mats[kind]
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = texture(kind)
-	mat.albedo_color = Color.WHITE
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	mat.texture_repeat = true
-	mat.roughness = 0.92
-	mat.metallic = 0.06
-	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	mat.uv1_scale = Vector3.ONE
-	if kind == "bunk" or kind == "crate":
-		mat.metallic = 0.0
-		mat.roughness = 1.0
-	elif kind == "bezel":
-		mat.roughness = 0.7
-		mat.metallic = 0.12
-	elif kind == "ceiling":
-		mat.emission_enabled = true
-		mat.emission_texture = mat.albedo_texture
-		mat.emission = Color(0.7, 0.5, 0.28)
-		mat.emission_energy_multiplier = 0.12
+	var mat := ShaderMaterial.new()
+	mat.shader = _SHADE
+	mat.set_shader_parameter("albedo_tex", texture(kind))
+	mat.set_shader_parameter("lamp", 0.16 if kind == "ceiling" else 0.0)
 	_mats[kind] = mat
 	return mat
 
