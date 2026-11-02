@@ -24,12 +24,13 @@ var _dither_layer: CanvasLayer
 var _planet: Dictionary = {}
 var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
+var _planet_body: Node3D
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1"
 	var user_args := OS.get_cmdline_user_args()
-	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull")
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull") or user_args.has("--mega")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -50,6 +51,7 @@ func _ready() -> void:
 	body.name = planet.name
 	_world.add_child(body)
 	body.setup(planet, sun_dir)
+	_planet_body = body
 	_planet_center = planet.position
 	_planet_radius = float(planet.radius)
 
@@ -117,20 +119,28 @@ func _ready() -> void:
 			door_cabin.walker.pitch = 0.0
 			door_cabin.walker.eye.rotation.x = 0.0
 			door_cabin.set_bay_pose(_cli_door)
+	if _cli_at.begins_with("mega"):
+		_frame_mega(_cli_at)
 	if _tour:
 		var args := OS.get_cmdline_user_args()
-		# The film tour opens on the exterior. Walk and the inventory tour start inside.
-		if args.has("--bay"):
-			_aim_bay_at_planet(ship)
-		if not args.has("--film"):
-			var tour_view := "rear"
-			if args.has("--walk"):
-				tour_view = "aisle"
-			ship.start_cabin_view(tour_view)
-		var tour = load("res://scripts/flight/cabin_tour.gd").new()
-		tour.name = "CabinTour"
-		add_child(tour)
-		tour.setup(ship)
+		if args.has("--mega"):
+			var mega = load("res://scripts/world/mega_tour.gd").new()
+			mega.name = "MegaTour"
+			add_child(mega)
+			mega.setup(_planet_body, ship)
+		else:
+			# The film tour opens on the exterior. Walk and the inventory tour start inside.
+			if args.has("--bay"):
+				_aim_bay_at_planet(ship)
+			if not args.has("--film"):
+				var tour_view := "rear"
+				if args.has("--walk"):
+					tour_view = "aisle"
+				ship.start_cabin_view(tour_view)
+			var tour = load("res://scripts/flight/cabin_tour.gd").new()
+			tour.name = "CabinTour"
+			add_child(tour)
+			tour.setup(ship)
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
 	_update_bounce()
@@ -334,6 +344,35 @@ func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
 	var right := ship.global_basis.x
 	# Low front three-quarter, so the white nose and canopy take the sun.
 	_frame_portrait(ship, camera, forward * 7.4 + right * 5.6 + Vector3.UP * 1.7, forward * 0.8, 26.0)
+
+
+func _frame_mega(mode: String) -> void:
+	if _planet_body == null:
+		return
+	var city := _planet_body.get_node_or_null("MegaCity") as Node3D
+	var camera := _ship.get("_chase") as Camera3D
+	if city == null or camera == null:
+		return
+	_ship.global_position = _planet_center + Vector3(0.0, _planet_radius * 8.0, 0.0)
+	camera.held = true
+	camera.current = true
+	var spot := Vector3(12.0, 58.0, 26.0)
+	var aim := Vector3(0.0, 10.0, 0.0)
+	camera.fov = 40.0
+	if mode == "mega-cloud":
+		spot = Vector3(3.0, 5.5, 7.0)
+		aim = Vector3(0.0, 2.0, -1.0)
+		camera.fov = 46.0
+	elif mode == "mega-canyon":
+		spot = Vector3(-0.6, 3.6, 0.2)
+		aim = Vector3(1.8, 8.0, -2.4)
+		camera.fov = 52.0
+	elif mode == "mega-detail":
+		spot = Vector3(1.15, 2.4, 1.7)
+		aim = Vector3(-0.2, 5.5, -0.4)
+		camera.fov = 36.0
+	camera.global_position = city.to_global(spot)
+	camera.look_at(city.to_global(aim), city.global_basis.y)
 
 
 func _frame_seam(ship: Node3D, camera: Camera3D) -> void:

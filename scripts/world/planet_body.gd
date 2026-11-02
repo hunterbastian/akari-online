@@ -72,6 +72,11 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 		var offset := primary if spec.kind == "primary" else _orbit_offset(spec, primary, radius)
 		_add_moon("Moon" if i == 0 else "Moon%d" % (i + 1), spec, offset, radius)
 
+	if str(data.get("id", "")) == "sol:0":
+		var city = load("res://scripts/world/mega_city.gd").new()
+		add_child(city)
+		city.build(radius, sun)
+
 
 func _process(delta: float) -> void:
 	if _spin:

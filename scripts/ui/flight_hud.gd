@@ -44,7 +44,12 @@ func _process(_delta: float) -> void:
 	if OS.get_environment("AKARI_CABIN") != "":
 		visible = false
 		return
-	if OS.get_cmdline_user_args().has("--hull") or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1":
+	var args := OS.get_cmdline_user_args()
+	var mega_shot := false
+	for arg in args:
+		if str(arg).begins_with("mega"):
+			mega_shot = true
+	if args.has("--hull") or args.has("--mega") or mega_shot or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1":
 		visible = false
 		return
 	var flying := _ship != null and bool(_ship.get("active"))
