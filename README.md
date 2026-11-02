@@ -4,7 +4,7 @@
 
 AKARI ONLINE is a retro science-fiction game where the ship is your home. You walk the warehouse cabin of a glossy white Destiny-1-inspired jumpship, run the CRT-green computer in the pilot seat, and fly to Mina, an ice world with a brutalist megastructure above a cloud sea. The picture is pixelated, dithered, and graded like film. It is a solo project, built with AI, in Godot 4.6 for Mac and iPhone.
 
-<img src="docs/media/city.png" alt="The city canyon on Mina, above the cloud sea">
+<img src="docs/media/ship.png" alt="The jumpship in front of Mina">
 
 ## Features
 
