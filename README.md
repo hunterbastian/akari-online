@@ -1,49 +1,100 @@
+<img src="docs/media/hero.gif" width="640" alt="Descent from orbit onto Mina">
+
 # AKARI ONLINE
 
-A Godot 4.6 flight scene in Sol. You launch beside Mina, an ice world seeded to match the previous web build, under a nebula sky.
+AKARI ONLINE is a retro science-fiction game where the ship is your home. You walk the warehouse cabin of a glossy white Destiny-1-inspired jumpship, run the CRT-green computer in the pilot seat, and fly to Mina, an ice world with a brutalist megastructure above a cloud sea. The picture is pixelated, dithered, and graded like film. It is a solo project, built with AI, in Godot 4.6 for Mac and iPhone.
 
-## Run
+## Screenshots
 
-Install [Godot 4.6](https://godotengine.org/download/archive/4.6-stable/) and open this folder, or from a shell:
+<table>
+<tr>
+<td width="50%"><img src="docs/media/cabin.png" alt="Warehouse cabin"><br>Warehouse cabin</td>
+<td width="50%"><img src="docs/media/cockpit.png" alt="Cockpit CRTs"><br>Cockpit</td>
+</tr>
+<tr>
+<td><img src="docs/media/ship.png" alt="Jumpship in orbit"><br>Jumpship</td>
+<td><img src="docs/media/limb.png" alt="Mina from orbit"><br>Mina from orbit</td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/media/city.png" alt="City canyon"><br>City canyon</td>
+</tr>
+</table>
+
+## Features
+
+- A walkable cabin: crates, lockers, a bunk, a workbench, and a bay door with a force field.
+- A seat terminal with green CRTs. You can type on it. E is a letter there, not the stand-up key.
+- A small inventory. Five hotbar slots, a pack, two lockers. Pick up a crate, drop it with Q.
+- Flight in a seeded Sol system. The ship keeps its velocity while you are out of the seat.
+- Mina's megastructure. You can fly the canyon. You cannot land.
+- A pixel scale, Bayer dither, bloom, and a film grade. iPhone uses a lower quality profile.
+- Nothing is saved, and there is no login.
+
+## Controls
+
+Click the picture to capture the mouse. Esc lets it go. Any key or a click leaves the title.
+
+**Flying**
+
+| Key | Action |
+| --- | --- |
+| W / S, arrows | Throttle forward and back |
+| A / D, arrows | Yaw |
+| Mouse | Look |
+| Shift | Boost |
+| Space / Ctrl | Rise and drop |
+| E | Stand up into the cabin |
+
+**In the cabin**
+
+| Key | Action |
+| --- | --- |
+| W A S D | Walk |
+| Mouse | Look |
+| E | Sit, use the bay lever, or pick up what is in front of you |
+| 1–5 | Choose a hotbar slot |
+| Q | Drop the chosen slot |
+
+**Touch**
+
+The stick, the look drag, and the buttons show on a phone. Flying is still the keyboard.
+
+- **E** stands you up. **SIT** puts you back in the seat.
+- The left stick walks.
+- Drag the right side of the screen to look.
+- **USE** opens the bay, grabs a crate, or uses a locker.
+
+## Build and run
+
+Install [Godot 4.6](https://godotengine.org/download/archive/4.6-stable/) and open this folder, or:
 
 ```
 godot --path .
 ```
 
-The game opens on a title drift past Mina. Click or press any key, and the view fades into flight. Then click the view to capture the mouse.
-
-- **W / S** or the arrow keys throttle forward and back
-- **A / D** or the arrow keys yaw
-- **Mouse** looks
-- **Shift** boosts
-- **Space / Ctrl** rise and drop
-- **Esc** releases the mouse
-- **E** stands up from the pilot seat into the cabin. Walk with **WASD**, look with the mouse, and press **E** beside the seat to fly again. The ship keeps its velocity while you are up. On iPhone, the seat button stands and sits, a joystick walks, and dragging the right side of the screen looks.
-
-The desktop renderer is Forward+. iOS is set to the Mobile renderer for a later export. Physics is Jolt at 120 ticks per second. There is no landing, trading, or login in this milestone. Speed stays on the pixel HUD, including while you walk the cabin.
-
-## Seed check
-
-```
-godot --headless --path . --script res://test/test_sol_planet.gd
-```
-
-That regenerates Sol and compares every world's seed, name, biome, radius, and position with `test/sol_web_expected.json`, captured from the web build's `universe.js`.
-
-## macOS export
-
-`export_presets.cfg` has a macOS preset named `macOS` (universal, ad-hoc signature, testing distribution). Export templates for 4.6 are required:
+Desktop renders with Forward+. `project.godot` sets iOS to the Mobile renderer and the low quality profile. `export_presets.cfg` has a macOS preset (universal binary, ad-hoc signature). An iOS export preset is not in the repo yet. Add one in the editor when you have an Apple team id.
 
 ```
 godot --headless --export-debug "macOS" "build/macos/AKARI ONLINE.zip"
 ```
 
-## Ship mesh
-
-The player hull is `assets/ships/jumpship.glb` (nose at -Z, engines at +Z), scaled to the old chase-cam size. Godot cannot import the Draco-compressed glBs. `assets/models/ship.glb` is the previous starter hull with Draco removed. To rebuild assets from Blender without compressing them:
+`tools/check.sh` runs the linter, the headless tests, and the flight bench. The Sol seed check on its own:
 
 ```
-blender -b --python tools/blender/build_assets.py -- --uncompressed
+godot --headless --path . --script res://test/test_sol_planet.gd
 ```
 
-That writes plain glBs into `assets/models/` and skips the Draco pass. Omit `--uncompressed` to keep the old Draco export under `public/models/`.
+## Roadmap
+
+- Seat-terminal commands: `AUTOPILOT HOVER`, `AUTOPILOT ORBIT`, `SCAN`, `MINA`.
+- Landing on Mina.
+- Making the ship your own.
+- A save.
+
+## Dev notes
+
+Every bug that ships gets a lint rule or a test, so it fails `tools/check.sh` if it comes back. The rules are listed in `docs/LINT.md`.
+
+Functions that run every frame are marked `# hot`. They must not allocate: no `.new()`, no string building, no `Array` or `Dictionary` literals. A phone frame is 16 ms, and a garbage-collection hitch drops it.
+
+`docs/budget.json` is the ceiling for frame time, draw calls, node count, and packed size. The bench flies the cabin, the exterior, and the city, and `tools/budget.py` fails the run if a number is over the ceiling. See `docs/BUDGET.md`.
