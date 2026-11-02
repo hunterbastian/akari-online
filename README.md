@@ -1,5 +1,3 @@
-<img src="docs/media/hero.gif" width="640" alt="Descent from orbit onto Mina">
-
 # AKARI ONLINE
 
 A retro space game. Your ship is your home.
