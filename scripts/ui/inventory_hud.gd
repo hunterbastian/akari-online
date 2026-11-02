@@ -16,6 +16,7 @@ var _root: Control
 var _slots: Array[Control] = []
 var _drag := {}
 var _touch := false
+var _mock_shot := false
 var _font: FontFile
 var _icons := {}
 
@@ -37,9 +38,13 @@ func bind(ship: Node) -> void:
 	add_child(_root)
 	get_viewport().size_changed.connect(_rebuild)
 	visible = false
+	_mock_shot = OS.get_cmdline_user_args().has("--mock")
 
 
 func _process(_delta: float) -> void:
+	if _mock_shot:
+		visible = false
+		return
 	_inv = _inventory()
 	var walking := _ship != null and bool(_ship.get("walking"))
 	var seated := false

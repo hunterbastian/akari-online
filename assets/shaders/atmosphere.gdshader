@@ -21,20 +21,21 @@ void fragment() {
 	float ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
 	float rim = pow(1.0 - ndotv, u_power);
 	float scatter = exp(-ndotv * u_falloff);
-	// Light the haze by the limb point under this pixel, not the shell's near face,
-	// so the night side stays dark instead of getting a blue veil.
 	vec3 limb = n - view_dir * dot(n, view_dir);
 	limb = length(limb) > 1e-4 ? normalize(limb) : n;
-	float ndl = dot(normalize(mix(limb, n, 0.25)), normalize(u_sun_dir));
-	float day = smoothstep(-0.12, 0.35, ndl);
-	float term = exp(-ndl * ndl * 24.0);
-	vec3 cool = mix(u_color, vec3(0.4, 0.68, 0.95), 0.8);
-	vec3 col = cool * mix(0.05, 1.1, day);
-	col += vec3(1.0, 0.78, 0.5) * term * rim * 0.35;
-	// Forward scatter: the limb lights up when the sun sits behind Mina.
-	float back = pow(max(dot(-view_dir, normalize(u_sun_dir)), 0.0), 8.0);
-	col += vec3(0.55, 0.78, 1.0) * back * rim * 1.4;
-	float alpha = rim * scatter * mix(0.1, 1.0, max(day, back)) * u_strength;
+	vec3 sun = normalize(u_sun_dir);
+	float ndl = dot(normalize(mix(limb, n, 0.25)), sun);
+	// Wide terminator: the night limb stays faint instead of cutting off.
+	float day = smoothstep(-0.42, 0.55, ndl);
+	float term = exp(-ndl * ndl * 6.0);
+	vec3 rayleigh = mix(u_color, vec3(0.42, 0.66, 1.0), 0.72);
+	vec3 warm = vec3(1.0, 0.74, 0.48);
+	vec3 col = mix(rayleigh, warm, clamp(term * 0.7, 0.0, 1.0));
+	col *= mix(0.22, 1.0, day);
+	float back = pow(max(dot(-view_dir, sun), 0.0), 6.0);
+	col += warm * term * rim * 0.55;
+	col += vec3(0.62, 0.8, 1.0) * back * rim * 0.8;
+	float alpha = rim * scatter * mix(0.1, 0.72, max(day, back * 0.7)) * u_strength;
 	ALBEDO = col;
-	ALPHA = alpha;
+	ALPHA = clamp(alpha, 0.0, 1.0);
 }

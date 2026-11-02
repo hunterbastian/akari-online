@@ -35,6 +35,7 @@ var _command := ""
 var _cursor_on := true
 var _cursor_time := 0.0
 var _prompt_held := false
+var _boot_lock := false
 var _hum: AudioStreamPlayer
 var _whine: AudioStreamPlayer3D
 var _steps: AudioStreamPlayer
@@ -138,7 +139,24 @@ func set_walking(on: bool) -> void:
 		mesh.cast_shadow = mode
 
 
+func present_boot(body: String, prompt: String) -> void:
+	_boot_lock = true
+	var text := body
+	if not prompt.is_empty():
+		if not text.is_empty():
+			text += "\n"
+		text += prompt
+	if _term_header:
+		_term_header.position = Vector2(28, 24)
+		_term_header.size.y = 320
+		_term_header.add_theme_font_size_override("font_size", 32)
+		_term_header.text = text
+	_set_line("terminal", "")
+
+
 func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String, hull: int, autopilot: String, pitch_deg: int, yaw_deg: int) -> void:
+	if _boot_lock:
+		return
 	var spd := "%03d" % int(round(speed))
 	var rng := "%05d" % int(round(maxf(mina_range, 0.0)))
 	var thr := "%04.2f" % clampf(throttle, 0.0, 1.0)
@@ -193,6 +211,9 @@ func snap_view(mode: String) -> void:
 # hot
 func _process(delta: float) -> void:
 	if not _lines.has("terminal"):
+		return
+	if _boot_lock:
+		_ambience(delta)
 		return
 	# Shots must show the cursor. A long first frame would otherwise land in the off half.
 	if _shot_hold or not OS.get_environment("AKARI_CABIN").is_empty():

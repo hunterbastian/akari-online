@@ -1,6 +1,9 @@
 shader_type sky;
 
 uniform vec3 sun_dir = vec3(0.48, 0.79, 0.31);
+uniform vec3 up_dir = vec3(0.0, 1.0, 0.0);
+uniform float ground_mix = 0.0;
+uniform float cheap = 0.0;
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -31,10 +34,25 @@ float fbm(vec3 p) {
 	return s;
 }
 
+vec3 air_sky(vec3 dir, vec3 sun) {
+	vec3 up = normalize(up_dir);
+	float zenith = clamp(dot(dir, up) * 0.5 + 0.5, 0.0, 1.0);
+	float horizon = pow(1.0 - zenith, 1.6);
+	vec3 top = vec3(0.1, 0.18, 0.32);
+	vec3 haze = vec3(0.28, 0.26, 0.22);
+	vec3 sky = mix(top, haze, horizon);
+	float mu = max(dot(dir, sun), 0.0);
+	sky += vec3(0.85, 0.55, 0.28) * pow(mu, 4.0) * 0.16;
+	sky += vec3(1.0, 0.86, 0.62) * pow(mu, 36.0) * 0.42;
+	return sky;
+}
+
 void sky() {
 	vec3 dir = normalize(EYEDIR);
+	vec3 sun = normalize(sun_dir);
 	vec3 base = vec3(0.0015, 0.0025, 0.008);
-
+	vec3 col = base;
+	if (cheap < 0.5) {
 	float far_n = fbm(dir * 1.35 + vec3(2.2, 0.4, 1.1));
 	float mid_n = fbm(dir * 2.8 + far_n * 0.55 + vec3(7.0, 1.4, 3.2));
 	float near_n = fbm(dir * 5.4 + mid_n * 0.35 + vec3(0.6, 4.8, 8.1));
@@ -45,7 +63,6 @@ void sky() {
 	float far_mask = smoothstep(0.46, 0.76, far_n);
 	float mid_mask = smoothstep(0.52, 0.82, mid_n);
 	float near_mask = smoothstep(0.58, 0.86, near_n);
-	vec3 col = base;
 	col = mix(col, indigo, far_mask * 0.2);
 	col = mix(col, teal, mid_mask * 0.13);
 	col = mix(col, violet, near_mask * 0.08);
@@ -61,12 +78,13 @@ void sky() {
 	col += vec3(0.72, 0.8, 0.95) * dim;
 	col += vec3(0.92, 0.94, 1.0) * bright;
 
-	vec3 sun = normalize(sun_dir);
 	float mu = max(dot(dir, sun), 0.0);
 	float corona = pow(mu, 64.0);
 	float wide = pow(mu, 18.0);
 	col += vec3(0.5, 0.64, 0.86) * corona * 0.35;
 	col += vec3(0.05, 0.08, 0.14) * wide * 0.04;
+	}
+	col = mix(col, air_sky(dir, sun), clamp(ground_mix, 0.0, 1.0));
 
 	COLOR = col;
 }

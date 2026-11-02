@@ -12,6 +12,7 @@ var _shot_time := 0.0
 var _shot_frames := 0
 var _shot_saved := false
 var _cli_shot := ""
+var _mock := ""
 var _cli_at := ""
 var _cli_hold := ""
 var _cli_floor := ""
@@ -122,6 +123,11 @@ func _ready() -> void:
 			door_cabin.set_bay_pose(_cli_door)
 	if _cli_at.begins_with("mega"):
 		_frame_mega(_cli_at)
+	if not _mock.is_empty():
+		var mock = load("res://scripts/flight/mockups.gd").new()
+		mock.name = "Mockup"
+		add_child(mock)
+		mock.setup(_mock, ship, _planet_center, _planet_radius)
 	if _tour:
 		var args := OS.get_cmdline_user_args()
 		if args.has("--mega"):
@@ -262,7 +268,14 @@ func _process(delta: float) -> void:
 		_shot_time += delta
 		_shot_frames += 1
 		# Nested CRT viewports need a few real frames before the shot is honest.
-		if _shot_time < 0.6 or _shot_frames < 8:
+		var shot_wait := 0.6
+		if _mock == "boot":
+			shot_wait = 4.6
+		elif _mock == "bay":
+			shot_wait = 2.6
+		elif _mock == "entry":
+			shot_wait = 1.4
+		if _shot_time < shot_wait or _shot_frames < 8:
 			return
 		_shot_saved = true
 		_run_cli_shot()
@@ -273,7 +286,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _mock != "" or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -557,6 +570,9 @@ func _read_cli() -> void:
 		elif arg == "--at" and i + 1 < args.size():
 			_cli_at = str(args[i + 1])
 			i += 2
+		elif arg == "--mock" and i + 1 < args.size():
+			_mock = str(args[i + 1])
+			i += 2
 		elif arg == "--hold" and i + 1 < args.size():
 			_cli_hold = str(args[i + 1])
 			i += 2
@@ -568,6 +584,10 @@ func _read_cli() -> void:
 			i += 2
 		else:
 			i += 1
+	if _mock == "boot" or _mock == "entry":
+		_cabin_view = "seat"
+	elif _mock == "bay":
+		_cabin_view = "rear"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()
