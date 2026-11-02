@@ -35,12 +35,14 @@ func release_from_title() -> void:
 	_apply(0.0, true)
 
 
+# hot
 func _process(delta: float) -> void:
 	if held or _ship == null:
 		return
 	_apply(minf(delta, FlightProfile.DT_CAP), false)
 
 
+# hot
 func _apply(step: float, snap: bool) -> void:
 	var boosting: bool = _ship.get("boosting")
 	var cam_dist := FlightProfile.CAM_DIST_BOOST if boosting else FlightProfile.CAM_DIST

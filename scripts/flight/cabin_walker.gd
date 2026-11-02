@@ -73,6 +73,7 @@ func near_point(point: Vector3, distance: float) -> bool:
 	return Vector2(position.x, position.z).distance_to(Vector2(point.x, point.z)) <= distance
 
 
+# hot
 func _process(delta: float) -> void:
 	if DevConsole.blocks_gameplay():
 		return

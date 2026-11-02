@@ -126,6 +126,7 @@ func _linear_fade(color: Color) -> GradientTexture2D:
 	return texture
 
 
+# hot
 func _process(delta: float) -> void:
 	if _view == null:
 		return

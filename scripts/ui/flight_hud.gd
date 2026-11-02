@@ -8,6 +8,9 @@ var _ship: Node
 var _speed: Label
 var _hint: Label
 var _font: FontVariation
+var _hide_shot := false
+var _shown_spd := -1
+var _shown_hint := ""
 
 
 func setup(ship: Node) -> void:
@@ -25,6 +28,7 @@ func setup(ship: Node) -> void:
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 	visible = false
+	_hide_shot = _beauty_shot()
 
 
 func _layout() -> void:
@@ -40,16 +44,32 @@ func _layout() -> void:
 	_hint.size = Vector2(size_px * 12, text_h)
 
 
-func _process(_delta: float) -> void:
+func _beauty_shot() -> bool:
 	if OS.get_environment("AKARI_CABIN") != "":
-		visible = false
-		return
+		return true
+	if OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1":
+		return true
 	var args := OS.get_cmdline_user_args()
-	var mega_shot := false
+	if args.has("--hull") or args.has("--mega"):
+		return true
 	for arg in args:
 		if str(arg).begins_with("mega"):
-			mega_shot = true
-	if args.has("--hull") or args.has("--mega") or mega_shot or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1":
+			return true
+	return false
+
+
+func _set_speed(spd: int) -> void:
+	_speed.text = "SPD  %d" % spd
+
+
+func _set_hint(text: String, show: bool) -> void:
+	_hint.text = text
+	_hint.visible = show
+
+
+# hot
+func _process(_delta: float) -> void:
+	if _hide_shot:
 		visible = false
 		return
 	var flying := _ship != null and bool(_ship.get("active"))
@@ -57,17 +77,23 @@ func _process(_delta: float) -> void:
 	if not flying:
 		return
 	var velocity: Vector3 = _ship.get("velocity")
-	_speed.text = "SPD  %d" % int(round(velocity.length()))
+	var spd := int(round(velocity.length()))
+	if spd != _shown_spd:
+		_shown_spd = spd
+		_set_speed(spd)
 	var walking := bool(_ship.get("walking"))
 	var cabin = _ship.get("_cabin")
+	var hint := ""
+	var show := false
 	if walking and cabin != null and cabin.has_method("near_bay_lever") and cabin.near_bay_lever():
-		_hint.text = "E  BAY"
-		_hint.visible = true
+		hint = "E  BAY"
+		show = true
 	elif walking and _ship.has_method("near_seat") and _ship.near_seat():
-		_hint.text = "E  SIT"
-		_hint.visible = true
+		hint = "E  SIT"
+		show = true
 	elif not walking:
-		_hint.text = "E  STAND"
-		_hint.visible = true
-	else:
-		_hint.visible = false
+		hint = "E  STAND"
+		show = true
+	if hint != _shown_hint or show != _hint.visible:
+		_shown_hint = hint
+		_set_hint(hint, show)

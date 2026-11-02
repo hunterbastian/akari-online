@@ -34,6 +34,7 @@ func setup(flight_ship: Node3D, chase_camera: Camera3D, center: Vector3, radius:
 	_apply_title_pose(0.0)
 
 
+# hot
 func _process(delta: float) -> void:
 	if _finished:
 		return
@@ -70,6 +71,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		pressed = true
 	if pressed:
 		begin()
+
+
+func abort_for_dev() -> void:
+	# A dev teleport takes over. Leave the title camera and the card behind.
+	_finished = true
+	_transition = true
+	if _camera:
+		_camera.current = false
+	if _card:
+		_card.visible = false
+	set_process(false)
+	set_process_unhandled_input(false)
 
 
 func begin() -> void:

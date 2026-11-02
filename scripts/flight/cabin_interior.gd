@@ -156,6 +156,16 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	_refresh_header()
 
 
+func terminal_wants_keys() -> bool:
+	return walker != null and walker.locked and walker.eye != null and walker.eye.current
+
+
+func release_fixed_view() -> void:
+	# A dev teleport is a place to start walking, not a camera you cannot leave.
+	if walker:
+		walker.locked = false
+
+
 func snap_view(mode: String) -> void:
 	show_hotbar = mode != "seat"
 	if mode == "seat":
@@ -180,6 +190,7 @@ func snap_view(mode: String) -> void:
 		walker.snap(aisle_point, standing_eye, -0.02, 0.0)
 
 
+# hot
 func _process(delta: float) -> void:
 	if not _lines.has("terminal"):
 		return

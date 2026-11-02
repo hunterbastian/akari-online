@@ -26,6 +26,12 @@ var _engine_anchors: Array[Vector3] = []
 var walking := false
 var dev_speed_mult := 1.0
 var dev_god := false
+var _pickup_until := 0
+var _ship_cache: Dictionary = {}
+var _read_spd := -1
+var _read_range := -1
+var _read_thr := -1
+var _read_ap := ""
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
 var _trails: Array[MeshInstance3D] = []
@@ -131,6 +137,11 @@ func start_cabin_view(mode: String) -> void:
 
 func _enter_cabin() -> void:
 	walking = true
+	# Coast on the velocity you had. The burn itself stops, or the nozzles keep firing.
+	thrust = 0.0
+	boosting = false
+	_pickup_until = Time.get_ticks_msec() + 600
+	_update_flames()
 	_set_shell_hidden(true)
 	if _cabin:
 		_cabin.set_walking(true)
@@ -172,6 +183,15 @@ func _input(event: InputEvent) -> void:
 	if not active or _shot:
 		return
 	if event.is_action_pressed("interact"):
+		# The seat terminal is typing. E is a letter there, not the eject key.
+		if _cabin and _cabin.has_method("terminal_wants_keys") and _cabin.terminal_wants_keys():
+			return
+		# Sitting wins over a crate at your feet, including the moment you just stood.
+		if walking and near_seat():
+			toggle_seat()
+			return
+		if walking and Time.get_ticks_msec() < _pickup_until:
+			return
 		if walking and _cabin and _cabin.has_method("try_bay_door") and _cabin.try_bay_door():
 			return
 		if walking and _cabin and _cabin.inventory and _cabin.inventory.try_interact():
@@ -192,6 +212,12 @@ func _input(event: InputEvent) -> void:
 			if DisplayServer.get_name() != "headless":
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			if _cabin and _cabin.has_method("terminal_wants_keys") and _cabin.terminal_wants_keys():
+				if near_seat():
+					toggle_seat()
+				else:
+					_cabin.walker.locked = false
+				return
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _cabin:
 			_cabin.walker.add_look(event.relative)
@@ -205,6 +231,7 @@ func _input(event: InputEvent) -> void:
 		_mouse_dy += event.relative.y
 
 
+# hot
 func _process(delta: float) -> void:
 	if not active:
 		return
@@ -273,6 +300,7 @@ func _process(delta: float) -> void:
 	_update_cabin()
 
 
+# hot
 func _hold_course(step: float) -> void:
 	# Autopilot: keep the velocity the ship had when the pilot stood up. No new input, no drag.
 	_mouse_dx = 0.0
@@ -287,6 +315,7 @@ func _hold_course(step: float) -> void:
 	_update_cabin()
 
 
+# hot
 func _update_cabin() -> void:
 	var offset := planet_position - global_position
 	var distance := maxf(offset.length(), 0.001)
@@ -296,17 +325,26 @@ func _update_cabin() -> void:
 	for material in _paints:
 		material.set_shader_parameter("bounce_dir", toward)
 		material.set_shader_parameter("bounce_strength", strength)
-	if _cabin:
-		var ship := Ships.get_ship(GameState.ship_id)
-		var mina_range := maxf(distance - planet_radius, 0.0)
-		var hull := int(ship.stats.hull)
-		# Standing up holds the last velocity. Seated flight and the locked seat stay on standby.
-		var autopilot := "STANDBY"
-		if walking and _cabin.walker != null and not _cabin.walker.locked:
-			autopilot = "HOLD"
-		var pitch_deg := int(round(rad_to_deg(rotation.x)))
-		var yaw_deg := int(round(rad_to_deg(rotation.y)))
-		_cabin.update_readouts(velocity.length(), thrust, mina_range, str(ship.name), hull, autopilot, pitch_deg, yaw_deg)
+	if _cabin == null:
+		return
+	if _ship_cache.is_empty():
+		_ship_cache = Ships.get_ship(GameState.ship_id)
+	var mina_range := int(round(maxf(distance - planet_radius, 0.0)))
+	var spd := int(round(velocity.length()))
+	var thr := int(round(thrust * 100.0))
+	var autopilot := "STBY"
+	if walking and _cabin.walker != null and not _cabin.walker.locked:
+		autopilot = "HOLD"
+	if spd == _read_spd and mina_range == _read_range and thr == _read_thr and autopilot == _read_ap:
+		return
+	_read_spd = spd
+	_read_range = mina_range
+	_read_thr = thr
+	_read_ap = autopilot
+	var hull := int(_ship_cache.stats.hull)
+	var pitch_deg := int(round(rad_to_deg(rotation.x)))
+	var yaw_deg := int(round(rad_to_deg(rotation.y)))
+	_cabin.update_readouts(float(spd), thrust, float(mina_range), str(_ship_cache.name), hull, autopilot, pitch_deg, yaw_deg)
 
 
 func _keep_off_star() -> void:
@@ -359,6 +397,7 @@ func _build_flames() -> void:
 		_flames.append(flame)
 
 
+# hot
 func _update_flames() -> void:
 	var hot := thrust
 	for flame in _flames:

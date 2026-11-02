@@ -110,8 +110,9 @@ func _layout() -> void:
 	_use.size = Vector2(84, 84)
 
 
+# hot
 func _process(_delta: float) -> void:
-	if not _touch or _ship == null:
+	if not _touch or _ship == null or DevConsole.blocks_gameplay():
 		visible = false
 		return
 	var flying := bool(_ship.get("active"))
@@ -126,11 +127,16 @@ func _process(_delta: float) -> void:
 
 
 func _on_seat() -> void:
+	# The console owns the screen. SIT must not fire through it.
+	if DevConsole.blocks_gameplay():
+		return
 	if _ship and _ship.has_method("toggle_seat"):
 		_ship.toggle_seat()
 
 
 func _on_use() -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if _ship and _ship.has_method("try_cabin_use"):
 		_ship.try_cabin_use()
 

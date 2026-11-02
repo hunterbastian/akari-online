@@ -1,0 +1,14 @@
+{
+  "limits": {
+    "worst_ms": 140,
+    "worst_draws": 500,
+    "worst_nodes": 1200,
+    "pack_bytes": 1800000
+  },
+  "measured": {
+    "worst_ms": 73.93,
+    "worst_draws": 227,
+    "worst_nodes": 701,
+    "pack_bytes": 1200810
+  }
+}

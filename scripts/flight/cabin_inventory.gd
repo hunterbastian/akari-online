@@ -142,6 +142,26 @@ func pickup_kind(kind: String) -> bool:
 	return false
 
 
+func close_if_far(origin: Vector3) -> void:
+	if open_bank == "":
+		return
+	if not _locker_pos.has(open_bank):
+		open_bank = ""
+		dirty = true
+		return
+	var at: Vector3 = _locker_pos[open_bank]
+	var dist := Vector2(origin.x, origin.z).distance_to(Vector2(at.x, at.z))
+	if dist > _scale * 1.25:
+		open_bank = ""
+		dirty = true
+
+
+func _process(_delta: float) -> void:
+	if open_bank == "" or _cabin == null or _cabin.walker == null:
+		return
+	close_if_far(_cabin.walker.position)
+
+
 func try_interact() -> bool:
 	if _cabin == null or _cabin.walker == null or _cabin.walker.locked:
 		return false

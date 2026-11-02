@@ -25,6 +25,7 @@ var _planet: Dictionary = {}
 var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
+var _state_test := false
 
 
 func _ready() -> void:
@@ -144,8 +145,14 @@ func _ready() -> void:
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
 	_update_bounce()
+	if OS.get_cmdline_user_args().has("--bench"):
+		var bench = load("res://scripts/bench_run.gd").new()
+		bench.name = "BenchRun"
+		add_child(bench)
+		bench.setup(self, ship)
 	if OS.get_environment("AKARI_CONSOLE") == "1":
 		DevConsole.present()
+	_state_test = OS.get_cmdline_user_args().has("--state-test")
 
 
 func _mount_world() -> void:
@@ -239,7 +246,13 @@ func _update_bounce() -> void:
 	_bounce.light_energy = 0.08 + 0.32 * near * near
 
 
+# hot
 func _process(delta: float) -> void:
+	if _state_test:
+		_state_test = false
+		var failed: int = load("res://test/test_statechart.gd").run()
+		get_tree().quit(failed)
+		return
 	_update_bounce()
 	if _tour:
 		return
@@ -400,6 +413,7 @@ func dev_teleport(spec: String) -> String:
 		_ship.global_position = at
 		return "tp %s" % str(at)
 	var key := parts[0].to_lower()
+	_dismiss_title()
 	if key == "planet" or key == "exterior":
 		_ship.dev_leave_cabin()
 		_ship.velocity = Vector3.ZERO
@@ -417,53 +431,79 @@ func dev_teleport(spec: String) -> String:
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("seat")
+		_finish_dev_view()
 		return "tp cabin"
 	if key == "aisle":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("aisle")
+		_finish_dev_view()
 		return "tp aisle"
 	if key == "rear" or key == "back":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("rear")
+		_finish_dev_view()
 		return "tp rear"
 	if key == "dash":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("dash")
+		_finish_dev_view()
 		return "tp dash"
 	if key == "crates":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("crates")
+		_finish_dev_view()
 		return "tp crates"
 	if key == "locker":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("locker")
+		_finish_dev_view()
 		return "tp locker"
 	if key == "storage":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("storage")
+		_finish_dev_view()
 		return "tp storage"
 	if key == "living":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("living")
+		_finish_dev_view()
 		return "tp living"
 	if key == "bench":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("bench")
+		_finish_dev_view()
 		return "tp bench"
 	if key == "wide":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
 		_ship.start_cabin_view("wide")
+		_finish_dev_view()
 		return "tp wide"
 	return "unknown tp target '%s'" % key
+
+
+func _dismiss_title() -> void:
+	var director := get_node_or_null("TitleDirector")
+	if director and director.has_method("abort_for_dev"):
+		director.abort_for_dev()
+
+
+func _finish_dev_view() -> void:
+	if _ship == null:
+		return
+	var cabin = _ship.get("_cabin")
+	if cabin and cabin.has_method("release_fixed_view"):
+		cabin.release_fixed_view()
+	if cabin and cabin.walker and cabin.walker.eye:
+		cabin.walker.eye.current = true
 
 
 func _tp_moon() -> String:

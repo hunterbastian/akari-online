@@ -78,6 +78,7 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 		city.build(radius, sun)
 
 
+# hot
 func _process(delta: float) -> void:
 	if _spin:
 		_spin.rotate_y(delta * 0.02)

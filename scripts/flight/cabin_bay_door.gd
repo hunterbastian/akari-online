@@ -74,6 +74,7 @@ func set_pose(mode: String) -> void:
 		_apply(0.0)
 
 
+# hot
 func _process(delta: float) -> void:
 	var blink := true
 	if _moving:

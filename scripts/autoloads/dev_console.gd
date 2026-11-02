@@ -315,9 +315,13 @@ func _place_toast() -> void:
 	_toast.size = Vector2(180.0, 40.0)
 
 
+# hot
 func _process(delta: float) -> void:
 	if not _enabled:
 		return
+	if _freecam_on and not is_instance_valid(_freecam):
+		# The freecam node died with the previous scene. Do not keep blocking the title.
+		_freecam_on = false
 	if _toast_time > 0.0:
 		_toast_time -= delta
 		if _toast_time <= 0.0 and _toast:
@@ -329,7 +333,7 @@ func _process(delta: float) -> void:
 			var fps := Engine.get_frames_per_second()
 			var draws := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 			var mem := int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0)
-			_fps_label.text = "FPS  %d\nDRAW %d\nMEM  %d MB" % [fps, draws, mem]
+			_write_fps(fps, draws, mem)
 	if _freecam_on and not open and is_instance_valid(_freecam):
 		_fly(delta)
 
@@ -599,6 +603,23 @@ func _cmd_fps(_args: PackedStringArray) -> void:
 	_echo("fps %s" % ("on" if _fps_on else "off"))
 
 
+func hold_freecam() -> void:
+	if _freecam_on and is_instance_valid(_freecam):
+		_freecam.current = true
+
+
+func release_transient() -> void:
+	# Noclip and an open console are for this scene only. A reload starts clean.
+	if _freecam_on:
+		_freecam_off()
+	if open:
+		_set_open(false)
+
+
+func _write_fps(fps: float, draws: int, mem: int) -> void:
+	_fps_label.text = "FPS  %d\nDRAW %d\nMEM  %d MB" % [fps, draws, mem]
+
+
 func _cmd_tp(args: PackedStringArray) -> void:
 	var scene := _scene()
 	if scene == null or not scene.has_method("dev_teleport"):
@@ -609,6 +630,7 @@ func _cmd_tp(args: PackedStringArray) -> void:
 		return
 	var spec := " ".join(args)
 	var message := str(scene.dev_teleport(spec))
+	hold_freecam()
 	_echo(message)
 
 
@@ -728,6 +750,7 @@ func _cmd_quality(args: PackedStringArray) -> void:
 		return
 	_POST.runtime_quality = tier
 	_echo("quality %s, reloading" % tier)
+	release_transient()
 	get_tree().reload_current_scene()
 
 
@@ -782,11 +805,13 @@ func _cmd_seed(args: PackedStringArray) -> void:
 		return
 	Universe.debug_seed = int(args[0])
 	_echo("seed %d, reloading" % Universe.debug_seed)
+	release_transient()
 	get_tree().reload_current_scene()
 
 
 func _cmd_reload(_args: PackedStringArray) -> void:
 	_echo("reloading")
+	release_transient()
 	get_tree().reload_current_scene()
 
 
