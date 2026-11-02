@@ -34,6 +34,7 @@ func setup(flight_ship: Node3D, chase_camera: Camera3D, center: Vector3, radius:
 	_apply_title_pose(0.0)
 
 
+# hot
 func _process(delta: float) -> void:
 	if _finished:
 		return
@@ -59,6 +60,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if DevConsole.blocks_gameplay():
+		return
 	if _transition or _time < 0.45:
 		return
 	var pressed := false
@@ -68,6 +71,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		pressed = true
 	if pressed:
 		begin()
+
+
+func abort_for_dev() -> void:
+	# A dev teleport takes over. Leave the title camera and the card behind.
+	_finished = true
+	_transition = true
+	if _camera:
+		_camera.current = false
+	if _card:
+		_card.visible = false
+	set_process(false)
+	set_process_unhandled_input(false)
 
 
 func begin() -> void:
@@ -99,6 +114,7 @@ func _build_camera() -> void:
 	_camera.current = true
 	_camera.fov = 42.0
 	_camera.near = 0.12
+	_camera.cull_mask &= ~(1 << 2)
 	_camera.far = 7000.0
 	# The 3D world lives in the low-res viewport. The title card stays on the root.
 	ship.get_parent().add_child(_camera)

@@ -1,0 +1,27 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: python3 tools/lint.py
+      - name: Godot
+        run: |
+          curl -fsSL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.6-stable/Godot_v4.6-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-dist
+          install -m 755 /tmp/godot-dist/Godot_v4.6-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Tests and bench
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-vulkan-drivers
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          if [ ! -f "$VK_ICD_FILENAMES" ]; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+          fi
+          chmod +x tools/check.sh
+          GODOT=godot xvfb-run -a tools/check.sh

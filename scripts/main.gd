@@ -7,23 +7,40 @@ const _PostProfile := preload("res://scripts/data/post_profile.gd")
 
 var _shot := false
 var _title_card := false
+var _cabin_view := ""
 var _shot_time := 0.0
+var _shot_frames := 0
 var _shot_saved := false
+var _cli_shot := ""
+var _cli_at := ""
+var _cli_hold := ""
+var _cli_floor := ""
+var _cli_door := ""
+var _tour := false
 var _world: SubViewport
 var _bounce: DirectionalLight3D
 var _ship: Node3D
+var _dither_layer: CanvasLayer
+var _planet: Dictionary = {}
 var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
+var _planet_body: Node3D
+var _state_test := false
 
 
 func _ready() -> void:
-	_shot = OS.get_environment("AKARI_SHOT") == "1"
+	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1"
+	var user_args := OS.get_cmdline_user_args()
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull") or user_args.has("--mega")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
+	_cabin_view = OS.get_environment("AKARI_CABIN")
+	_read_cli()
 	DisplayServer.window_set_title("AKARI ONLINE")
 	_mount_world()
 	var system := Galaxy.system_by_id(GameState.system_id)
 	var chart := Universe.generate_system(system)
 	var planet: Dictionary = chart.planets[0]
+	_planet = planet
 	var sky: Dictionary = chart.sky
 	var sun_dir := FlightProfile.SUN_OFFSET.normalized()
 
@@ -35,18 +52,19 @@ func _ready() -> void:
 	body.name = planet.name
 	_world.add_child(body)
 	body.setup(planet, sun_dir)
+	_planet_body = body
 	_planet_center = planet.position
 	_planet_radius = float(planet.radius)
 
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
-	ship.set_meta("flight_active", _shot)
+	ship.set_meta("flight_active", _shot or _tour or not _cabin_view.is_empty())
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	_ship = ship
-	if _shot:
+	if _shot or _tour or not _cabin_view.is_empty():
 		_place_for_shot(ship, planet)
 	else:
 		ship.global_position = chart.spawn
@@ -56,26 +74,85 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
-	camera.set_meta("title_hold", not _shot)
+	camera.set_meta("title_hold", not _shot and not _tour)
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
-	if _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
+	if _shot and OS.get_environment("AKARI_HERO") == "1":
+		_frame_hero(ship, camera)
+	elif _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
 		_frame_side(ship, camera)
-	elif not _shot:
+	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
+		_frame_seam(ship, camera)
+	elif not _shot and not _tour and _cabin_view.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
 		director.setup(ship, camera, planet.position, float(planet.radius), sun_dir)
 	var hud = load("res://scripts/ui/flight_hud.gd").new()
 	hud.name = "FlightHud"
+	hud.add_to_group("akari_hud")
 	add_child(hud)
 	hud.setup(ship)
+	var cabin_controls = load("res://scripts/ui/cabin_controls.gd").new()
+	cabin_controls.name = "CabinControls"
+	cabin_controls.add_to_group("akari_hud")
+	add_child(cabin_controls)
+	cabin_controls.setup(ship)
+	ship.set_chase_camera(camera)
+	ship.set_cabin_controls(cabin_controls)
+	var inventory_hud = load("res://scripts/ui/inventory_hud.gd").new()
+	inventory_hud.name = "InventoryHud"
+	add_child(inventory_hud)
+	inventory_hud.bind(ship)
+	if not _cabin_view.is_empty():
+		ship.start_cabin_view(_cabin_view)
+	if not _cli_at.is_empty():
+		dev_teleport(_cli_at)
+	_apply_shot_inventory()
+	if _cli_door != "":
+		_aim_bay_at_planet(_ship)
+		var door_cabin = _ship.get("_cabin")
+		if door_cabin and door_cabin.has_method("set_bay_pose"):
+			door_cabin.snap_view("rear")
+			door_cabin.walker.pitch = 0.0
+			door_cabin.walker.eye.rotation.x = 0.0
+			door_cabin.set_bay_pose(_cli_door)
+	if _cli_at.begins_with("mega"):
+		_frame_mega(_cli_at)
+	if _tour:
+		var args := OS.get_cmdline_user_args()
+		if args.has("--mega"):
+			var mega = load("res://scripts/world/mega_tour.gd").new()
+			mega.name = "MegaTour"
+			add_child(mega)
+			mega.setup(_planet_body, ship)
+		else:
+			# The film tour opens on the exterior. Walk and the inventory tour start inside.
+			if args.has("--bay"):
+				_aim_bay_at_planet(ship)
+			if not args.has("--film"):
+				var tour_view := "rear"
+				if args.has("--walk"):
+					tour_view = "aisle"
+				ship.start_cabin_view(tour_view)
+			var tour = load("res://scripts/flight/cabin_tour.gd").new()
+			tour.name = "CabinTour"
+			add_child(tour)
+			tour.setup(ship)
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
 	_update_bounce()
+	if OS.get_cmdline_user_args().has("--bench"):
+		var bench = load("res://scripts/bench_run.gd").new()
+		bench.name = "BenchRun"
+		add_child(bench)
+		bench.setup(self, ship)
+	if OS.get_environment("AKARI_CONSOLE") == "1":
+		DevConsole.present()
+	_state_test = OS.get_cmdline_user_args().has("--state-test")
 
 
 func _mount_world() -> void:
@@ -103,6 +180,10 @@ func _mount_world() -> void:
 	_apply_render_scale()
 
 
+func apply_render_scale() -> void:
+	_apply_render_scale()
+
+
 func _apply_render_scale() -> void:
 	var full := get_viewport().get_visible_rect().size
 	var scale := _PostProfile.render_scale()
@@ -112,8 +193,19 @@ func _apply_render_scale() -> void:
 	)
 
 
+func set_dither_enabled(on: bool) -> void:
+	if on:
+		_add_dither()
+		return
+	if is_instance_valid(_dither_layer):
+		_dither_layer.visible = false
+
+
 func _add_dither() -> void:
 	if not _PostProfile.dither_enabled():
+		return
+	if is_instance_valid(_dither_layer):
+		_dither_layer.visible = true
 		return
 	var layer := CanvasLayer.new()
 	layer.name = "Dither"
@@ -123,10 +215,16 @@ func _add_dither() -> void:
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var material := ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/film_dither.gdshader")
+	material.set_shader_parameter("dither_strength", 0.01)
+	material.set_shader_parameter("grain_strength", 0.014)
+	material.set_shader_parameter("quantize_steps", 36.0)
+	material.set_shader_parameter("vignette", 0.14)
+	material.set_shader_parameter("ca_strength", _PostProfile.film_ca())
 	rect.material = material
 	layer.add_child(rect)
 	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
 	_world.add_child(layer)
+	_dither_layer = layer
 
 
 func _add_sun_glare(chase: Camera3D, sun_dir: Vector3) -> void:
@@ -148,22 +246,43 @@ func _update_bounce() -> void:
 	_bounce.light_energy = 0.08 + 0.32 * near * near
 
 
+# hot
 func _process(delta: float) -> void:
+	if _state_test:
+		_state_test = false
+		var failed: int = load("res://test/test_statechart.gd").run()
+		get_tree().quit(failed)
+		return
 	_update_bounce()
+	if _tour:
+		return
+	if not _cli_shot.is_empty():
+		if _shot_saved:
+			return
+		_shot_time += delta
+		_shot_frames += 1
+		# Nested CRT viewports need a few real frames before the shot is honest.
+		if _shot_time < 0.6 or _shot_frames < 8:
+			return
+		_shot_saved = true
+		_run_cli_shot()
+		return
 	if _title_card and not _shot and not _shot_saved:
 		_shot_time += delta
 		if _shot_time >= 2.4:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _shot or _shot_saved:
+	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
-	var still_at := 8.0
+	_shot_frames += 1
+	var still_at := 8.0 if _cabin_view.is_empty() else 1.2
 	var still_env := OS.get_environment("AKARI_SHOT_AT")
 	if not still_env.is_empty():
 		still_at = float(still_env)
-	if _shot_time < still_at:
+	# Nested CRT viewports need a few real frames; a long first frame must not skip them.
+	if _shot_time < still_at or _shot_frames < 4:
 		return
 	_shot_saved = true
 	_capture.call_deferred()
@@ -179,6 +298,13 @@ func _capture() -> void:
 	print("Wrote ", path)
 	if OS.get_environment("AKARI_SHOT_HOLD") != "1":
 		get_tree().quit()
+
+
+func _aim_bay_at_planet(ship: Node3D) -> void:
+	# The bay opens on +Z. look_at aims -Z, so aim the nose away from Mina.
+	var center: Vector3 = _planet.position
+	var away := ship.global_position * 2.0 - center
+	ship.look_at(away, Vector3.UP)
 
 
 func _place_for_shot(ship: Node3D, planet: Dictionary) -> void:
@@ -213,13 +339,270 @@ func _frame_closeup(ship: Node3D, camera: Camera3D) -> void:
 	)
 
 
+func _frame_exterior(ship: Node3D) -> void:
+	var camera := ship.get("_chase") as Camera3D
+	if camera == null:
+		return
+	camera.held = true
+	camera.current = true
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	camera.fov = 34.0
+	camera.global_position = ship.global_position - forward * 8.2 + right * 6.4 + Vector3.UP * 2.2
+	camera.look_at(ship.global_position + forward * 5.5 + Vector3.UP * 0.3, Vector3.UP)
+
+
+func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	# Low front three-quarter, so the white nose and canopy take the sun.
+	_frame_portrait(ship, camera, forward * 7.4 + right * 5.6 + Vector3.UP * 1.7, forward * 0.8, 26.0)
+
+
+func _frame_mega(mode: String) -> void:
+	if _planet_body == null:
+		return
+	var city := _planet_body.get_node_or_null("MegaCity") as Node3D
+	var camera := _ship.get("_chase") as Camera3D
+	if city == null or camera == null:
+		return
+	_ship.global_position = _planet_center + Vector3(0.0, _planet_radius * 8.0, 0.0)
+	camera.held = true
+	camera.current = true
+	var spot := Vector3(16.0, 42.0, 30.0)
+	var aim := Vector3(0.0, 8.0, 6.0)
+	camera.fov = 36.0
+	if mode == "mega-cloud":
+		spot = Vector3(8.0, 1.3, 2.0)
+		aim = Vector3(-1.0, 7.0, 12.0)
+		camera.fov = 48.0
+	elif mode == "mega-canyon":
+		spot = Vector3(0.25, 3.2, 6.0)
+		aim = Vector3(0.4, 14.0, 15.0)
+		camera.fov = 54.0
+	elif mode == "mega-detail":
+		spot = Vector3(-2.4, 6.0, -0.2)
+		aim = Vector3(-5.2, 10.0, -1.0)
+		camera.fov = 32.0
+	camera.global_position = city.to_global(spot)
+	camera.look_at(city.to_global(aim), city.global_basis.y)
+
+
+func _frame_seam(ship: Node3D, camera: Camera3D) -> void:
+	var right := ship.global_basis.x
+	var forward := -ship.global_basis.z
+	var aim := ship.global_position + Vector3.UP * 0.42 - forward * 0.05
+	_frame_portrait(ship, camera, right * 1.15 + Vector3.UP * 1.35 + forward * 0.15, aim - ship.global_position, 26.0)
+
+
 func _frame_side(ship: Node3D, camera: Camera3D) -> void:
 	var right := ship.global_basis.x
-	_frame_portrait(ship, camera, right * 11.5 + Vector3.UP * 1.35, Vector3.ZERO, 28.0)
+	_frame_portrait(ship, camera, right * 7.6 + Vector3.UP * 1.15, Vector3.UP * 0.15, 24.0)
+
+
+func dev_teleport(spec: String) -> String:
+	if _ship == null:
+		return "no ship"
+	var parts: PackedStringArray = spec.split(" ", false)
+	if parts.is_empty():
+		return "tp needs a target"
+	if parts.size() >= 3 and parts[0].is_valid_float() and parts[1].is_valid_float() and parts[2].is_valid_float():
+		var at := Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
+		_ship.dev_leave_cabin()
+		_ship.velocity = Vector3.ZERO
+		_ship.global_position = at
+		return "tp %s" % str(at)
+	var key := parts[0].to_lower()
+	_dismiss_title()
+	if key == "planet" or key == "exterior":
+		_ship.dev_leave_cabin()
+		_ship.velocity = Vector3.ZERO
+		_place_for_shot(_ship, _planet)
+		if key == "exterior":
+			_frame_exterior(_ship)
+		return "tp " + key
+	if key == "moon":
+		return _tp_moon()
+	if key == "ship":
+		_ship.dev_leave_cabin()
+		_ship.velocity = Vector3.ZERO
+		return "tp ship %s" % str(_ship.global_position)
+	if key == "cabin" or key == "seat":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("seat")
+		_finish_dev_view()
+		return "tp cabin"
+	if key == "aisle":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("aisle")
+		_finish_dev_view()
+		return "tp aisle"
+	if key == "rear" or key == "back":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("rear")
+		_finish_dev_view()
+		return "tp rear"
+	if key == "dash":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("dash")
+		_finish_dev_view()
+		return "tp dash"
+	if key == "crates":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("crates")
+		_finish_dev_view()
+		return "tp crates"
+	if key == "locker":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("locker")
+		_finish_dev_view()
+		return "tp locker"
+	if key == "storage":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("storage")
+		_finish_dev_view()
+		return "tp storage"
+	if key == "living":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("living")
+		_finish_dev_view()
+		return "tp living"
+	if key == "bench":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("bench")
+		_finish_dev_view()
+		return "tp bench"
+	if key == "wide":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("wide")
+		_finish_dev_view()
+		return "tp wide"
+	return "unknown tp target '%s'" % key
+
+
+func _dismiss_title() -> void:
+	var director := get_node_or_null("TitleDirector")
+	if director and director.has_method("abort_for_dev"):
+		director.abort_for_dev()
+
+
+func _finish_dev_view() -> void:
+	if _ship == null:
+		return
+	var cabin = _ship.get("_cabin")
+	if cabin and cabin.has_method("release_fixed_view"):
+		cabin.release_fixed_view()
+	if cabin and cabin.walker and cabin.walker.eye:
+		cabin.walker.eye.current = true
+
+
+func _tp_moon() -> String:
+	var body := _world.get_node_or_null(str(_planet.get("name", "")))
+	if body == null:
+		return "no planet"
+	var moon := body.get_node_or_null("Moon") as Node3D
+	if moon == null:
+		return "no moon"
+	_ship.dev_leave_cabin()
+	_ship.velocity = Vector3.ZERO
+	var pos := moon.global_position
+	var away := pos - _planet_center
+	if away.length_squared() < 0.01:
+		away = Vector3.UP
+	_ship.global_position = pos + away.normalized() * 6.0
+	_ship.look_at(pos, Vector3.UP)
+	return "tp moon"
+
+
+func _apply_shot_inventory() -> void:
+	if _ship == null:
+		return
+	var cabin = _ship.get("_cabin")
+	if cabin == null or cabin.inventory == null:
+		return
+	var inv = cabin.inventory
+	if not _cli_hold.is_empty():
+		inv.give(_cli_hold.to_lower(), 1)
+	if not _cli_floor.is_empty():
+		inv.give(_cli_floor.to_lower(), 1)
+		inv.select(0)
+		inv.drop_selected()
+		cabin.snap_view("floor")
+	if _cabin_view == "locker" or _cli_at == "locker":
+		cabin.snap_view("locker")
+		inv.store("LockerL", "crate", 1)
+		inv.store("LockerL", "cartridge", 2)
+		inv.open("LockerL")
+
+
+func _read_cli() -> void:
+	var args := OS.get_cmdline_user_args()
+	var i := 0
+	while i < args.size():
+		var arg := str(args[i])
+		if arg == "--shot" and i + 1 < args.size():
+			_cli_shot = str(args[i + 1])
+			_shot = true
+			i += 2
+		elif arg == "--at" and i + 1 < args.size():
+			_cli_at = str(args[i + 1])
+			i += 2
+		elif arg == "--hold" and i + 1 < args.size():
+			_cli_hold = str(args[i + 1])
+			i += 2
+		elif arg == "--floor" and i + 1 < args.size():
+			_cli_floor = str(args[i + 1])
+			i += 2
+		elif arg == "--door" and i + 1 < args.size():
+			_cli_door = str(args[i + 1]).to_lower()
+			i += 2
+		else:
+			i += 1
+	if _cli_at.is_empty():
+		return
+	var at := _cli_at.to_lower()
+	if at == "cabin" or at == "seat":
+		_cabin_view = "seat"
+	elif at == "aisle":
+		_cabin_view = "aisle"
+	elif at == "rear" or at == "back":
+		_cabin_view = "rear"
+	elif at == "dash":
+		_cabin_view = "dash"
+	elif at == "storage":
+		_cabin_view = "storage"
+	elif at == "locker":
+		_cabin_view = "locker"
+	elif at == "crates":
+		_cabin_view = "crates"
+	elif at == "living":
+		_cabin_view = "living"
+	elif at == "bench":
+		_cabin_view = "bench"
+	elif at == "wide":
+		_cabin_view = "wide"
+	else:
+		_cabin_view = ""
+
+
+func _run_cli_shot() -> void:
+	await DevConsole.capture_screenshot(1.0, false, _cli_shot)
+	get_tree().quit()
 
 
 func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	var high := _PostProfile.high_quality()
+	var med := _PostProfile.detailed()
 	var world := WorldEnvironment.new()
 	world.name = "WorldEnvironment"
 	var environment := Environment.new()
@@ -230,27 +613,30 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	environment.ambient_light_color = Color(0.36, 0.5, 0.72)
 	environment.ambient_light_energy = 0.045
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	environment.tonemap_mode = Environment.TONE_MAPPER_AGX
-	environment.tonemap_exposure = 1.0
-	environment.tonemap_white = 6.0
+	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	environment.tonemap_exposure = 1.04
+	environment.tonemap_white = 8.5
 
-	# Bloom only well above white: the sun, its glare and the engines. The frame itself stays crisp.
-	environment.glow_enabled = true
+	# Halation on the sun and bright highlights. Low quality skips it.
+	var low := not med and not high
+	environment.glow_enabled = not low
 	environment.glow_normalized = false
-	environment.glow_intensity = 0.65
-	environment.glow_strength = 0.9
-	environment.glow_bloom = 0.0
-	environment.glow_hdr_threshold = 2.4
-	environment.glow_hdr_scale = 2.2
-	environment.glow_hdr_luminance_cap = 24.0
+	environment.glow_intensity = 0.85 if high else 0.38
+	environment.glow_strength = 1.05 if high else 0.55
+	environment.glow_bloom = 0.06 if high else 0.0
+	environment.glow_hdr_threshold = 1.08 if high else 1.65
+	environment.glow_hdr_scale = 2.0
+	environment.glow_hdr_luminance_cap = 16.0
 	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	environment.set_glow_level(0, 0.0)
-	environment.set_glow_level(1, 0.6)
-	environment.set_glow_level(2, 0.8)
-	environment.set_glow_level(3, 0.35)
-	environment.set_glow_level(4, 0.12)
+	environment.set_glow_level(1, 0.35 if high else 0.15)
+	environment.set_glow_level(2, 0.55 if high else 0.3)
+	environment.set_glow_level(3, 0.7 if high else 0.2)
+	environment.set_glow_level(4, 0.45 if high else 0.0)
+	environment.set_glow_level(5, 0.22 if high else 0.0)
+	environment.set_glow_level(6, 0.08 if high else 0.0)
 
-	environment.ssao_enabled = high
+	environment.ssao_enabled = med
 	environment.ssao_radius = 1.1
 	environment.ssao_intensity = 1.6
 	environment.ssao_power = 1.5
@@ -283,7 +669,12 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	material.shader = load("res://assets/shaders/nebula_sky.gdshader")
 	material.set_shader_parameter("sun_dir", sun_dir)
 	sky.sky_material = material
-	sky.radiance_size = Sky.RADIANCE_SIZE_256 if high else Sky.RADIANCE_SIZE_64
+	var radiance := Sky.RADIANCE_SIZE_64
+	if high:
+		radiance = Sky.RADIANCE_SIZE_256
+	elif med:
+		radiance = Sky.RADIANCE_SIZE_128
+	sky.radiance_size = radiance
 	environment.sky = sky
 	world.environment = environment
 	_world.add_child(world)
@@ -378,10 +769,10 @@ func _log_features(environment: Environment, _sky_colors: Dictionary) -> void:
 		adapter = str(RenderingServer.get_video_adapter_name())
 	print("RENDER adapter=", adapter)
 	print(
-		"FEATURES quality=%s agx=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
+		"FEATURES quality=%s aces=%s glow=%s ssao=%s ssr=%s sdfgi=%s volfog=%s lut=%s"
 		% [
 			_PostProfile.quality(),
-			environment.tonemap_mode == Environment.TONE_MAPPER_AGX,
+			environment.tonemap_mode == Environment.TONE_MAPPER_ACES,
 			environment.glow_enabled,
 			environment.ssao_enabled,
 			environment.ssr_enabled,

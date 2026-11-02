@@ -90,8 +90,18 @@ static func biome_index(biome_id: String) -> float:
 	return float(BIOME_ID.get(biome_id, 0.0))
 
 
+## Debug console override. -1 keeps the system-id hash the web build matches.
+static var debug_seed := -1
+
+
+static func active_seed(system_id: String) -> int:
+	if debug_seed >= 0:
+		return debug_seed
+	return hash_string(system_id)
+
+
 static func generate_system(system: Dictionary) -> Dictionary:
-	var rng := Rng.new(hash_string(str(system.id)))
+	var rng := Rng.new(active_seed(str(system.id)))
 	var sky: Dictionary = SKIES.get(system.type, SKIES.unknown)
 	var count := 3 + int(floor(rng.nextf() * 2.0))
 	var used_names := {}

@@ -12,6 +12,7 @@ var _planet_radius := 24.0
 var _root: Control
 var _core: TextureRect
 var _streak: TextureRect
+var _dirt: TextureRect
 var _shafts: Array[TextureRect] = []
 var _ghosts: Array[TextureRect] = []
 var _ghost_spec := [
@@ -40,6 +41,7 @@ func setup(view: SubViewport, sun_position: Vector3, planet_center: Vector3, pla
 	_core = _sprite(_radial(Color(1.0, 0.94, 0.84, 0.5), Color(0.55, 0.7, 1.0, 0.0), 0.0), additive)
 	if high:
 		_streak = _sprite(_radial(Color(0.78, 0.88, 1.0, 0.55), Color(0.4, 0.6, 1.0, 0.0), 0.0), additive)
+		_dirt = _sprite(_dirt_map(), additive)
 		for i in 6:
 			var shaft := _sprite(_linear_fade(Color(1.0, 0.95, 0.85, 0.07)), additive)
 			shaft.pivot_offset = Vector2.ZERO
@@ -79,6 +81,37 @@ func _radial(inner: Color, outer: Color, ring: float) -> GradientTexture2D:
 	return texture
 
 
+func _dirt_map() -> ImageTexture:
+	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var specks: Array = [
+		[18, 22, 7, Color(0.85, 0.78, 0.62, 0.22)],
+		[40, 16, 4, Color(0.7, 0.78, 0.9, 0.16)],
+		[46, 38, 9, Color(0.9, 0.84, 0.7, 0.14)],
+		[24, 44, 5, Color(0.75, 0.8, 0.9, 0.12)],
+		[12, 36, 3, Color(1.0, 0.95, 0.85, 0.18)],
+	]
+	for speck in specks:
+		var cx: int = speck[0]
+		var cy: int = speck[1]
+		var radius: int = speck[2]
+		var tint: Color = speck[3]
+		for y in range(cy - radius, cy + radius + 1):
+			for x in range(cx - radius, cx + radius + 1):
+				if x < 0 or y < 0 or x > 63 or y > 63:
+					continue
+				var fall := 1.0 - Vector2(x - cx, y - cy).length() / float(radius)
+				if fall <= 0.0:
+					continue
+				var pixel := image.get_pixel(x, y)
+				pixel.r = maxf(pixel.r, tint.r)
+				pixel.g = maxf(pixel.g, tint.g)
+				pixel.b = maxf(pixel.b, tint.b)
+				pixel.a = maxf(pixel.a, tint.a * fall)
+				image.set_pixel(x, y, pixel)
+	return ImageTexture.create_from_image(image)
+
+
 func _linear_fade(color: Color) -> GradientTexture2D:
 	var gradient := Gradient.new()
 	gradient.offsets = PackedFloat32Array([0.0, 1.0])
@@ -93,6 +126,7 @@ func _linear_fade(color: Color) -> GradientTexture2D:
 	return texture
 
 
+# hot
 func _process(delta: float) -> void:
 	if _view == null:
 		return
@@ -107,6 +141,13 @@ func _process(delta: float) -> void:
 		if inside and not _eclipsed(camera.global_position):
 			var center_dist := (screen - size * 0.5).length() / size.length()
 			target = clampf(1.15 - center_dist * 1.2, 0.0, 1.0)
+			# The combiner sits in the middle of the cabin view. Keep the glare off that glass.
+			if camera.is_in_group("cabin_eye"):
+				var glass := Rect2(size.x * 0.28, size.y * 0.26, size.x * 0.44, size.y * 0.46)
+				if glass.has_point(screen):
+					target = 0.0
+				else:
+					target *= 0.3
 	# Quick in, slower out, so the glare does not pop when Mina's limb crosses the sun.
 	var rate := 10.0 if target > _visibility else 4.0
 	_visibility = lerpf(_visibility, target, 1.0 - exp(-rate * delta))
@@ -114,9 +155,34 @@ func _process(delta: float) -> void:
 	if not _root.visible:
 		return
 	var unit := size.y
-	_place(_core, screen, Vector2.ONE * unit * 0.42, _visibility)
+	var core := 0.16 if camera != null and camera.is_in_group("cabin_eye") else 0.42
+	_place(_core, screen, Vector2.ONE * unit * core, _visibility)
+	var in_cabin := camera != null and camera.is_in_group("cabin_eye")
 	if _streak:
-		_place(_streak, screen, Vector2(unit * 1.5, unit * 0.022), _visibility * 0.9)
+		var streak_w := unit * (0.28 if in_cabin else 1.5)
+		_place(_streak, screen, Vector2(streak_w, unit * 0.018), _visibility * 0.9)
+	if _dirt:
+		_dirt.visible = not in_cabin
+		if not in_cabin:
+			_place(_dirt, screen, Vector2.ONE * unit * 0.55, _visibility * 0.22)
+	if in_cabin:
+		for shaft in _shafts:
+			shaft.visible = false
+	else:
+		_place_shafts(screen, unit)
+	var axis := size * 0.5 - screen
+	for i in _ghosts.size():
+		var ghost := _ghosts[i]
+		if in_cabin:
+			ghost.visible = false
+			continue
+		var spec: Array = _ghost_spec[i]
+		var at: Vector2 = screen + axis * float(spec[0]) * 2.0
+		ghost.visible = true
+		_place(ghost, at, Vector2.ONE * unit * float(spec[1]) * 2.0, _visibility)
+
+
+func _place_shafts(screen: Vector2, unit: float) -> void:
 	for i in _shafts.size():
 		var shaft := _shafts[i]
 		var angle := 0.35 + float(i) * TAU / float(_shafts.size()) + sin(float(i) * 3.7) * 0.4
@@ -126,11 +192,7 @@ func _process(delta: float) -> void:
 		shaft.pivot_offset = Vector2(0.0, shaft.size.y * 0.5)
 		shaft.rotation = angle
 		shaft.modulate = Color(1, 1, 1, _visibility)
-	var axis := size * 0.5 - screen
-	for i in _ghosts.size():
-		var spec: Array = _ghost_spec[i]
-		var at: Vector2 = screen + axis * float(spec[0]) * 2.0
-		_place(_ghosts[i], at, Vector2.ONE * unit * float(spec[1]) * 2.0, _visibility)
+		shaft.visible = true
 
 
 func _place(rect: TextureRect, center: Vector2, extent: Vector2, alpha: float) -> void:

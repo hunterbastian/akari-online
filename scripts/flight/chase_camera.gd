@@ -17,6 +17,8 @@ func _ready() -> void:
 	_ship = get_node_or_null(ship_path) as Node3D
 	fov = FlightProfile.FOV
 	near = 0.12
+	# Cabin lives on layer 3. The chase view is the exterior only.
+	cull_mask &= ~(1 << 2)
 	far = 7000.0
 	held = has_meta("title_hold") and bool(get_meta("title_hold"))
 	if held:
@@ -33,12 +35,14 @@ func release_from_title() -> void:
 	_apply(0.0, true)
 
 
+# hot
 func _process(delta: float) -> void:
 	if held or _ship == null:
 		return
 	_apply(minf(delta, FlightProfile.DT_CAP), false)
 
 
+# hot
 func _apply(step: float, snap: bool) -> void:
 	var boosting: bool = _ship.get("boosting")
 	var cam_dist := FlightProfile.CAM_DIST_BOOST if boosting else FlightProfile.CAM_DIST
