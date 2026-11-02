@@ -26,12 +26,13 @@ var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
 var _state_test := false
+var _sky_mat: ShaderMaterial
 
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1"
 	var user_args := OS.get_cmdline_user_args()
-	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull") or user_args.has("--mega")
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull") or user_args.has("--mega") or user_args.has("--atmo") or user_args.has("--interior") or user_args.has("--exterior")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -120,11 +121,11 @@ func _ready() -> void:
 			door_cabin.walker.pitch = 0.0
 			door_cabin.walker.eye.rotation.x = 0.0
 			door_cabin.set_bay_pose(_cli_door)
-	if _cli_at.begins_with("mega"):
+	if _cli_at.begins_with("mega") or _cli_at.begins_with("atmo"):
 		_frame_mega(_cli_at)
 	if _tour:
 		var args := OS.get_cmdline_user_args()
-		if args.has("--mega"):
+		if args.has("--mega") or args.has("--atmo"):
 			var mega = load("res://scripts/world/mega_tour.gd").new()
 			mega.name = "MegaTour"
 			add_child(mega)
@@ -247,13 +248,37 @@ func _update_bounce() -> void:
 
 
 # hot
+func _update_sky() -> void:
+	if _sky_mat == null or _world == null:
+		return
+	var origin := _planet_center
+	if _ship != null:
+		origin = _ship.global_position
+	var cam := _world.get_camera_3d()
+	if cam != null:
+		origin = cam.global_position
+	var offset := origin - _planet_center
+	var distance := offset.length()
+	if distance < 0.001:
+		return
+	var height := distance - _planet_radius
+	var span := _planet_radius * 2.4
+	var t := clampf((height - _planet_radius * 0.05) / span, 0.0, 1.0)
+	t = t * t * (3.0 - 2.0 * t)
+	_sky_mat.set_shader_parameter("ground_mix", 1.0 - t)
+	_sky_mat.set_shader_parameter("up_dir", offset / distance)
+
+
+# hot
 func _process(delta: float) -> void:
 	if _state_test:
 		_state_test = false
 		var failed: int = load("res://test/test_statechart.gd").run()
+		failed += load("res://test/test_atmosphere.gd").run()
 		get_tree().quit(failed)
 		return
 	_update_bounce()
+	_update_sky()
 	if _tour:
 		return
 	if not _cli_shot.is_empty():
@@ -384,6 +409,18 @@ func _frame_mega(mode: String) -> void:
 		spot = Vector3(-2.4, 6.0, -0.2)
 		aim = Vector3(-5.2, 10.0, -1.0)
 		camera.fov = 32.0
+	elif mode == "atmo-limb":
+		spot = Vector3(10.0, 86.0, 34.0)
+		aim = Vector3(0.0, -12.0, 0.0)
+		camera.fov = 28.0
+	elif mode == "atmo-sky":
+		spot = Vector3(3.0, 20.0, 16.0)
+		aim = Vector3(0.2, 6.0, 12.0)
+		camera.fov = 52.0
+	elif mode == "atmo-city":
+		spot = Vector3(0.25, 3.2, 6.0)
+		aim = Vector3(0.4, 14.0, 15.0)
+		camera.fov = 50.0
 	camera.global_position = city.to_global(spot)
 	camera.look_at(city.to_global(aim), city.global_basis.y)
 
@@ -668,6 +705,9 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	var material := ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/nebula_sky.gdshader")
 	material.set_shader_parameter("sun_dir", sun_dir)
+	material.set_shader_parameter("ground_mix", 0.0)
+	material.set_shader_parameter("cheap", 0.0 if high else 1.0)
+	_sky_mat = material
 	sky.sky_material = material
 	var radiance := Sky.RADIANCE_SIZE_64
 	if high:

@@ -45,6 +45,7 @@ func _slab_material(color: Color) -> ShaderMaterial:
 	mat.shader = _SLAB
 	mat.set_shader_parameter("base_color", color)
 	mat.set_shader_parameter("face_tex", _face)
+	mat.set_shader_parameter("haze_color", Vector3(0.66, 0.74, 0.84))
 	mat.set_shader_parameter("haze_near", 8.0)
 	mat.set_shader_parameter("haze_far", 48.0 if _Post.quality() != "low" else 36.0)
 	return mat

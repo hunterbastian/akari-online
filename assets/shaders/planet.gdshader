@@ -141,7 +141,7 @@ void fragment() {
 	// Geometric normal for the terminator so bump noise does not smear it.
 	float ndl_geo = dot(normalize(v_world - u_center), light_dir);
 	// Hard sun: a narrow terminator, lit side Lambert-ish, night side near black.
-	float day = smoothstep(-0.03, 0.09, ndl_geo);
+	float day = smoothstep(-0.2, 0.24, ndl_geo);
 	float lambert = clamp(ndl * 0.85 + 0.15, 0.0, 1.0);
 	vec3 lit = albedo * (0.05 + 0.6 * lambert);
 	vec3 night = albedo * vec3(0.012, 0.02, 0.04);
