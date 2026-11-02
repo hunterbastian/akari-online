@@ -46,6 +46,7 @@ var _step_acc := 0.0
 var _last_walk := Vector3.ZERO
 var _shot_hold := false
 var inventory
+var bay_door
 var show_hotbar := true
 
 
@@ -71,14 +72,15 @@ func build(scale: float, high_quality: bool) -> void:
 	_box("CeilingR", _v(1.35, 2.78, -3.5), _v(0.9, 0.08, 1.2), wall, true)
 	_box("WallL", _v(-1.78, 1.12, -1.7), _v(0.08, 3.36, 5.0), wall, true)
 	_box("WallR", _v(1.78, 1.12, -1.7), _v(0.08, 3.36, 5.0), wall, true)
-	_box("WallRear", _v(0.0, 1.12, 0.78), _v(3.6, 3.36, 0.08), wall, true)
+	# Rear wall is a frame. The shuttle-bay door fills the opening.
+	_box("RearL", _v(-1.32, 1.15, 0.78), _v(0.96, 3.3, 0.08), wall, true)
+	_box("RearR", _v(1.32, 1.15, 0.78), _v(0.96, 3.3, 0.08), wall, true)
+	_box("RearTop", _v(0.0, 2.35, 0.78), _v(1.72, 0.9, 0.08), wall, true)
 	_box("Kick", _v(0.0, -0.22, -3.85), _v(2.4, 0.42, 0.08), trim, true)
 
 	_box("JumpSeat", _v(-1.35, -0.22, -3.15), _v(0.4, 0.22, 0.4), cloth, false)
 
-	_box("Door", _v(0.0, 0.72, 0.7), _v(1.7, 2.2, 0.05), door, false)
-	_box("DoorBar", _v(0.0, 1.9, 0.64), _v(1.95, 0.1, 0.1), trim, false)
-	_glow("DoorTell", _v(-0.7, 1.95, 0.6), _v(0.04, 0.04, 0.02), Color(1.15, 0.16, 0.07))
+	_box("DoorBar", _v(0.0, 1.96, 0.7), _v(1.9, 0.08, 0.1), trim, false)
 
 	_glass(_v(0.0, 1.05, -4.05), Vector2(2.4, 1.2) * _scale, 0.1)
 	_glass(_v(0.0, 2.15, -3.65), Vector2(1.8, 0.42) * _scale, 0.85)
@@ -99,7 +101,33 @@ func build(scale: float, high_quality: bool) -> void:
 	inventory.name = "Inventory"
 	add_child(inventory)
 	inventory.setup(self)
+	bay_door = load("res://scripts/flight/cabin_bay_door.gd").new()
+	bay_door.name = "BayDoor"
+	add_child(bay_door)
+	bay_door.setup(self)
 	_setup_audio()
+
+
+func try_bay_door() -> bool:
+	return bay_door != null and bay_door.try_toggle()
+
+
+func near_bay_lever() -> bool:
+	return bay_door != null and bay_door.near_lever()
+
+
+func bay_is_open() -> bool:
+	return bay_door != null and bay_door.is_open()
+
+
+func set_bay_pose(mode: String) -> void:
+	if bay_door:
+		bay_door.set_pose(mode)
+
+
+func pulse_bay() -> void:
+	if bay_door:
+		bay_door.toggle()
 
 
 func set_walking(on: bool) -> void:
@@ -123,7 +151,8 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	# No fuel tank yet. 1.00 is a full cell until that system exists.
 	_set_line("nav", "NAV\n%s\nHULL %d\nMINA %s\nBRG FWD" % [name, hull, rng])
 	_set_line("drive", "DRIVE\nSPD %s\nFUEL 1.00\nTHR %s\nAP %s" % [spd, thr, auto])
-	_set_line("bay", "BAY\nSEALED\nCORE\n312")
+	var bay_state := "OPEN" if bay_is_open() else "SEALED"
+	_set_line("bay", "BAY\n%s\nCORE\n312" % bay_state)
 	_refresh_header()
 
 

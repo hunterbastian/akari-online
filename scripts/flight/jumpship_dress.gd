@@ -27,6 +27,32 @@ static func paint(root: Node, high_quality: bool) -> Array[ShaderMaterial]:
 	return paints
 
 
+static func mark_bay(root: Node) -> void:
+	# A shallow segmented plate on the aft fuselage. It does not change the silhouette.
+	var fuse := root.find_child("Fuselage", true, false) as MeshInstance3D
+	if fuse == null or fuse.mesh == null:
+		return
+	var bounds := fuse.mesh.get_aabb()
+	var rear := bounds.position.z + bounds.size.z - 0.015
+	var width := minf(bounds.size.x * 0.28, 1.4)
+	var height := minf(bounds.size.y * 0.22, 0.9)
+	var cy := bounds.position.y + bounds.size.y * 0.46
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.78, 0.8, 0.84)
+	for i in 4:
+		var slat := MeshInstance3D.new()
+		slat.name = "BayMark%d" % i
+		var box := BoxMesh.new()
+		box.size = Vector3(width, height * 0.22, 0.02)
+		slat.mesh = box
+		var y := cy - height * 0.5 + height * (float(i) + 0.5) / 4.0
+		slat.position = Vector3(0.0, y, rear)
+		slat.material_override = mat
+		slat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fuse.add_child(slat)
+
+
 static func shell_nodes(root: Node) -> Array[GeometryInstance3D]:
 	var found: Array[GeometryInstance3D] = []
 	for part_name in _SHELL_PARTS:

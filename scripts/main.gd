@@ -15,6 +15,7 @@ var _cli_shot := ""
 var _cli_at := ""
 var _cli_hold := ""
 var _cli_floor := ""
+var _cli_door := ""
 var _tour := false
 var _world: SubViewport
 var _bounce: DirectionalLight3D
@@ -28,7 +29,7 @@ var _planet_radius := 24.0
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
 	var user_args := OS.get_cmdline_user_args()
-	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones")
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -106,9 +107,19 @@ func _ready() -> void:
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
+	if _cli_door != "":
+		_aim_bay_at_planet(_ship)
+		var door_cabin = _ship.get("_cabin")
+		if door_cabin and door_cabin.has_method("set_bay_pose"):
+			door_cabin.snap_view("rear")
+			door_cabin.walker.pitch = 0.0
+			door_cabin.walker.eye.rotation.x = 0.0
+			door_cabin.set_bay_pose(_cli_door)
 	if _tour:
 		var args := OS.get_cmdline_user_args()
 		# The film tour opens on the exterior. Walk and the inventory tour start inside.
+		if args.has("--bay"):
+			_aim_bay_at_planet(ship)
 		if not args.has("--film"):
 			var tour_view := "rear"
 			if args.has("--walk"):
@@ -262,6 +273,13 @@ func _capture() -> void:
 	print("Wrote ", path)
 	if OS.get_environment("AKARI_SHOT_HOLD") != "1":
 		get_tree().quit()
+
+
+func _aim_bay_at_planet(ship: Node3D) -> void:
+	# The bay opens on +Z. look_at aims -Z, so aim the nose away from Mina.
+	var center: Vector3 = _planet.position
+	var away := ship.global_position * 2.0 - center
+	ship.look_at(away, Vector3.UP)
 
 
 func _place_for_shot(ship: Node3D, planet: Dictionary) -> void:
@@ -456,6 +474,9 @@ func _read_cli() -> void:
 			i += 2
 		elif arg == "--floor" and i + 1 < args.size():
 			_cli_floor = str(args[i + 1])
+			i += 2
+		elif arg == "--door" and i + 1 < args.size():
+			_cli_door = str(args[i + 1]).to_lower()
 			i += 2
 		else:
 			i += 1

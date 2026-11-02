@@ -9,6 +9,9 @@ var _ship: Node
 var _walk := false
 var _film := false
 var _zones := false
+var _bay := false
+var _bay_opened := false
+var _bay_closed := false
 var _seated := false
 var _outside := false
 var _inside := false
@@ -26,6 +29,15 @@ const _FLY := 15.6
 const _END := 36.5
 const _ZONE_SIT := 26.0
 const _ZONE_END := 31.0
+const _BAY_OPEN := 6.2
+const _BAY_CLOSE := 14.2
+const _BAY_END := 19.2
+
+const _BAY := [
+	[0.0, 0.0, -1.35, PI, -0.04],
+	[4.2, 0.05, -0.42, PI, -0.02],
+	[6.0, 0.12, -0.32, PI, 0.0],
+]
 
 ## Rear bay, storage wall, bunk, workbench, then the seat.
 const _ZONES := [
@@ -69,6 +81,7 @@ func setup(ship: Node) -> void:
 	_walk = OS.get_cmdline_user_args().has("--walk")
 	_film = OS.get_cmdline_user_args().has("--film")
 	_zones = OS.get_cmdline_user_args().has("--zones")
+	_bay = OS.get_cmdline_user_args().has("--bay")
 	if _film:
 		var camera := _camera()
 		if camera:
@@ -89,6 +102,9 @@ func _process(delta: float) -> void:
 		return
 	if _zones:
 		_play_zones(cabin, walker, delta)
+		return
+	if _bay:
+		_play_bay(cabin, walker, delta)
 		return
 	walker.locked = false
 	if walker.eye:
@@ -154,6 +170,22 @@ func _play_zones(cabin, walker, delta: float) -> void:
 		walker.pitch = -0.12 + sin(u * PI) * 0.06
 		walker.eye.rotation.x = walker.pitch
 	if _time >= _ZONE_END:
+		get_tree().quit()
+
+
+func _play_bay(cabin, walker, delta: float) -> void:
+	walker.locked = true
+	if walker.eye:
+		walker.eye.current = true
+	if _time < _BAY_OPEN:
+		_glide_keys(cabin, walker, delta, _BAY, _time)
+	elif not _bay_opened:
+		_bay_opened = true
+		cabin.pulse_bay()
+	elif _time >= _BAY_CLOSE and not _bay_closed:
+		_bay_closed = true
+		cabin.pulse_bay()
+	if _time >= _BAY_END:
 		get_tree().quit()
 
 

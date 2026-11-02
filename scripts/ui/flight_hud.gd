@@ -51,7 +51,11 @@ func _process(_delta: float) -> void:
 	var velocity: Vector3 = _ship.get("velocity")
 	_speed.text = "SPD  %d" % int(round(velocity.length()))
 	var walking := bool(_ship.get("walking"))
-	if walking and _ship.has_method("near_seat") and _ship.near_seat():
+	var cabin = _ship.get("_cabin")
+	if walking and cabin != null and cabin.has_method("near_bay_lever") and cabin.near_bay_lever():
+		_hint.text = "E  BAY"
+		_hint.visible = true
+	elif walking and _ship.has_method("near_seat") and _ship.near_seat():
 		_hint.text = "E  SIT"
 		_hint.visible = true
 	elif not walking:

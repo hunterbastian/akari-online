@@ -65,6 +65,8 @@ func _ready() -> void:
 	_build_flames()
 	_build_engine_fx()
 	_build_speed_streaks()
+	if _model:
+		_Dress.mark_bay(_model)
 	for child in _hull.get_children():
 		_set_layer(child, 2)
 	_cabin = _Cabin.new()
@@ -168,6 +170,8 @@ func _input(event: InputEvent) -> void:
 	if not active or _shot:
 		return
 	if event.is_action_pressed("interact"):
+		if walking and _cabin and _cabin.has_method("try_bay_door") and _cabin.try_bay_door():
+			return
 		if walking and _cabin and _cabin.inventory and _cabin.inventory.try_interact():
 			return
 		toggle_seat()

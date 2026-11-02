@@ -186,11 +186,12 @@ static func _retile_shell(cabin) -> void:
 	var shade_cast: bool = cabin._high
 	_retile_named(cabin, "WallL", "concrete", shade_cast)
 	_retile_named(cabin, "WallR", "concrete", shade_cast)
-	_retile_named(cabin, "WallRear", "concrete", shade_cast)
+	_retile_named(cabin, "RearL", "concrete", shade_cast)
+	_retile_named(cabin, "RearR", "concrete", shade_cast)
+	_retile_named(cabin, "RearTop", "concrete")
 	_retile_named(cabin, "CeilingRear", "concrete")
 	_retile_named(cabin, "CeilingL", "concrete")
 	_retile_named(cabin, "CeilingR", "concrete")
-	_retile_named(cabin, "Door", "rollup")
 	_retile_named(cabin, "Kick", "hazard")
 	_retile_named(cabin, "DoorBar", "steel")
 
