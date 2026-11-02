@@ -50,7 +50,7 @@ func _beauty_shot() -> bool:
 	if OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1":
 		return true
 	var args := OS.get_cmdline_user_args()
-	if args.has("--hull") or args.has("--mega"):
+	if args.has("--hull") or args.has("--mega") or args.has("--thrust-demo"):
 		return true
 	for arg in args:
 		if str(arg).begins_with("mega"):

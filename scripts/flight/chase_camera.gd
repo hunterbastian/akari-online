@@ -74,5 +74,4 @@ func _apply(step: float, snap: bool) -> void:
 	if snap:
 		fov = FlightProfile.FOV
 		return
-	var target_fov := FlightProfile.FOV_BOOST if boosting else FlightProfile.FOV
-	fov = FlightProfile.damp(fov, target_fov, FlightProfile.FOV_DAMP, step)
+	# Thrust kick owns the FOV widen. This camera only chases.

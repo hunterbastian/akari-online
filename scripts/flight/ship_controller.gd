@@ -26,6 +26,9 @@ var _engine_anchors: Array[Vector3] = []
 var walking := false
 var dev_speed_mult := 1.0
 var dev_god := false
+## >= 0 replaces the keyboard for the thrust-kick demo. -1 means real input.
+var script_throttle := -1.0
+var script_boost := false
 var _pickup_until := 0
 var _ship_cache: Dictionary = {}
 var _read_spd := -1
@@ -86,6 +89,10 @@ func _ready() -> void:
 	if _PostProfile.high_quality():
 		_build_reflection_probe()
 	_update_cabin()
+	var kick = load("res://scripts/flight/thrust_kick.gd").new()
+	kick.name = "ThrustKick"
+	add_child(kick)
+	kick.setup(self)
 
 
 func set_flight_active(on: bool) -> void:
@@ -170,6 +177,16 @@ func _exit_cabin() -> void:
 func _set_shell_hidden(hidden: bool) -> void:
 	for part in _shell:
 		part.visible = not hidden
+
+
+func hold_seat_flight() -> void:
+	# Stay in the seat camera, but let the burn actually move the ship.
+	walking = false
+	if _chase:
+		_chase.current = false
+	if _cabin and _cabin.walker and _cabin.walker.eye:
+		_cabin.walker.locked = true
+		_cabin.walker.eye.current = true
 
 
 func dev_leave_cabin() -> void:
@@ -267,12 +284,16 @@ func _process(delta: float) -> void:
 		_hull.rotation.z = _bank
 
 	var forward := -global_basis.z
-	boosting = Input.is_action_pressed("boost")
 	var throttle := 0.0
-	if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup) or demo_fly:
-		throttle += 1.0
-	if Input.is_action_pressed("throttle_back"):
-		throttle -= 1.0
+	if script_throttle >= 0.0:
+		boosting = script_boost
+		throttle = script_throttle
+	else:
+		boosting = Input.is_action_pressed("boost")
+		if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup) or demo_fly:
+			throttle += 1.0
+		if Input.is_action_pressed("throttle_back"):
+			throttle -= 1.0
 	thrust = maxf(0.0, throttle) * (1.0 if boosting else 0.65)
 
 	var speed := 0.0

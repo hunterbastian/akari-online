@@ -26,6 +26,7 @@ var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
 var _state_test := false
+var _kick_demo := ""
 
 
 func _ready() -> void:
@@ -59,12 +60,12 @@ func _ready() -> void:
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
-	ship.set_meta("flight_active", _shot or _tour or not _cabin_view.is_empty())
+	ship.set_meta("flight_active", _shot or _tour or not _cabin_view.is_empty() or not _kick_demo.is_empty())
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	_ship = ship
-	if _shot or _tour or not _cabin_view.is_empty():
+	if _shot or _tour or not _cabin_view.is_empty() or not _kick_demo.is_empty():
 		_place_for_shot(ship, planet)
 	else:
 		ship.global_position = chart.spawn
@@ -74,7 +75,7 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
-	camera.set_meta("title_hold", not _shot and not _tour)
+	camera.set_meta("title_hold", not _shot and not _tour and _kick_demo.is_empty())
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
@@ -86,7 +87,7 @@ func _ready() -> void:
 		_frame_side(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
 		_frame_seam(ship, camera)
-	elif not _shot and not _tour and _cabin_view.is_empty():
+	elif not _shot and not _tour and _cabin_view.is_empty() and _kick_demo.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -109,6 +110,21 @@ func _ready() -> void:
 	inventory_hud.bind(ship)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
+	if _kick_demo == "inside":
+		ship.hold_seat_flight()
+		var seat = ship.get("_cabin")
+		if seat and seat.walker and seat.walker.eye:
+			seat.walker.pitch = -0.38
+			seat.walker.eye.rotation.x = -0.38
+	elif _kick_demo == "outside":
+		ship.global_rotate(Vector3.UP, PI)
+		# Keep the hull in frame so the camera kick stays readable.
+		ship.dev_speed_mult = 0.045
+	if not _kick_demo.is_empty():
+		var kick_demo = load("res://scripts/flight/thrust_demo.gd").new()
+		kick_demo.name = "ThrustDemo"
+		add_child(kick_demo)
+		kick_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -273,7 +289,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -566,8 +582,13 @@ func _read_cli() -> void:
 		elif arg == "--door" and i + 1 < args.size():
 			_cli_door = str(args[i + 1]).to_lower()
 			i += 2
+		elif arg == "--thrust-demo" and i + 1 < args.size():
+			_kick_demo = str(args[i + 1])
+			i += 2
 		else:
 			i += 1
+	if _kick_demo == "inside":
+		_cabin_view = "seat"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()

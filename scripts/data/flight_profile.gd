@@ -23,6 +23,15 @@ const CAM_LOOK_AHEAD := 28.0
 const FOV := 52.0
 const FOV_BOOST := 60.0
 const FOV_DAMP := 4.0
+## Extra degrees at full thrust. Eases in faster than it eases out.
+const KICK_FOV := 6.0
+const KICK_IN := 9.0
+const KICK_OUT := 2.4
+## Camera shake scale. 0 holds the view still. 1 is the default hum and boost kick.
+const SHAKE := 1.0
+const SHAKE_HUM := 0.02
+const SHAKE_BURST := 0.07
+const SHAKE_DECAY := 3.2
 const DT_CAP := 0.05
 const HULL_SCALE := 1.28
 ## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.
