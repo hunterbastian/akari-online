@@ -26,6 +26,8 @@ var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
 var _state_test := false
+var _lights_arg := ""
+var _lights_demo := ""
 
 
 func _ready() -> void:
@@ -109,6 +111,17 @@ func _ready() -> void:
 	inventory_hud.bind(ship)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
+	if not _lights_arg.is_empty() or not _lights_demo.is_empty():
+		var lit = ship.get("_cabin")
+		if lit:
+			lit.show_hotbar = false
+			if not _lights_arg.is_empty():
+				lit.terminal_submit_text("LIGHTS " + _lights_arg.to_upper())
+	if not _lights_demo.is_empty():
+		var lights_demo = load("res://scripts/flight/lights_demo.gd").new()
+		lights_demo.name = "LightsDemo"
+		add_child(lights_demo)
+		lights_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -273,7 +286,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -566,8 +579,18 @@ func _read_cli() -> void:
 		elif arg == "--door" and i + 1 < args.size():
 			_cli_door = str(args[i + 1]).to_lower()
 			i += 2
+		elif arg == "--lights" and i + 1 < args.size():
+			_lights_arg = str(args[i + 1]).to_lower()
+			i += 2
+		elif arg == "--lights-demo" and i + 1 < args.size():
+			_lights_demo = str(args[i + 1])
+			i += 2
 		else:
 			i += 1
+	if _lights_demo == "wide":
+		_cabin_view = "wide"
+	elif _lights_demo == "inside" or not _lights_arg.is_empty():
+		_cabin_view = "seat"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()

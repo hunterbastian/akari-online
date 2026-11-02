@@ -6,6 +6,8 @@ render_mode specular_disabled, ambient_light_disabled;
 
 uniform sampler2D albedo_tex : filter_nearest, repeat_enable;
 uniform float lamp = 0.0;
+uniform vec3 lamp_tint = vec3(1.0);
+uniform float lamp_gain = 1.0;
 
 varying float v_ao;
 varying float v_nose;
@@ -42,7 +44,7 @@ void fragment() {
 	vec3 tint = mix(vec3(0.9, 0.87, 0.82), vec3(1.06, 0.97, 0.84), warm);
 	tint = mix(tint, vec3(0.84, 0.94, 1.06), v_nose * 0.6);
 	tint = mix(tint, vec3(0.72, 1.0, 0.78), crt * 0.42);
-	col *= zone * tint;
+	col *= zone * tint * lamp_tint * lamp_gain;
 	float core = smoothstep(0.78, 0.96, max(tex.r, max(tex.g, tex.b)));
 	col += vec3(1.0, 0.78, 0.45) * core * lamp;
 	ALBEDO = col;

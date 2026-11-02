@@ -16,6 +16,8 @@ uniform float bounce_strength = 0.18;
 uniform sampler2D detail_tex : filter_nearest, repeat_enable;
 uniform sampler2D decal_tex : filter_nearest, repeat_disable;
 uniform float decal_side = 0.0;
+uniform vec3 lamp_tint = vec3(1.0);
+uniform float lamp_gain = 1.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -94,7 +96,7 @@ void fragment() {
 	float facing = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
 	float fresnel = pow(1.0 - facing, 4.0);
 	albedo += vec3(0.75, 0.84, 1.0) * fresnel * 0.07;
-	ALBEDO = max(albedo, vec3(0.0));
+	ALBEDO = max(albedo, vec3(0.0)) * lamp_tint * lamp_gain;
 	ROUGHNESS = clamp(roughness_base + (speckle - 0.5) * 0.08 - curve * 0.16 + (bayer - 0.5) * 0.02, 0.14, 0.72);
 	METALLIC = mix(metallic_base, 0.62, curve * 0.85);
 	SPECULAR = mix(0.55, 0.82, curve);
@@ -103,5 +105,5 @@ void fragment() {
 	RIM = 0.22 + fresnel * 0.35;
 
 	float under = clamp(dot(world_normal, bounce_dir), 0.0, 1.0);
-	EMISSION = bounce_color.rgb * under * under * bounce_strength;
+	EMISSION = bounce_color.rgb * under * under * bounce_strength * lamp_tint * lamp_gain;
 }

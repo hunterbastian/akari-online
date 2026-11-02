@@ -14,6 +14,7 @@ if ! command -v "$GODOT" >/dev/null 2>&1; then
 fi
 "$GODOT" --headless --path . --script res://test/test_inventory.gd
 "$GODOT" --headless --path . -- --state-test
+"$GODOT" --headless --path . --script res://test/test_cabin_terminal.gd
 "$GODOT" --headless --path . --script res://test/test_sol_planet.gd
 if [ "${SKIP_BENCH:-}" = "1" ]; then
   exit 0
