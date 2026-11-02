@@ -12,6 +12,9 @@ uniform float panel_shift = 0.0;
 uniform vec3 bounce_dir = vec3(0.0, -1.0, 0.0);
 uniform vec4 bounce_color : source_color = vec4(0.42, 0.64, 0.95, 1.0);
 uniform float bounce_strength = 0.16;
+uniform sampler2D detail_tex : filter_nearest, repeat_enable;
+uniform sampler2D decal_tex : filter_nearest, repeat_disable;
+uniform float decal_side = 0.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -37,6 +40,14 @@ float value_noise(vec3 p) {
 	return mix(mix(n00, n10, blend.y), mix(n01, n11, blend.y), blend.z);
 }
 
+varying vec3 v_model;
+varying vec3 v_model_n;
+
+void vertex() {
+	v_model = VERTEX;
+	v_model_n = NORMAL;
+}
+
 void fragment() {
 	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 world_normal = normalize(mat3(INV_VIEW_MATRIX) * NORMAL);
@@ -44,6 +55,20 @@ void fragment() {
 	float curve = clamp(length(fwidth(NORMAL)) * 5.0, 0.0, 1.0);
 
 	vec3 albedo = paint_color.rgb * mix(0.97, 1.03, speckle);
+	vec3 mn = normalize(v_model_n);
+	vec3 an = abs(mn);
+	vec2 uv = v_model.xy;
+	if (an.y > an.x && an.y > an.z) {
+		uv = v_model.xz;
+	} else if (an.x > an.z) {
+		uv = v_model.zy;
+	}
+	albedo *= texture(detail_tex, uv * 1.15).rgb;
+	vec2 duv = vec2(1.0 - (v_model.z - 0.35) / 1.45, (v_model.y - 0.33) / 0.38);
+	if (decal_side > 0.5 && mn.x > 0.45 && v_model.x > 0.1 && duv.x > 0.0 && duv.x < 1.0 && duv.y > 0.0 && duv.y < 1.0) {
+		vec4 stamp = texture(decal_tex, duv);
+		albedo = mix(albedo, stamp.rgb, stamp.a);
+	}
 	vec3 edge = paint_color.rgb * vec3(0.8, 0.84, 0.9);
 	albedo = mix(albedo, edge, curve * 0.35);
 

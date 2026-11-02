@@ -39,7 +39,7 @@ const _FX := 2.5
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
-	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_HERO") == "1"
+	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SEAM") == "1"
 	if has_meta("flight_active"):
 		active = bool(get_meta("flight_active"))
 	var ship := Ships.get_ship(GameState.ship_id)
@@ -66,6 +66,8 @@ func _ready() -> void:
 	_build_engine_fx()
 	_build_speed_streaks()
 	if _model:
+		_Dress.mark_spine(_model)
+		_Dress.mark_stencil(_model)
 		_Dress.mark_bay(_model)
 	for child in _hull.get_children():
 		_set_layer(child, 2)

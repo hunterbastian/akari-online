@@ -5,6 +5,10 @@ extends RefCounted
 
 const _PAINT := preload("res://assets/shaders/hull_paint.gdshader")
 const _PAINT_LOW := preload("res://assets/shaders/hull_paint_low.gdshader")
+const _Detail := preload("res://scripts/flight/hull_detail.gd")
+
+static var _panel: Texture
+static var _decal: Texture
 
 const _DARK_PARTS := ["Engine_Bells", "Nacelle_Vents", "Greebles"]
 const _SHELL_PARTS := ["Fuselage", "Canopy", "Canopy_Frame", "Dorsal_Spine", "Greebles"]
@@ -25,6 +29,56 @@ static func paint(root: Node, high_quality: bool) -> Array[ShaderMaterial]:
 	var paints: Array[ShaderMaterial] = []
 	_paint_node(root, high_quality, paints)
 	return paints
+
+
+static func mark_stencil(root: Node) -> void:
+	var fuse := root.find_child("Fuselage", true, false) as MeshInstance3D
+	if fuse == null:
+		return
+	if _decal == null:
+		_panel = _Detail.panel_texture()
+		_decal = _Detail.decal_texture()
+	var plate := MeshInstance3D.new()
+	plate.name = "HullStencil"
+	var box := BoxMesh.new()
+	box.size = Vector3(0.02, 0.42, 1.55)
+	plate.mesh = box
+	plate.position = Vector3(1.06, 0.06, -0.15)
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_texture = _decal
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	mat.albedo_color = Color(1, 1, 1, 1)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.uv1_scale = Vector3(-1, 1, 1)
+	mat.uv1_offset = Vector3(1, 0, 0)
+	plate.material_override = mat
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fuse.add_child(plate)
+
+
+static func mark_spine(root: Node) -> void:
+	var spine := root.find_child("Dorsal_Spine", true, false) as MeshInstance3D
+	if spine == null or spine.mesh == null:
+		return
+	var bounds := spine.mesh.get_aabb()
+	var strip := MeshInstance3D.new()
+	strip.name = "SpineLight"
+	var box := BoxMesh.new()
+	box.size = Vector3(0.045, 0.02, bounds.size.z * 0.86)
+	strip.mesh = box
+	var top := bounds.position.y + bounds.size.y
+	strip.position = Vector3(bounds.get_center().x, top + 0.018, bounds.get_center().z)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.15, 0.85, 0.75)
+	mat.emission_enabled = true
+	mat.emission = Color(0.35, 1.15, 0.95)
+	mat.emission_energy_multiplier = 5.0
+	strip.material_override = mat
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	spine.add_child(strip)
 
 
 static func mark_bay(root: Node) -> void:
@@ -97,8 +151,13 @@ static func engine_anchors(root: Node) -> Array[Vector3]:
 
 
 static func paint_material(color: Color, roughness: float, metallic: float, high_quality: bool, shift: float = 0.0) -> ShaderMaterial:
+	if _panel == null:
+		_panel = _Detail.panel_texture()
+		_decal = _Detail.decal_texture()
 	var material := ShaderMaterial.new()
 	material.shader = _PAINT if high_quality else _PAINT_LOW
+	material.set_shader_parameter("detail_tex", _panel)
+	material.set_shader_parameter("decal_tex", _decal)
 	material.set_shader_parameter("paint_color", color)
 	material.set_shader_parameter("roughness_base", roughness)
 	material.set_shader_parameter("metallic_base", metallic)
@@ -157,6 +216,8 @@ static func _material_for(mesh_name: String, material_name: String, high_quality
 		metallic = 0.16
 	var shift := float(abs(mesh_name.hash()) % 17) * 0.37
 	var painted := paint_material(tint, roughness, metallic, high_quality, shift)
+	if mesh_name == "Fuselage":
+		painted.set_shader_parameter("decal_side", 0.0)
 	paints.append(painted)
 	return painted
 

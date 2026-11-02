@@ -13,6 +13,9 @@ uniform float panel_shift = 0.0;
 uniform vec3 bounce_dir = vec3(0.0, -1.0, 0.0);
 uniform vec4 bounce_color : source_color = vec4(0.42, 0.64, 0.95, 1.0);
 uniform float bounce_strength = 0.18;
+uniform sampler2D detail_tex : filter_nearest, repeat_enable;
+uniform sampler2D decal_tex : filter_nearest, repeat_disable;
+uniform float decal_side = 0.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -38,6 +41,36 @@ float value_noise(vec3 p) {
 	return mix(mix(n00, n10, blend.y), mix(n01, n11, blend.y), blend.z);
 }
 
+varying vec3 v_model;
+varying vec3 v_model_n;
+
+void vertex() {
+	v_model = VERTEX;
+	v_model_n = NORMAL;
+}
+
+vec3 _panel() {
+	vec3 n = abs(normalize(v_model_n));
+	vec3 w = n * n;
+	w /= max(w.x + w.y + w.z, 0.001);
+	float scale = 1.15;
+	vec3 x = texture(detail_tex, v_model.zy * scale).rgb;
+	vec3 y = texture(detail_tex, v_model.xz * scale).rgb;
+	vec3 z = texture(detail_tex, v_model.xy * scale).rgb;
+	return x * w.x + y * w.y + z * w.z;
+}
+
+vec3 _decal(vec3 albedo) {
+	vec3 n = normalize(v_model_n);
+	// Dorsal stencil. Long axis runs along the ship so a side view can read it.
+	vec2 uv = vec2(1.0 - (v_model.z - 0.35) / 1.45, (v_model.y - 0.33) / 0.38);
+	if (decal_side > 0.5 && n.x > 0.45 && v_model.x > 0.1 && uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) {
+		vec4 stamp = texture(decal_tex, uv);
+		return mix(albedo, stamp.rgb, stamp.a);
+	}
+	return albedo;
+}
+
 void fragment() {
 	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 world_normal = normalize(mat3(INV_VIEW_MATRIX) * NORMAL);
@@ -48,6 +81,8 @@ void fragment() {
 	vec3 albedo = paint_color.rgb;
 	albedo *= mix(0.955, 1.035, broad);
 	albedo *= mix(0.985, 1.015, speckle);
+	albedo *= _panel();
+	albedo = _decal(albedo);
 	// Worn edges catch a cooler, slightly metallic glint.
 	vec3 edge = paint_color.rgb * vec3(0.78, 0.82, 0.9);
 	albedo = mix(albedo, edge, curve * 0.45);

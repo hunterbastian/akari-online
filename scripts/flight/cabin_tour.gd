@@ -10,6 +10,7 @@ var _walk := false
 var _film := false
 var _zones := false
 var _bay := false
+var _hull_pass := false
 var _bay_opened := false
 var _bay_closed := false
 var _seated := false
@@ -82,6 +83,7 @@ func setup(ship: Node) -> void:
 	_film = OS.get_cmdline_user_args().has("--film")
 	_zones = OS.get_cmdline_user_args().has("--zones")
 	_bay = OS.get_cmdline_user_args().has("--bay")
+	_hull_pass = OS.get_cmdline_user_args().has("--hull")
 	if _film:
 		var camera := _camera()
 		if camera:
@@ -93,6 +95,9 @@ func _process(delta: float) -> void:
 	if _ship == null:
 		return
 	_time += delta
+	if _hull_pass:
+		_play_hull()
+		return
 	var cabin = _ship.get("_cabin")
 	if cabin == null or cabin.walker == null or cabin.inventory == null:
 		return
@@ -186,6 +191,26 @@ func _play_bay(cabin, walker, delta: float) -> void:
 		_bay_closed = true
 		cabin.pulse_bay()
 	if _time >= _BAY_END:
+		get_tree().quit()
+
+
+func _play_hull() -> void:
+	var camera := _camera()
+	if camera == null:
+		return
+	camera.held = true
+	camera.current = true
+	var u := clampf(_time / 18.0, 0.0, 1.0)
+	var angle := lerpf(0.35, 2.35, u)
+	var radius := lerpf(12.0, 8.0, sin(u * PI))
+	var height := 1.1 + sin(u * PI) * 1.15
+	var forward: Vector3 = -_ship.global_basis.z
+	var right: Vector3 = _ship.global_basis.x
+	var offset: Vector3 = (-forward * cos(angle) + right * sin(angle)) * radius + Vector3.UP * height
+	camera.global_position = _ship.global_position + offset
+	camera.look_at(_ship.global_position + Vector3.UP * 0.2, Vector3.UP)
+	camera.fov = 34.0
+	if _time >= 18.0:
 		get_tree().quit()
 
 

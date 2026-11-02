@@ -27,9 +27,9 @@ var _planet_radius := 24.0
 
 
 func _ready() -> void:
-	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1"
+	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1"
 	var user_args := OS.get_cmdline_user_args()
-	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay")
+	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
@@ -81,6 +81,8 @@ func _ready() -> void:
 		_frame_closeup(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SIDE") == "1":
 		_frame_side(ship, camera)
+	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
+		_frame_seam(ship, camera)
 	elif not _shot and not _tour and _cabin_view.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
@@ -334,9 +336,16 @@ func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
 	_frame_portrait(ship, camera, forward * 7.4 + right * 5.6 + Vector3.UP * 1.7, forward * 0.8, 26.0)
 
 
+func _frame_seam(ship: Node3D, camera: Camera3D) -> void:
+	var right := ship.global_basis.x
+	var forward := -ship.global_basis.z
+	var aim := ship.global_position + Vector3.UP * 0.42 - forward * 0.05
+	_frame_portrait(ship, camera, right * 1.15 + Vector3.UP * 1.35 + forward * 0.15, aim - ship.global_position, 26.0)
+
+
 func _frame_side(ship: Node3D, camera: Camera3D) -> void:
 	var right := ship.global_basis.x
-	_frame_portrait(ship, camera, right * 11.5 + Vector3.UP * 1.35, Vector3.ZERO, 28.0)
+	_frame_portrait(ship, camera, right * 7.6 + Vector3.UP * 1.15, Vector3.UP * 0.15, 24.0)
 
 
 func dev_teleport(spec: String) -> String:
