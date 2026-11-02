@@ -369,21 +369,21 @@ func _frame_mega(mode: String) -> void:
 	_ship.global_position = _planet_center + Vector3(0.0, _planet_radius * 8.0, 0.0)
 	camera.held = true
 	camera.current = true
-	var spot := Vector3(12.0, 58.0, 26.0)
-	var aim := Vector3(0.0, 10.0, 0.0)
-	camera.fov = 40.0
+	var spot := Vector3(16.0, 42.0, 30.0)
+	var aim := Vector3(0.0, 8.0, 6.0)
+	camera.fov = 36.0
 	if mode == "mega-cloud":
-		spot = Vector3(3.0, 5.5, 7.0)
-		aim = Vector3(0.0, 2.0, -1.0)
-		camera.fov = 46.0
+		spot = Vector3(8.0, 1.3, 2.0)
+		aim = Vector3(-1.0, 7.0, 12.0)
+		camera.fov = 48.0
 	elif mode == "mega-canyon":
-		spot = Vector3(-0.6, 3.6, 0.2)
-		aim = Vector3(1.8, 8.0, -2.4)
-		camera.fov = 52.0
+		spot = Vector3(0.25, 3.2, 6.0)
+		aim = Vector3(0.4, 14.0, 15.0)
+		camera.fov = 54.0
 	elif mode == "mega-detail":
-		spot = Vector3(1.15, 2.4, 1.7)
-		aim = Vector3(-0.2, 5.5, -0.4)
-		camera.fov = 36.0
+		spot = Vector3(-2.4, 6.0, -0.2)
+		aim = Vector3(-5.2, 10.0, -1.0)
+		camera.fov = 32.0
 	camera.global_position = city.to_global(spot)
 	camera.look_at(city.to_global(aim), city.global_basis.y)
 

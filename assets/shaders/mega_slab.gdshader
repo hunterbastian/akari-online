@@ -11,15 +11,17 @@ uniform float haze_near = 18.0;
 uniform float haze_far = 90.0;
 
 void fragment() {
-	vec3 tex = texture(face_tex, UV * vec2(3.0, 4.0)).rgb;
+	vec3 tex = texture(face_tex, UV * vec2(4.0, 7.0)).rgb;
 	vec3 col = base_color.rgb * tex;
 	float mark = step(0.55, tex.r) * step(tex.g, 0.28) * step(tex.b, 0.28);
 	col = mix(col, vec3(0.62, 0.11, 0.09), mark);
 	float window = step(0.72, tex.r) * step(0.45, tex.g) * step(tex.b, 0.45);
+	float seam = step(0.45, tex.g) * step(tex.r, 0.4) * step(0.55, tex.b);
 	float dist = length(VERTEX);
 	float haze = smoothstep(haze_near, haze_far, dist);
-	ALBEDO = mix(col, haze_color, haze);
+	vec3 faded = mix(col, haze_color, haze);
+	ALBEDO = faded;
 	ROUGHNESS = 0.78;
 	METALLIC = 0.04;
-	EMISSION = vec3(1.0, 0.72, 0.38) * window * (1.0 - haze) * 0.9;
+	EMISSION = vec3(1.0, 0.72, 0.38) * window * (1.0 - haze) * 0.9 + vec3(0.25, 0.95, 0.82) * seam * (1.0 - haze);
 }
