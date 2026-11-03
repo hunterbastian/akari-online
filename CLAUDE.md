@@ -46,6 +46,7 @@ The flight world is drawn in a low-res `SubViewport` (`handle_input_locally = fa
 - `--log-demo` `--time-demo`
 - `--orbit-demo` and `--orbit-demo out`
 - `--save-demo write` then `--save-demo read`
+- `--look sixth|modern|phone` switches the post stack. Default is `modern`. `phone` is the sixth-gen stack without depth of field and god rays.
 - `--tour`, `--atmo`, `--hull`, `--mega` are shot and tour tools
 
 ## Vision
@@ -55,19 +56,20 @@ The ship is home. You personalize it and it grows with you.
 - Exterior: hand-made glossy white Destiny 1-inspired Blender jumpship, `assets/ships/jumpship.glb`, no Draco, dithered.
 - Interior: blocky warehouse cabin and a Star Trek-style shuttle bay door.
 - Ship computer: retro CRT-green screens only. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
-- Look: flat 2012-Minecraft lighting (per-face shading, soft corner AO, contact shadows) plus a little shader polish. Pixelated and dithered. Destiny filmic grade: teal shadows, warm highlights, lifted blacks, bloom, film grain.
+- Look: flat 2012-Minecraft lighting (per-face shading, soft corner AO, contact shadows) plus a little shader polish. Pixelated and dithered. Destiny filmic grade: teal shadows, warm highlights, lifted blacks, bloom, film grain. `LOOK SIXTH` (or `--look sixth`) adds the PS2/GameCube stack on that same film pass: 480-line nearest upscale, Kawase bloom, a light distance blur, screen-space sun shafts, 5-bit ordered dither, GameCube deflicker, composite chroma, and a light CRT mask. The cabin eases those filters so the green type stays readable. Pass switches live in `scripts/data/sixth_look.gd`.
 - Mina: brutalist megastructures are the style reference. City work is paused.
 
 ## Code health
 
 Every fixed bug gets a lint rule in `tools/lint.py` or a test under `test/`. A function marked `# hot` on the line above it must not allocate: no `.new()`, lambdas, string concat or formatting, or Array/Dictionary literals. `tools/check.sh` enforces that.
 
-Performance budget in `tools/budget.py`, last measured on this merge:
+Performance budget in `tools/budget.py`, last measured on this merge. `tools/check.sh` benches the modern look. A second run with `--look sixth` matched it.
 
-- worst frame 75.0 ms (limit 140)
+- worst frame 75.0 ms, modern and sixth (limit 140)
 - 209 draw calls (limit 500)
 - 411 nodes (limit 1200)
-- pack 1,263,157 bytes (limit 1.8 MB)
+- pack 1,279,904 bytes (limit 1.8 MB)
+- average frame 66.6 ms modern, 66.8 ms sixth
 
 ## Architecture
 
@@ -76,7 +78,8 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 - `scripts/flight/ship_controller.gd` flight loop, seat toggle, flames, CRT readout push, ship log tick, orbit coast, save capture.
 - `scripts/flight/chase_camera.gd` exterior camera. `scripts/flight/thrust_kick.gd` and `thrust_feel.gd` ease FOV, sway, and lag. Star streaks are `assets/shaders/star_streak.gdshader`. Tune with `FlightProfile` in `scripts/data/flight_profile.gd`: `SHAKE` (0 off, 1 default), `KICK_FOV`, `KICK_IN_TIME` (1.5 s), `CAM_LAG`, `STREAK_OUT`, `BOB` (0 off, 1 the gentle walk).
 - `scripts/flight/cabin_interior.gd` warehouse cabin, CRT, terminal keyboard, lamps. `cabin_walker.gd` plus `cabin_bob.gd` walk and bob. `cabin_bay_door.gd` the shuttle bay. `cabin_lamps.gd` LIGHTS presets.
-- `scripts/flight/cabin_terminal.gd` `submit(line, lamps, log)`. Add a command by matching the first word next to HELP, LOG, TIME, AUTOPILOT, and SAVE, and teach `terminal_submit()` in the cabin if the command has a side effect. HELP is one line: `HELP  LIGHTS  LOG  TIME  AUTOPILOT  SAVE`.
+- `scripts/flight/cabin_terminal.gd` `submit(line, lamps, log)`. Add a command by matching the first word next to HELP, LOG, TIME, AUTOPILOT, SAVE, and LOOK, and teach `terminal_submit()` in the cabin if the command has a side effect. HELP is one line: `HELP  LIGHTS  LOG  TIME  AUTOPILOT  SAVE  LOOK`.
+- LOOK: `SIXTH`, `MODERN`, `PHONE`. The setting is `akari/post/look`. `scripts/data/sixth_look.gd` resolves the preset. Each `PASS_*` flag drops that step. A phone, or quality `low`, drops depth of field and god rays. `scripts/world/sixth_film.gd` pushes the sun and the cabin eye into `assets/shaders/film_dither.gdshader`. `stack == 0` is the Destiny grade alone.
 - LIGHTS: `WARM`, `COLD`, `RED`, `OFF`. The cabin notes the change in the log.
 - `scripts/flight/ship_log.gd` session log. `MINA_DAY` is 180 real seconds. `note("text")` stamps ship time. `observe()` adds the automatic lines (aboard, first burn, Mina, air, bay, days). Add a new automatic event there, not in a `# hot` function.
 - TIME prints ship clock (Mina days plus hh:mm of a 24-hour day squeezed into 180 real seconds), real time flown, and total time in space.

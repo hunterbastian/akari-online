@@ -5,6 +5,7 @@ extends Node
 
 const _PIXEL := preload("res://scripts/ui/pixel_text.gd")
 const _POST := preload("res://scripts/data/post_profile.gd")
+const _Look := preload("res://scripts/data/sixth_look.gd")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _DITHER := preload("res://assets/shaders/console_dither.gdshader")
 
@@ -179,6 +180,7 @@ func _register_builtins() -> void:
 	register_command("quality", _cmd_quality, "quality <low|med|high>  reloads the scene")
 	register_command("renderscale", _cmd_scale, "renderscale <0.3-1.0>")
 	register_command("dither", _cmd_dither, "dither on|off")
+	register_command("look", _cmd_look, "look <sixth|modern|phone>")
 	register_command("hud", _cmd_hud, "hud on|off")
 	register_command("seed", _cmd_seed, "seed  prints the system seed; seed <n> regenerates")
 	register_command("reload", _cmd_reload, "Reload the current scene")
@@ -482,13 +484,15 @@ func _complete_arg(command_name: String) -> void:
 	var options: PackedStringArray = PackedStringArray()
 	match command_name:
 		"tp":
-			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "rear", "dash", "storage", "locker"])
+			options = PackedStringArray(["planet", "moon", "ship", "cabin", "aisle", "rear", "dash", "window", "storage", "locker"])
 		"give":
 			options = PackedStringArray(["helmet", "mug", "cartridge", "crate"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
 		"dither", "hud":
 			options = PackedStringArray(["on", "off"])
+		"look":
+			options = PackedStringArray(["sixth", "modern", "phone"])
 		_:
 			return
 	var parts: PackedStringArray = _line.text.split(" ", false)
@@ -765,6 +769,17 @@ func _cmd_scale(args: PackedStringArray) -> void:
 	_POST.runtime_scale = scale
 	_reapply_scale()
 	_echo("renderscale %s" % str(scale))
+
+
+func _cmd_look(args: PackedStringArray) -> void:
+	var scene := get_tree().get_first_node_in_group("akari_main")
+	if args.is_empty():
+		_echo("look %s" % _Look.preset)
+		return
+	if scene == null or not scene.has_method("set_look") or not scene.set_look(str(args[0])):
+		_echo("look sixth|modern|phone", "err")
+		return
+	_echo("look %s" % _Look.preset)
 
 
 func _cmd_dither(args: PackedStringArray) -> void:

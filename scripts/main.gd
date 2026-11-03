@@ -2,6 +2,7 @@ extends Node3D
 
 const _ColorGrade := preload("res://scripts/world/color_grade.gd")
 const _PostProfile := preload("res://scripts/data/post_profile.gd")
+const _Sixth := preload("res://scripts/data/sixth_look.gd")
 
 ## Sol, one seeded world, the starter ship.
 
@@ -21,6 +22,10 @@ var _world: SubViewport
 var _bounce: DirectionalLight3D
 var _ship: Node3D
 var _dither_layer: CanvasLayer
+var _film: ShaderMaterial
+var _film_rect: ColorRect
+var _env: Environment
+var _glow_base := false
 var _planet: Dictionary = {}
 var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
@@ -41,7 +46,8 @@ var _stand_test := false
 
 
 func _ready() -> void:
-	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1"
+	add_to_group("akari_main")
+	_shot = OS.get_environment("AKARI_SHOT") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_SEAM") == "1" or OS.get_environment("AKARI_SUN") == "1"
 	var user_args := OS.get_cmdline_user_args()
 	_tour = user_args.has("--tour") or user_args.has("--walk") or user_args.has("--film") or user_args.has("--zones") or user_args.has("--bay") or user_args.has("--hull") or user_args.has("--mega") or user_args.has("--atmo") or user_args.has("--interior") or user_args.has("--exterior")
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
@@ -91,7 +97,9 @@ func _ready() -> void:
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
-	if _shot and OS.get_environment("AKARI_HERO") == "1":
+	if _shot and OS.get_environment("AKARI_SUN") == "1":
+		_frame_sun(ship, camera)
+	elif _shot and OS.get_environment("AKARI_HERO") == "1":
 		_frame_hero(ship, camera)
 	elif _shot and OS.get_environment("AKARI_CLOSEUP") == "1":
 		_frame_closeup(ship, camera)
@@ -293,10 +301,25 @@ func apply_render_scale() -> void:
 func _apply_render_scale() -> void:
 	var full := get_viewport().get_visible_rect().size
 	var scale := _PostProfile.render_scale()
+	var lines := _Sixth.scale_for(full.y)
+	if lines > 0.0:
+		scale = lines
 	_world.size = Vector2i(
 		maxi(1, int(round(full.x * scale))),
 		maxi(1, int(round(full.y * scale)))
 	)
+
+
+func set_look(name: String) -> bool:
+	if not _Sixth.set_preset(name):
+		return false
+	_apply_render_scale()
+	_push_film()
+	_apply_glow()
+	if _film_rect and _film_rect.has_method("sync"):
+		_film_rect.sync()
+	print("LOOK ", _Sixth.preset)
+	return true
 
 
 func set_dither_enabled(on: bool) -> void:
@@ -308,10 +331,15 @@ func set_dither_enabled(on: bool) -> void:
 
 
 func _add_dither() -> void:
-	if not _PostProfile.dither_enabled():
+	var want := _PostProfile.dither_enabled() or _Sixth.active
+	if not want:
+		if is_instance_valid(_dither_layer):
+			_dither_layer.visible = false
 		return
 	if is_instance_valid(_dither_layer):
 		_dither_layer.visible = true
+		if _film != null:
+			_push_film()
 		return
 	var layer := CanvasLayer.new()
 	layer.name = "Dither"
@@ -319,19 +347,56 @@ func _add_dither() -> void:
 	var rect := ColorRect.new()
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.set_script(load("res://scripts/world/sixth_film.gd"))
 	var material := ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/film_dither.gdshader")
-	material.set_shader_parameter("dither_strength", 0.01)
-	material.set_shader_parameter("grain_strength", 0.014)
-	material.set_shader_parameter("quantize_steps", 36.0)
-	material.set_shader_parameter("vignette", 0.14)
-	material.set_shader_parameter("ca_strength", _PostProfile.film_ca())
 	rect.material = material
 	rect.add_to_group("akari_film")
 	layer.add_child(rect)
 	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
 	_world.add_child(layer)
 	_dither_layer = layer
+	_film = material
+	_film_rect = rect
+	rect.setup(_world, FlightProfile.SUN_OFFSET.normalized() * 1800.0, _planet_center, _planet_radius, _ship, material)
+	_push_film()
+
+
+func _push_film() -> void:
+	if _film == null:
+		if not is_instance_valid(_dither_layer):
+			_add_dither()
+		if _film == null:
+			return
+	var ca := _PostProfile.film_ca()
+	if _Sixth.chroma > 0.01:
+		ca *= 0.35
+	_film.set_shader_parameter("stack", 1.0 if _Sixth.active else 0.0)
+	_film.set_shader_parameter("bloom_strength", _Sixth.bloom)
+	_film.set_shader_parameter("dof_strength", _Sixth.dof)
+	_film.set_shader_parameter("dof_near", _Sixth.DOF_NEAR)
+	_film.set_shader_parameter("dof_far", _Sixth.DOF_FAR)
+	_film.set_shader_parameter("shaft_strength", _Sixth.shafts)
+	_film.set_shader_parameter("quantize_steps", _Sixth.bits)
+	_film.set_shader_parameter("dither_strength", _Sixth.dither_extra)
+	_film.set_shader_parameter("grain_strength", 0.014)
+	_film.set_shader_parameter("deflicker", _Sixth.deflicker)
+	_film.set_shader_parameter("chroma", _Sixth.chroma)
+	_film.set_shader_parameter("crt", _Sixth.crt)
+	_film.set_shader_parameter("vignette", _Sixth.vignette)
+	_film.set_shader_parameter("cabin_bloom", _Sixth.CABIN_BLOOM)
+	_film.set_shader_parameter("cabin_deflicker", _Sixth.CABIN_DEFLICKER)
+	_film.set_shader_parameter("cabin_chroma", _Sixth.CABIN_CHROMA)
+	_film.set_shader_parameter("cabin_crt", _Sixth.CABIN_CRT)
+	_film.set_shader_parameter("cabin_shafts", _Sixth.CABIN_SHAFTS)
+	_film.set_shader_parameter("focus_radius", 4.2)
+	_film.set_shader_parameter("ca_strength", ca)
+
+
+func _apply_glow() -> void:
+	if _env == null:
+		return
+	_env.glow_enabled = _glow_base and _Sixth.engine_glow > 0.5
 
 
 func _add_sun_glare(chase: Camera3D, sun_dir: Vector3) -> void:
@@ -483,6 +548,18 @@ func _frame_exterior(ship: Node3D) -> void:
 	camera.look_at(ship.global_position + forward * 5.5 + Vector3.UP * 0.3, Vector3.UP)
 
 
+func _frame_sun(ship: Node3D, camera: Camera3D) -> void:
+	# Behind the ship, looking toward Mina, with the sun in the upper frame.
+	# held keeps the chase script from pulling the camera back.
+	camera.held = true
+	camera.current = true
+	var forward := -ship.global_basis.z
+	var right := ship.global_basis.x
+	camera.fov = 40.0
+	camera.global_position = ship.global_position - forward * 9.2 + right * 4.4 + Vector3.UP * 1.7
+	camera.look_at(ship.global_position + forward * 12.0 + Vector3.UP * 2.4, Vector3.UP)
+
+
 func _frame_hero(ship: Node3D, camera: Camera3D) -> void:
 	var forward := -ship.global_basis.z
 	var right := ship.global_basis.x
@@ -594,6 +671,12 @@ func dev_teleport(spec: String) -> String:
 		_ship.start_cabin_view("dash")
 		_finish_dev_view()
 		return "tp dash"
+	if key == "window":
+		_place_for_shot(_ship, _planet)
+		_ship.velocity = Vector3.ZERO
+		_ship.start_cabin_view("window")
+		_finish_dev_view()
+		return "tp window"
 	if key == "crates":
 		_place_for_shot(_ship, _planet)
 		_ship.velocity = Vector3.ZERO
@@ -713,6 +796,7 @@ func _arm_keeper(keeper) -> void:
 
 
 func _read_cli() -> void:
+	_Sixth.boot()
 	var args := OS.get_cmdline_user_args()
 	var i := 0
 	while i < args.size():
@@ -735,6 +819,9 @@ func _read_cli() -> void:
 			i += 2
 		elif arg == "--thrust-demo" and i + 1 < args.size():
 			_kick_demo = str(args[i + 1])
+			i += 2
+		elif arg == "--look" and i + 1 < args.size():
+			_Sixth.set_preset(str(args[i + 1]))
 			i += 2
 		elif arg == "--lights" and i + 1 < args.size():
 			_lights_arg = str(args[i + 1]).to_lower()
@@ -792,6 +879,8 @@ func _read_cli() -> void:
 		_cabin_view = "rear"
 	elif at == "dash":
 		_cabin_view = "dash"
+	elif at == "window":
+		_cabin_view = "window"
 	elif at == "storage":
 		_cabin_view = "storage"
 	elif at == "locker":
@@ -876,6 +965,9 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	environment.adjustment_contrast = 1.08
 	environment.adjustment_saturation = 1.0
 	environment.adjustment_color_correction = _ColorGrade.build_lut()
+	_env = environment
+	_glow_base = environment.glow_enabled
+	_apply_glow()
 
 	var sky := Sky.new()
 	var material := ShaderMaterial.new()

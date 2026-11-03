@@ -198,6 +198,8 @@ func snap_view(mode: String) -> void:
 		walker.snap(_v(0.05, 0.0, -1.45), _scale * 1.35, -1.05, -2.45)
 	elif mode == "dash":
 		walker.snap(_v(0.0, 0.0, -1.2), _scale * 0.92, -0.42, 0.0)
+	elif mode == "window":
+		walker.snap(seat_point, seated_eye, 0.36, 0.0)
 	elif mode == "floor":
 		walker.snap(_v(0.2, 0.0, -0.5), _scale * 1.05, -0.72, 1.05)
 	else:
@@ -296,9 +298,17 @@ func terminal_submit() -> void:
 		pilot.engage_orbit()
 	elif pilot != null and reply == "AUTOPILOT OFF":
 		pilot.request_orbit_stop()
+	elif reply == "LOOK SIXTH" or reply == "LOOK MODERN" or reply == "LOOK PHONE":
+		_apply_look(reply)
 	if not reply.is_empty():
 		_reply = reply
 	_refresh_prompt()
+
+
+func _apply_look(reply: String) -> void:
+	var root := get_tree().get_first_node_in_group("akari_main")
+	if root and root.has_method("set_look"):
+		root.set_look(reply.trim_prefix("LOOK "))
 
 
 func _flight_ship():

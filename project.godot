@@ -84,6 +84,7 @@ common/physics_ticks_per_second=120
 [akari]
 
 post/dither=true
+post/look="modern"
 render/scale=0.6
 quality="high"
 quality.mobile="low"
