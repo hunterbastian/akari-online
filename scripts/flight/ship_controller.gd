@@ -32,6 +32,8 @@ var _read_spd := -1
 var _read_range := -1
 var _read_thr := -1
 var _read_ap := ""
+var _log = preload("res://scripts/flight/ship_log.gd").new()
+var script_throttle := -1.0
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
 var _trails: Array[MeshInstance3D] = []
@@ -85,7 +87,22 @@ func _ready() -> void:
 	_paints.append_array(_cabin.paints)
 	if _PostProfile.high_quality():
 		_build_reflection_probe()
+	if _cabin.has_method("set_log"):
+		_cabin.set_log(_log)
 	_update_cabin()
+
+
+func ship_log():
+	return _log
+
+
+func hold_seat_flight() -> void:
+	walking = false
+	if _chase:
+		_chase.current = false
+	if _cabin and _cabin.walker and _cabin.walker.eye:
+		_cabin.walker.locked = true
+		_cabin.walker.eye.current = true
 
 
 func set_flight_active(on: bool) -> void:
@@ -137,6 +154,8 @@ func start_cabin_view(mode: String) -> void:
 
 func _enter_cabin() -> void:
 	walking = true
+	if _log:
+		_log.mark_aboard()
 	# Coast on the velocity you had. The burn itself stops, or the nozzles keep firing.
 	thrust = 0.0
 	boosting = false
@@ -240,6 +259,7 @@ func _process(delta: float) -> void:
 		_mouse_dy = 0.0
 		return
 	var step := minf(delta, FlightProfile.DT_CAP)
+	_note_log(step)
 	if walking:
 		_hold_course(step)
 		return
@@ -267,12 +287,16 @@ func _process(delta: float) -> void:
 		_hull.rotation.z = _bank
 
 	var forward := -global_basis.z
-	boosting = Input.is_action_pressed("boost")
 	var throttle := 0.0
-	if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup) or demo_fly:
-		throttle += 1.0
-	if Input.is_action_pressed("throttle_back"):
-		throttle -= 1.0
+	if script_throttle >= 0.0:
+		boosting = script_throttle > 0.85
+		throttle = script_throttle
+	else:
+		boosting = Input.is_action_pressed("boost")
+		if Input.is_action_pressed("throttle_forward") or (_shot and not _closeup) or demo_fly:
+			throttle += 1.0
+		if Input.is_action_pressed("throttle_back"):
+			throttle -= 1.0
 	thrust = maxf(0.0, throttle) * (1.0 if boosting else 0.65)
 
 	var speed := 0.0
@@ -345,6 +369,18 @@ func _update_cabin() -> void:
 	var pitch_deg := int(round(rad_to_deg(rotation.x)))
 	var yaw_deg := int(round(rad_to_deg(rotation.y)))
 	_cabin.update_readouts(float(spd), thrust, float(mina_range), str(_ship_cache.name), hull, autopilot, pitch_deg, yaw_deg)
+
+
+func _note_log(step: float) -> void:
+	if _log == null:
+		return
+	var alt := 0.0
+	if planet_radius > 0.0:
+		alt = maxf(global_position.distance_to(planet_position) - planet_radius, 0.0)
+	var bay := false
+	if _cabin != null and _cabin.has_method("bay_is_open"):
+		bay = _cabin.bay_is_open()
+	_log.observe(step, velocity.length(), alt, planet_radius, walking, thrust, bay)
 
 
 func _keep_off_star() -> void:

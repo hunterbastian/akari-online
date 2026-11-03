@@ -28,6 +28,7 @@ var _planet_body: Node3D
 var _state_test := false
 var _lights_arg := ""
 var _lights_demo := ""
+var _log_demo := false
 
 
 func _ready() -> void:
@@ -122,6 +123,15 @@ func _ready() -> void:
 		lights_demo.name = "LightsDemo"
 		add_child(lights_demo)
 		lights_demo.setup(ship)
+	if _log_demo:
+		ship.hold_seat_flight()
+		var logged = ship.get("_cabin")
+		if logged:
+			logged.show_hotbar = false
+		var log_demo = load("res://scripts/flight/log_demo.gd").new()
+		log_demo.name = "LogDemo"
+		add_child(log_demo)
+		log_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -286,7 +296,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _log_demo or not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -585,8 +595,13 @@ func _read_cli() -> void:
 		elif arg == "--lights-demo" and i + 1 < args.size():
 			_lights_demo = str(args[i + 1])
 			i += 2
+		elif arg == "--log-demo":
+			_log_demo = true
+			i += 1
 		else:
 			i += 1
+	if _log_demo:
+		_cabin_view = "seat"
 	if _lights_demo == "wide":
 		_cabin_view = "wide"
 	elif _lights_demo == "inside" or not _lights_arg.is_empty():

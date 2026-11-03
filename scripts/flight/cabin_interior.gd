@@ -49,6 +49,7 @@ var inventory
 var _lamps = preload("res://scripts/flight/cabin_lamps.gd").new()
 const _Term := preload("res://scripts/flight/cabin_terminal.gd")
 var _reply := ""
+var _session_log
 var _term_reply: Label
 var _lamp_mats: Array[ShaderMaterial] = []
 var _bulbs: Array[MeshInstance3D] = []
@@ -257,9 +258,17 @@ func terminal_submit_text(line: String) -> void:
 	terminal_submit()
 
 
+func set_log(log) -> void:
+	_session_log = log
+
+
 func terminal_submit() -> void:
-	var reply: String = _Term.submit(_command, _lamps)
+	var reply: String = _Term.submit(_command, _lamps, _session_log)
 	_command = ""
+	if reply.begins_with("LIGHTS ") and not reply.contains("?") and _session_log != null:
+		var preset := reply.trim_prefix("LIGHTS ")
+		if not preset.contains(" "):
+			_session_log.note("Cabin lights " + preset.to_lower())
 	if not reply.is_empty():
 		_reply = reply
 	_refresh_prompt()
@@ -267,10 +276,27 @@ func terminal_submit() -> void:
 
 func _refresh_prompt() -> void:
 	var cursor := "_" if _cursor_on else " "
-	_refresh_header()
+	var multi := _reply.contains("\n")
+	var prompt: Label = _lines.get("terminal")
+	if prompt:
+		prompt.position.y = 248.0 if multi else 210.0
 	_set_line("terminal", ">" + _command + cursor)
+	if _term_header:
+		if multi:
+			_term_header.add_theme_font_size_override("font_size", 20)
+			_term_header.size.y = 210
+			_term_header.text = _reply
+		else:
+			_term_header.add_theme_font_size_override("font_size", 28)
+			_term_header.size.y = 120
+			_refresh_header()
 	if _term_reply:
-		_term_reply.text = _reply
+		if _session_log != null and _session_log.blip and not multi:
+			_term_reply.text = "NEW LOG"
+		elif multi:
+			_term_reply.text = "LOG"
+		else:
+			_term_reply.text = _reply
 
 
 func _refresh_header() -> void:
