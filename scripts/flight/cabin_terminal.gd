@@ -11,7 +11,7 @@ static func submit(line: String, lamps, log = null) -> String:
 	var parts := text.split(" ", false)
 	var cmd := str(parts[0])
 	if cmd == "HELP":
-		return "HELP  LIGHTS  LOG  TIME"
+		return "HELP  LIGHTS  LOG  TIME  AUTOPILOT"
 	if cmd == "TIME":
 		if log == null or not log.has_method("time_report"):
 			return "TIME?"
@@ -20,6 +20,16 @@ static func submit(line: String, lamps, log = null) -> String:
 		if log == null:
 			return "LOG EMPTY"
 		return log.page()
+	if cmd == "STOP":
+		return "AUTOPILOT OFF"
+	if cmd == "AUTOPILOT":
+		if parts.size() < 2:
+			return "ORBIT  OFF"
+		if str(parts[1]) == "ORBIT":
+			return "AUTOPILOT ORBIT"
+		if str(parts[1]) == "OFF":
+			return "AUTOPILOT OFF"
+		return "AUTOPILOT?"
 	if cmd != "LIGHTS":
 		return "?"
 	if parts.size() < 2:

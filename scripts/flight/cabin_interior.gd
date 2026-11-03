@@ -34,6 +34,7 @@ var _pitch_deg := 0
 var _yaw_deg := 0
 var _readout := "SPD 000\nALT 00000\nHDG 000\nTHR 0.00"
 var _command := ""
+var orbit_hold := false
 var _cursor_on := true
 var _cursor_time := 0.0
 var _prompt_held := false
@@ -157,6 +158,7 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	var name := ship_name.to_upper()
 	if name.length() > 12:
 		name = name.substr(0, 12)
+	orbit_hold = autopilot == "ORBIT"
 	_pitch_deg = pitch_deg
 	_yaw_deg = yaw_deg
 	_readout = _Read.block(int(round(speed)), int(round(mina_range)), yaw_deg, throttle)
@@ -272,7 +274,21 @@ func terminal_submit() -> void:
 			_session_log.note("Cabin lights " + preset.to_lower())
 	if not reply.is_empty():
 		_reply = reply
+	var pilot = _flight_ship()
+	if pilot != null and reply == "AUTOPILOT ORBIT":
+		pilot.engage_orbit()
+	elif pilot != null and reply == "AUTOPILOT OFF":
+		pilot.request_orbit_stop()
 	_refresh_prompt()
+
+
+func _flight_ship():
+	var node: Node = get_parent()
+	while node != null:
+		if node.has_method("engage_orbit"):
+			return node
+		node = node.get_parent()
+	return null
 
 
 func _refresh_prompt() -> void:
@@ -300,10 +316,18 @@ func _refresh_prompt() -> void:
 			_term_reply.text = _reply
 
 
+func show_orbit(on: bool) -> void:
+	orbit_hold = on
+	_refresh_header()
+
+
 func _refresh_header() -> void:
 	if _term_header == null:
 		return
-	_term_header.text = _readout
+	if orbit_hold:
+		_term_header.text = "AUTOPILOT: ORBIT\n" + _readout
+	else:
+		_term_header.text = _readout
 
 
 func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
@@ -570,7 +594,9 @@ func _step_wav() -> AudioStreamWAV:
 func _ambience(delta: float) -> void:
 	_fill_tone(_hum_pb, 78.0, 0.05, _hum_phase)
 	_hum_phase += delta
-	_fill_tone(_whine_pb, 2400.0, 0.03, _whine_phase)
+	var tone := 460.0 if orbit_hold else 2400.0
+	var amp := 0.01 if orbit_hold else 0.03
+	_fill_tone(_whine_pb, tone, amp, _whine_phase)
 	_whine_phase += delta
 	if walker == null or not walker.active_walk or walker.locked or _steps == null:
 		return

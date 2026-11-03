@@ -25,6 +25,8 @@ var _paints: Array[ShaderMaterial] = []
 var _engine_anchors: Array[Vector3] = []
 var walking := false
 var dev_speed_mult := 1.0
+var _orbit = preload("res://scripts/flight/orbit_pilot.gd").new()
+var _stop_orbit := false
 var dev_god := false
 ## >= 0 replaces the keyboard for the thrust-kick demo. -1 means real input.
 var script_throttle := -1.0
@@ -284,6 +286,9 @@ func _process(delta: float) -> void:
 		_read_wait = 0.1
 		_read_due = true
 	_note_log(step)
+	if _orbit != null and _orbit.active:
+		_coast_orbit(step)
+		return
 	if walking:
 		_hold_course(step)
 		return
@@ -383,7 +388,9 @@ func _update_cabin() -> void:
 	var spd := int(round(velocity.length()))
 	var thr := int(round(thrust * 100.0))
 	var autopilot := "STBY"
-	if walking and _cabin.walker != null and not _cabin.walker.locked:
+	if _orbit != null and _orbit.active:
+		autopilot = "ORBIT"
+	elif walking and _cabin.walker != null and not _cabin.walker.locked:
 		autopilot = "HOLD"
 	var yaw_deg := int(round(rad_to_deg(rotation.y)))
 	var heading := int(posmod(yaw_deg, 360))
@@ -412,6 +419,51 @@ func _note_log(step: float) -> void:
 	if _cabin != null and _cabin.has_method("bay_is_open"):
 		bay = _cabin.bay_is_open()
 	_log.observe(step, velocity.length(), alt, planet_radius, walking, thrust, bay)
+
+
+func engage_orbit() -> void:
+	_orbit.engage(global_position, velocity, planet_position, planet_radius)
+	_mouse_dx = 0.0
+	_mouse_dy = 0.0
+	if _cabin and _cabin.has_method("show_orbit"):
+		_cabin.show_orbit(true)
+	var log = get("_log")
+	if log != null and log.has_method("note"):
+		log.note("Autopilot set to orbit Mina")
+
+
+func request_orbit_stop() -> void:
+	_stop_orbit = true
+
+
+func _coast_orbit(step: float) -> void:
+	var throttle := Input.is_action_pressed("throttle_forward") or Input.is_action_pressed("throttle_back")
+	var turn := Input.is_action_pressed("yaw_left") or Input.is_action_pressed("yaw_right")
+	turn = turn or Input.is_action_pressed("lift") or Input.is_action_pressed("drop")
+	var boost := Input.is_action_pressed("boost")
+	if _orbit.cancel_if(throttle, turn, boost, _stop_orbit, walking):
+		_stop_orbit = false
+		_read_ap = ""
+		if _cabin:
+			_cabin.orbit_hold = false
+			if _cabin.has_method("show_orbit"):
+				_cabin.show_orbit(false)
+		return
+	var desired: Vector3 = _orbit.step(global_position, step)
+	velocity = velocity.lerp(desired, 1.0 - exp(-1.15 * step))
+	global_position += velocity * step
+	var radial: Vector3 = global_position - _orbit.center
+	if radial.length() > 0.2:
+		var inward: Vector3 = -radial.normalized()
+		var tangent: Vector3 = _orbit.normal.cross(radial.normalized()).normalized()
+		var look: Vector3 = inward * 0.82 + tangent * 0.38
+		look_at(global_position + look, _orbit.normal)
+	thrust = lerpf(thrust, 0.16, 1.0 - exp(-1.2 * step))
+	boosting = false
+	if _cabin:
+		_cabin.orbit_hold = true
+	_update_flames()
+	_update_cabin()
 
 
 func _keep_off_star() -> void:
