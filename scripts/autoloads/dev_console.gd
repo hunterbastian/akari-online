@@ -179,6 +179,7 @@ func _register_builtins() -> void:
 	register_command("quality", _cmd_quality, "quality <low|med|high>  reloads the scene")
 	register_command("renderscale", _cmd_scale, "renderscale <0.3-1.0>")
 	register_command("dither", _cmd_dither, "dither on|off")
+	register_command("post", _cmd_post, "post <deflicker|composite|crt> <0-1>  GameCube passes")
 	register_command("hud", _cmd_hud, "hud on|off")
 	register_command("seed", _cmd_seed, "seed  prints the system seed; seed <n> regenerates")
 	register_command("reload", _cmd_reload, "Reload the current scene")
@@ -487,6 +488,8 @@ func _complete_arg(command_name: String) -> void:
 			options = PackedStringArray(["helmet", "mug", "cartridge", "crate"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
+		"post":
+			options = PackedStringArray(["deflicker", "composite", "crt"])
 		"dither", "hud":
 			options = PackedStringArray(["on", "off"])
 		_:
@@ -780,6 +783,25 @@ func _cmd_dither(args: PackedStringArray) -> void:
 	if scene and scene.has_method("set_dither_enabled"):
 		scene.set_dither_enabled(on)
 	_echo("dither %s" % ("on" if on else "off"))
+
+
+func _cmd_post(args: PackedStringArray) -> void:
+	var names := ["deflicker", "composite", "crt"]
+	if args.is_empty():
+		for pass_name in names:
+			_echo("post %s %s" % [pass_name, str(_POST.film_pass(pass_name))])
+		return
+	var pass_name := args[0].to_lower()
+	if not names.has(pass_name) or args.size() < 2 or not args[1].is_valid_float():
+		_echo("post <deflicker|composite|crt> <0-1>", "err")
+		return
+	var value := clampf(float(args[1]), 0.0, 1.0)
+	_POST.runtime_post[pass_name] = value
+	for node in get_tree().get_nodes_in_group("akari_film"):
+		var item := node as CanvasItem
+		if item and item.material is ShaderMaterial:
+			(item.material as ShaderMaterial).set_shader_parameter(pass_name, value)
+	_echo("post %s %s" % [pass_name, str(value)])
 
 
 func _cmd_hud(args: PackedStringArray) -> void:

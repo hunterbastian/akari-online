@@ -11,6 +11,14 @@ uniform float quantize_steps : hint_range(8.0, 128.0) = 36.0;
 uniform float vignette : hint_range(0.0, 0.6) = 0.14;
 uniform float ca_strength : hint_range(0.0, 0.02) = 0.0;
 uniform float streak : hint_range(0.0, 1.0) = 0.0;
+// GameCube deflicker: each pixel blends with the rows above and below, the
+// console's 3-tap vertical copy filter (about 14/36/14 of 64). 1 = the full filter.
+uniform float deflicker : hint_range(0.0, 1.0) = 0.0;
+// Composite cable: luma loses a little sharpness, chroma bleeds wider sideways,
+// faint dot crawl. 1 = the full look.
+uniform float composite : hint_range(0.0, 1.0) = 0.0;
+// CRT: soft scanlines on the rendered rows, brightness kept.
+uniform float crt : hint_range(0.0, 1.0) = 0.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -18,6 +26,22 @@ const mat4 BAYER = mat4(
 	vec4(2.0, 14.0, 1.0, 13.0),
 	vec4(10.0, 6.0, 9.0, 5.0)
 ) / 16.0;
+
+vec3 to_yiq(vec3 c) {
+	return vec3(
+		dot(c, vec3(0.299, 0.587, 0.114)),
+		dot(c, vec3(0.596, -0.274, -0.322)),
+		dot(c, vec3(0.211, -0.523, 0.312))
+	);
+}
+
+vec3 from_yiq(vec3 y) {
+	return vec3(
+		dot(y, vec3(1.0, 0.956, 0.621)),
+		dot(y, vec3(1.0, -0.272, -0.647)),
+		dot(y, vec3(1.0, -1.106, 1.703))
+	);
+}
 
 float hash12(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -36,7 +60,33 @@ void fragment() {
 	} else {
 		col = texture(screen_tex, uv).rgb;
 	}
+	vec2 px = SCREEN_PIXEL_SIZE;
 	ivec2 pixel = ivec2(floor(FRAGCOORD.xy));
+	if (deflicker > 0.001) {
+		vec3 up = texture(screen_tex, uv - vec2(0.0, px.y)).rgb;
+		vec3 down = texture(screen_tex, uv + vec2(0.0, px.y)).rgb;
+		col = mix(col, (up + down) * 0.5, 0.4375 * deflicker);
+	}
+	if (composite > 0.001) {
+		vec3 l1 = texture(screen_tex, uv - vec2(px.x, 0.0)).rgb;
+		vec3 r1 = texture(screen_tex, uv + vec2(px.x, 0.0)).rgb;
+		vec3 l2 = texture(screen_tex, uv - vec2(px.x * 2.0, 0.0)).rgb;
+		vec3 r2 = texture(screen_tex, uv + vec2(px.x * 2.0, 0.0)).rgb;
+		vec3 mid = to_yiq(col);
+		float luma = mid.x * 0.6 + (to_yiq(l1).x + to_yiq(r1).x) * 0.2;
+		vec2 chroma = mid.yz * 0.3 + (to_yiq(l1).yz + to_yiq(r1).yz) * 0.22 + (to_yiq(l2).yz + to_yiq(r2).yz) * 0.13;
+		// Dot crawl: a faint checker that walks a step each field.
+		float field = mod(floor(TIME * 30.0), 2.0);
+		float crawl = mod(float(pixel.x + pixel.y) + field, 2.0) * 2.0 - 1.0;
+		luma += crawl * length(chroma) * 0.06;
+		vec3 signal = from_yiq(vec3(luma, chroma * 0.94));
+		col = mix(col, signal, composite);
+	}
+	if (crt > 0.001) {
+		// Every other rendered row dims; the rest lift so the mean stays put.
+		float line = float(pixel.y & 1);
+		col *= 1.0 + crt * 0.08 * (0.5 - line);
+	}
 	float bayer = BAYER[pixel.x & 3][pixel.y & 3];
 	float steps = max(quantize_steps, 2.0);
 	col += (bayer - 0.5) / steps;

@@ -56,6 +56,7 @@ The ship is home. You personalize it and it grows with you.
 - Interior: blocky warehouse cabin and a Star Trek-style shuttle bay door.
 - Ship computer: retro CRT-green screens only. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
 - Look: flat 2012-Minecraft lighting (per-face shading, soft corner AO, contact shadows) plus a little shader polish. Pixelated and dithered. Destiny filmic grade: teal shadows, warm highlights, lifted blacks, bloom, film grain.
+- GameCube passes in `assets/shaders/film_dither.gdshader`, strengths in `PostProfile` (`DEFLICKER` 1, `COMPOSITE` 0.7, `CRT` 0): deflicker blends each pixel with the rows above and below, composite softens luma and bleeds chroma sideways with a faint dot crawl, CRT is alternate-row scanlines (off: they alias on the 0.6 nearest upscale). Console `post <deflicker|composite|crt> <0-1>`, env `AKARI_POST_DEFLICKER=0` etc. for side-by-side shots. Comparison: `docs/media/post_gamecube.png`.
 - Mina: brutalist megastructures are the style reference. City work is paused.
 
 ## Code health
