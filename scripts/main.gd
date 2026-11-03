@@ -26,6 +26,7 @@ var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
 var _state_test := false
+var _readout_demo := false
 
 
 func _ready() -> void:
@@ -109,6 +110,15 @@ func _ready() -> void:
 	inventory_hud.bind(ship)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
+	if _readout_demo:
+		ship.hold_seat_flight()
+		var seat = ship.get("_cabin")
+		if seat:
+			seat.show_hotbar = false
+		var readout_demo = load("res://scripts/flight/readout_demo.gd").new()
+		readout_demo.name = "ReadoutDemo"
+		add_child(readout_demo)
+		readout_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -273,7 +283,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _readout_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -566,8 +576,13 @@ func _read_cli() -> void:
 		elif arg == "--door" and i + 1 < args.size():
 			_cli_door = str(args[i + 1]).to_lower()
 			i += 2
+		elif arg == "--readout-demo":
+			_readout_demo = true
+			i += 1
 		else:
 			i += 1
+	if _readout_demo:
+		_cabin_view = "seat"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()
