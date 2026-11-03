@@ -9,6 +9,7 @@ const FLOWN_STEP := 250.0
 
 var elapsed := 0.0
 var flown := 0.0
+var flight_time := 0.0
 var cabin_time := 0.0
 var entries: Array[Dictionary] = []
 var blip := false
@@ -37,7 +38,8 @@ func note(text: String) -> void:
 
 func observe(delta: float, speed: float, alt: float, radius: float, aboard: bool, thrust: float, bay_open: bool) -> void:
 	elapsed += delta
-	if speed > 0.0:
+	if speed > 0.4:
+		flight_time += delta
 		flown += speed * delta
 	if aboard:
 		cabin_time += delta
@@ -88,14 +90,30 @@ func to_save() -> Dictionary:
 	return {
 		"elapsed": elapsed,
 		"flown": flown,
+		"flight_time": flight_time,
 		"count": entries.size(),
 		"entries": entries.duplicate(true),
 	}
 
 
+func time_report() -> String:
+	return "SHIP %s\nFLOWN %s\nSPACE %s" % [_clock(elapsed), _hms(flight_time), _hms(elapsed)]
+
+
 func _stamp() -> String:
-	var day := int(elapsed / MINA_DAY)
-	var into := int(elapsed) % int(MINA_DAY)
-	var minute := int(into / 60.0)
-	var second := into % 60
-	return "D%d %02d:%02d" % [day, minute, second]
+	return _clock(elapsed)
+
+
+func _clock(t: float) -> String:
+	var day := int(t / MINA_DAY)
+	var frac := fmod(maxf(t, 0.0), MINA_DAY) / MINA_DAY
+	var mins := int(frac * 24.0 * 60.0)
+	return "D%d %02d:%02d" % [day, int(mins / 60.0), mins % 60]
+
+
+func _hms(t: float) -> String:
+	var whole := int(maxf(t, 0.0))
+	var hour := int(whole / 3600.0)
+	var minute := int(whole / 60.0) % 60
+	var second := whole % 60
+	return "%02d:%02d:%02d" % [hour, minute, second]
