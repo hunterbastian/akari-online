@@ -72,6 +72,12 @@ static func texture(kind: String) -> Texture2D:
 			_paint_key(image)
 		"badge":
 			_paint_badge(image)
+		"accent":
+			_paint_accent(image)
+		"stencil":
+			_paint_stencil(image)
+		"warmgrey":
+			_paint_warmgrey(image)
 		_:
 			_paint_panel(image)
 	var image_texture := ImageTexture.create_from_image(image)
@@ -625,6 +631,28 @@ static func _paint_badge(image: Image) -> void:
 	_rect(image, 1, 6, 10, 2, Color("d8c49a"))
 	_rect(image, 1, 10, 6, 2, Color("c4a878"))
 	_px(image, 13, 8, Color("7dff9a"))
+
+
+static func _paint_accent(image: Image) -> void:
+	_fill(image, Color("e07a28"))
+	_rect(image, 0, 0, 16, 2, Color("f0a060"))
+	_rect(image, 0, 14, 16, 2, Color("a84818"))
+
+
+static func _paint_stencil(image: Image) -> void:
+	_fill(image, Color("cbb892"))
+	for x in [1, 4, 7, 10, 13]:
+		_rect(image, x, 3, 2, 10, Color("2a241c"))
+	_rect(image, 0, 0, 16, 1, Color("a89068"))
+	_rect(image, 0, 15, 16, 1, Color("8a7048"))
+
+
+static func _paint_warmgrey(image: Image) -> void:
+	_fill(image, Color("b7aea2"))
+	_rect(image, 0, 0, 16, 1, Color("8e8680"))
+	_rect(image, 0, 15, 16, 1, Color("6e6862"))
+	_px(image, 4, 6, Color("c8c0b4"))
+	_px(image, 11, 10, Color("9a9288"))
 
 
 static func _paint_lamp(image: Image) -> void:

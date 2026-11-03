@@ -34,4 +34,10 @@ func _run() -> int:
 	if not shader.contains("filter_linear"):
 		push_error("the phosphor should sample linear so angled text stays readable")
 		return 1
+	if cabin.contains("--terminal-variant") or cabin.contains("func _case_b("):
+		push_error("variant cases should not ship on this branch")
+		return 1
+	if not cabin.contains("ChamferBrow") or not cabin.contains("\"accent\"") or not cabin.contains("Stencil"):
+		push_error("the terminal should be the Ledger case")
+		return 1
 	return 0

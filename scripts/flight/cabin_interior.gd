@@ -193,7 +193,7 @@ func release_fixed_view() -> void:
 
 
 func snap_view(mode: String) -> void:
-	show_hotbar = mode != "seat"
+	show_hotbar = mode != "seat" and mode != "quarter"
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.12, 0.0)
 	elif mode == "wide":
@@ -210,6 +210,9 @@ func snap_view(mode: String) -> void:
 		walker.snap(_v(0.05, 0.0, -1.45), _scale * 1.35, -1.05, -2.45)
 	elif mode == "dash":
 		walker.snap(_v(0.0, 0.0, -1.2), _scale * 0.92, -0.42, 0.0)
+	elif mode == "quarter":
+		# Off the aisle, so the terminal's right cheek and top read together.
+		walker.snap(_v(0.78, 0.0, -1.85), standing_eye, -0.38, 0.48)
 	elif mode == "floor":
 		walker.snap(_v(0.2, 0.0, -0.5), _scale * 1.05, -0.72, 1.05)
 	else:
@@ -458,9 +461,16 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	root.name = "BeigeTerminal"
 	add_child(root)
 	root.add_to_group("akari_hud")
-	# Chassis on the dash, then a deep tube that leans back toward the seat and the aisle.
+	var pivot := Node3D.new()
+	pivot.name = "TerminalPivot"
+	pivot.position = pos
+	pivot.rotation.x = 0.50
+	root.add_child(pivot)
+	# Ledger. Chamfered bone, one orange band, a stencil serial.
 	_case_box(root, "Chassis", Vector3(0.88, 0.30, 0.56), Vector3(0.0, 0.17, -3.40), "plastic")
 	_case_box(root, "Deck", Vector3(0.76, 0.06, 0.24), Vector3(0.0, 0.22, -3.08), "plastic")
+	_case_box(root, "Stripe", Vector3(0.84, 0.028, 0.03), Vector3(0.0, 0.29, -3.12), "accent")
+	_case_box(root, "Stencil", Vector3(0.16, 0.045, 0.02), Vector3(-0.28, 0.24, -3.11), "stencil")
 	for i in 4:
 		var vx := -0.18 + float(i) * 0.12
 		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.33, -3.52), "bezel")
@@ -468,22 +478,23 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 		var kx := -0.28 + float(i) * 0.08
 		_case_box(root, "Key%d" % i, Vector3(0.055, 0.04, 0.055), Vector3(kx, 0.27, -3.08), "key")
 	_case_box(root, "Space", Vector3(0.28, 0.032, 0.05), Vector3(0.0, 0.265, -2.98), "key")
-
-	var pivot := Node3D.new()
-	pivot.name = "TerminalPivot"
-	pivot.position = pos
-	pivot.rotation.x = 0.50
-	root.add_child(pivot)
 	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "plastic")
 	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
 	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "plastic")
 	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "plastic")
 	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "plastic")
 	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "plastic")
+	_case_box(pivot, "ChamferL", Vector3(0.07, 0.50, 0.07), Vector3(-0.44, 0.02, 0.05), "plastic", Vector3(0.0, 0.78, 0.0))
+	_case_box(pivot, "ChamferR", Vector3(0.07, 0.50, 0.07), Vector3(0.44, 0.02, 0.05), "plastic", Vector3(0.0, -0.78, 0.0))
+	_case_box(pivot, "ChamferBrow", Vector3(0.78, 0.055, 0.055), Vector3(0.0, 0.35, 0.06), "plastic", Vector3(0.65, 0.0, 0.0))
+	_case_box(pivot, "Inset", Vector3(0.025, 0.18, 0.10), Vector3(-0.46, 0.04, -0.04), "warmgrey")
 	for i in 3:
-		_case_box(pivot, "SideVent%d" % i, Vector3(0.045, 0.028, 0.12), Vector3(0.455, 0.12 - float(i) * 0.08, -0.04), "bezel")
-	_case_box(pivot, "Badge", Vector3(0.18, 0.045, 0.025), Vector3(0.26, 0.30, 0.09), "badge")
-	_case_box(pivot, "Pip", Vector3(0.022, 0.022, 0.02), Vector3(0.33, 0.30, 0.105), "lamp")
+		_case_box(pivot, "SideVent%d" % i, Vector3(0.04, 0.026, 0.10), Vector3(0.46, 0.12 - float(i) * 0.08, -0.05), "bezel")
+	for i in 4:
+		var bolt: Vector3 = [Vector3(-0.36, 0.30, 0.08), Vector3(0.36, 0.30, 0.08), Vector3(-0.36, -0.22, 0.09), Vector3(0.36, -0.22, 0.09)][i]
+		_case_box(pivot, "BrowBolt%d" % i, Vector3(0.028, 0.028, 0.028), bolt, "steel")
+	_case_box(pivot, "Badge", Vector3(0.14, 0.04, 0.02), Vector3(0.28, 0.30, 0.09), "badge")
+	_case_box(pivot, "Pip", Vector3(0.02, 0.02, 0.018), Vector3(0.34, 0.30, 0.10), "lamp")
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -559,8 +570,13 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	pivot.add_child(mesh_instance)
 
 
-func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String) -> void:
+func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String, rot: Vector3 = Vector3.ZERO) -> void:
 	_Blocks._local_box(parent, node_name, size * _scale, pos * _scale, _Blocks.material(kind), INTERIOR_LAYER, true)
+	if rot == Vector3.ZERO:
+		return
+	var node := parent.get_node(node_name) as MeshInstance3D
+	if node:
+		node.rotation = rot
 
 
 func _build_walker() -> void:

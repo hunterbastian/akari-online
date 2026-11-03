@@ -829,6 +829,8 @@ func _read_cli() -> void:
 		_cabin_view = "bench"
 	elif at == "wide":
 		_cabin_view = "wide"
+	elif at == "quarter":
+		_cabin_view = "quarter"
 	else:
 		_cabin_view = ""
 
