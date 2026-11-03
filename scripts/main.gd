@@ -326,6 +326,8 @@ func _add_dither() -> void:
 	material.set_shader_parameter("quantize_steps", 36.0)
 	material.set_shader_parameter("vignette", 0.14)
 	material.set_shader_parameter("ca_strength", _PostProfile.film_ca())
+	for pass_name in ["deflicker", "composite", "crt"]:
+		material.set_shader_parameter(pass_name, _PostProfile.film_pass(pass_name))
 	rect.material = material
 	rect.add_to_group("akari_film")
 	layer.add_child(rect)
