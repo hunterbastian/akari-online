@@ -23,6 +23,7 @@ func _run() -> int:
 	failed += _ease_is_slow(feel_script)
 	failed += _sway_builds(feel_script)
 	failed += _push_is_soft(feel_script)
+	failed += _streaks_follow_fov(feel_script)
 	failed += _shake_off(feel_script)
 	failed += _rumble_loops()
 	return failed
@@ -109,6 +110,23 @@ func _push_is_soft(feel_script: Script) -> int:
 	_hold(feel, 1.0, 2.0)
 	if feel.push > 0.12:
 		push_error("boost push should settle, got %s" % feel.push)
+		return 1
+	return 0
+
+
+func _streaks_follow_fov(feel_script: Script) -> int:
+	var feel = feel_script.new()
+	_hold(feel, 1.0, 0.15)
+	if feel.streak_amount() > 0.12:
+		push_error("star streaks should ramp with the slow fov, got %s" % feel.streak_amount())
+		return 1
+	_hold(feel, 1.0, 1.7)
+	if feel.streak_amount() < 0.92:
+		push_error("star streaks should be fully out with the fov, got %s" % feel.streak_amount())
+		return 1
+	_hold(feel, 0.0, 1.7)
+	if feel.streak_amount() > 0.08:
+		push_error("star streaks should retract on release, got %s" % feel.streak_amount())
 		return 1
 	return 0
 

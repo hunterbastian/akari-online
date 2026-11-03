@@ -3,6 +3,7 @@ extends Node
 ## Applies the thrust kick to whichever camera is flying, plus a quiet engine rumble.
 
 const _FEEL := preload("res://scripts/flight/thrust_feel.gd")
+const _STREAK := preload("res://assets/shaders/star_streak.gdshader")
 
 var _ship: Node
 var _feel = _FEEL.new()
@@ -17,6 +18,11 @@ var _eye_base := Vector3.ZERO
 var _eye_ready := false
 var _film: ShaderMaterial
 var _lpf: AudioEffectLowPassFilter
+var _streaks: MeshInstance3D
+var _streak_mat: ShaderMaterial
+var _crts: Array[ShaderMaterial] = []
+var _spot: SpotLight3D
+var _spot_base := 0.8
 
 
 func setup(ship: Node) -> void:
@@ -36,6 +42,7 @@ func setup(ship: Node) -> void:
 	_player.bus = "Rumble"
 	add_child(_player)
 	_player.play()
+	_build_streaks()
 
 
 func _process(delta: float) -> void:
@@ -60,12 +67,24 @@ func _bind() -> void:
 	var cabin = _ship.get("_cabin")
 	if cabin != null and cabin.walker != null and cabin.walker.eye is Camera3D:
 		_eye = cabin.walker.eye
+	if cabin != null:
+		var spot = cabin.get_node_or_null("CeilShadow")
+		if spot is SpotLight3D:
+			_spot = spot
+			_spot_base = _spot.light_energy
 	var flames = _ship.get("_flames")
 	if flames is Array:
 		_flames = flames
 	var film = get_tree().get_first_node_in_group("akari_film")
 	if film is CanvasItem:
 		_film = (film as CanvasItem).material as ShaderMaterial
+	for node in get_tree().get_nodes_in_group("akari_crt"):
+		var mesh := node as MeshInstance3D
+		if mesh == null:
+			continue
+		var mat := mesh.material_override as ShaderMaterial
+		if mat != null:
+			_crts.append(mat)
 
 
 func lag_amount() -> float:
@@ -74,7 +93,7 @@ func lag_amount() -> float:
 
 func _apply_view() -> void:
 	var sway: Vector3 = _feel.shake_offset(FlightProfile.SHAKE)
-	var back: float = _feel.push * 0.06 * FlightProfile.SHAKE
+	var inside := _eye != null and _eye.current
 	if _chase != null and _chase.current and not _chase.held:
 		_chase.fov = FlightProfile.FOV + _feel.fov_extra
 		_chase.h_offset = sway.y * 0.35
@@ -85,21 +104,72 @@ func _apply_view() -> void:
 	elif _chase != null:
 		_chase.h_offset = 0.0
 		_chase.v_offset = 0.0
-	if _eye != null and _eye.current:
-		_eye.fov = 70.0 + _feel.fov_extra
+	if inside:
+		var cabin_sway: Vector3 = sway * FlightProfile.CABIN_SWAY
+		var back: float = (_feel.push * FlightProfile.CABIN_PUSH + _feel.weight * FlightProfile.CABIN_HOLD) * FlightProfile.SHAKE
+		_eye.fov = 70.0 + _feel.fov_extra * FlightProfile.CABIN_FOV
 		var walker = _ship.get("_cabin").walker
 		if walker.locked:
 			if not _eye_ready:
 				_eye_pitch = _eye.rotation.x
 				_eye_base = _eye.position
 				_eye_ready = true
-			_eye.rotation = Vector3(_eye_pitch + sway.x * 0.85, sway.y * 0.45, sway.z * 0.7)
-			_eye.position = _eye_base + Vector3(0.0, -back * 0.25, back)
+			_eye.rotation = Vector3(_eye_pitch + cabin_sway.x, cabin_sway.y * 0.65, cabin_sway.z)
+			_eye.position = _eye_base + Vector3(0.0, -back * 0.35, back)
 	elif _eye != null:
 		_eye.h_offset = 0.0
 		_eye.v_offset = 0.0
-	if _film != null:
-		_film.set_shader_parameter("streak", _feel.weight * 0.65)
+	_apply_streaks(inside)
+	_flicker_cabin(inside)
+
+
+func _apply_streaks(inside: bool) -> void:
+	if _streaks == null or _streak_mat == null:
+		return
+	var cam: Camera3D = _eye if inside else _chase
+	if cam == null:
+		_streaks.visible = false
+		return
+	var amount: float = _feel.streak_amount()
+	if not inside:
+		amount *= FlightProfile.STREAK_OUT
+	_streaks.visible = amount > 0.03
+	if not _streaks.visible:
+		return
+	_streaks.global_position = cam.global_position
+	_streaks.global_rotation = Vector3.ZERO
+	_streak_mat.set_shader_parameter("streak", amount)
+	_streak_mat.set_shader_parameter("travel_dir", -_ship.global_basis.z)
+
+
+func _flicker_cabin(inside: bool) -> void:
+	var flick: float = _feel.push * FlightProfile.SHAKE if inside else 0.0
+	for mat in _crts:
+		mat.set_shader_parameter("boost_flicker", flick)
+	if _spot == null:
+		return
+	var dip: float = 1.0 - flick * 0.55 * absf(sin(_feel.phase * 15.0))
+	_spot.light_energy = _spot_base * dip
+
+
+func _build_streaks() -> void:
+	_streaks = MeshInstance3D.new()
+	_streaks.name = "StarStreaks"
+	var sphere := SphereMesh.new()
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	sphere.radial_segments = 16
+	sphere.rings = 12
+	_streaks.mesh = sphere
+	_streaks.scale = Vector3.ONE * 1600.0
+	_streaks.top_level = true
+	_streaks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_streaks.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	_streak_mat = ShaderMaterial.new()
+	_streak_mat.shader = _STREAK
+	_streaks.material_override = _streak_mat
+	_streaks.visible = false
+	_ship.add_child(_streaks)
 
 
 func _pulse_engines() -> void:

@@ -36,6 +36,13 @@ const SHAKE_SWAY := 0.011
 const PUSH_IN := 0.45
 const PUSH_OUT := 1.15
 const PUSH_NOD := 0.018
+## Cabin feels the burn harder than the chase camera.
+const CABIN_SWAY := 1.9
+const CABIN_PUSH := 0.13
+const CABIN_HOLD := 0.045
+const CABIN_FOV := 1.35
+## Outside streaks are a milder version of the cabin window streaks.
+const STREAK_OUT := 0.42
 ## Extra chase distance, in meters, once the boost has fully settled.
 const CAM_LAG := 3.6
 const CAM_CHASE_BOOST := 1.55

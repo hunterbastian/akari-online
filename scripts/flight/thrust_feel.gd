@@ -60,6 +60,12 @@ func advance(amount: float, delta: float) -> void:
 		push = 0.0
 
 
+func streak_amount() -> float:
+	if FlightProfile.KICK_FOV <= 0.0:
+		return 0.0
+	return clampf(fov_extra / FlightProfile.KICK_FOV, 0.0, 1.0)
+
+
 # hot
 func shake_offset(intensity: float) -> Vector3:
 	if intensity <= 0.0 or (shake_amp <= 0.0 and push <= 0.0):

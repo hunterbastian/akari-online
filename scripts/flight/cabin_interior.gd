@@ -309,6 +309,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
 
 
@@ -610,6 +611,7 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
 
 
