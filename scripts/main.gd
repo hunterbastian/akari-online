@@ -33,6 +33,7 @@ var _lights_demo := ""
 var _walk_demo := false
 var _readout_demo := false
 var _log_demo := false
+var _time_demo := false
 
 
 func _ready() -> void:
@@ -161,6 +162,14 @@ func _ready() -> void:
 		readout_demo.name = "ReadoutDemo"
 		add_child(readout_demo)
 		readout_demo.setup(ship)
+	if _time_demo:
+		var timed = ship.get("_cabin")
+		if timed:
+			timed.show_hotbar = false
+		var time_demo = load("res://scripts/flight/time_demo.gd").new()
+		time_demo.name = "TimeDemo"
+		add_child(time_demo)
+		time_demo.setup(ship)
 	if _log_demo:
 		ship.hold_seat_flight()
 		var logged = ship.get("_cabin")
@@ -359,7 +368,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -682,9 +691,12 @@ func _read_cli() -> void:
 		elif arg == "--log-demo":
 			_log_demo = true
 			i += 1
+		elif arg == "--time-demo":
+			_time_demo = true
+			i += 1
 		else:
 			i += 1
-	if _kick_demo == "inside" or _log_demo:
+	if _kick_demo == "inside" or _log_demo or _time_demo:
 		_cabin_view = "seat"
 	if _lights_demo == "wide":
 		_cabin_view = "wide"

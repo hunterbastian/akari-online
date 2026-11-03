@@ -36,6 +36,7 @@ RULES = [
     ("cabin-bob", "scripts/data/flight_profile.gd", "const BOB := 1.0", "head bob defaults on and can be scaled off"),
     ("crt-readout", "scripts/flight/flight_readout.gd", "SPD", "the cockpit CRT prints speed, altitude, heading, and thrust"),
     ("ship-log", "scripts/flight/cabin_terminal.gd", "LOG", "HELP can list the LOG command"),
+    ("time-command", "scripts/flight/cabin_terminal.gd", "TIME", "HELP can list the TIME command"),
 ]
 
 

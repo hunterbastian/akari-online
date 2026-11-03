@@ -295,7 +295,7 @@ func _refresh_prompt() -> void:
 		if _session_log != null and _session_log.blip and not multi:
 			_term_reply.text = "NEW LOG"
 		elif multi:
-			_term_reply.text = "LOG"
+			_term_reply.text = ""
 		else:
 			_term_reply.text = _reply
 
