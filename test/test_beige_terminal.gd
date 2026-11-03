@@ -40,7 +40,10 @@ func _run() -> int:
 	if not cabin.contains("ChamferBrow") or not cabin.contains("\"accent\"") or not cabin.contains("Stencil"):
 		push_error("the terminal should be the Ledger case")
 		return 1
-	if not cabin.contains("HalEye") or not cabin.contains("GuardBar"):
-		push_error("the face should keep the red lens and the guarded switch")
+	if cabin.contains("HalEye") or cabin.contains("hal_lens"):
+		push_error("the red lens should be gone")
+		return 1
+	if not cabin.contains("GuardBar"):
+		push_error("the guarded switch should stay")
 		return 1
 	return 0

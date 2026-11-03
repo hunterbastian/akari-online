@@ -57,7 +57,7 @@ The ship is home. You personalize it and it grows with you.
 
 - Exterior: hand-made glossy white Destiny 1-inspired Blender jumpship, `assets/ships/jumpship.glb`, no Draco, dithered.
 - Interior: blocky warehouse cabin and a Star Trek-style shuttle bay door.
-- Ship computer: one terminal, the Ledger case in warm white and warm grey. Chamfered shell, one NASA-orange stripe, a stencil serial, a guarded switch, and a small red lens on the chin. Green phosphor, kept flat. It shows the flight readout, autopilot, hull and bay lines, the prompt, and the NEW LOG flash. Boot, key clicks, history, and tab live on that glass. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
+- Ship computer: one terminal, the Ledger case in warm white and warm grey. Chamfered shell, one NASA-orange stripe, a stencil serial, and a guarded switch. Green phosphor, kept flat. It shows the flight readout, autopilot, hull and bay lines, the prompt, and the NEW LOG flash. Boot, key clicks, history, and tab live on that glass. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
 - Look: flat 2012-Minecraft lighting (per-face shading, soft corner AO, contact shadows) plus a little shader polish. Pixelated and dithered. Destiny filmic grade: teal shadows, warm highlights, lifted blacks, bloom, film grain.
 - Mina: brutalist megastructures are the style reference. City work is paused.
 
@@ -69,8 +69,8 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 
 - worst frame 75.0 ms (limit 140)
 - 205 draw calls (limit 500)
-- 424 nodes (limit 1200)
-- pack 1,277,582 bytes (limit 1.8 MB)
+- 422 nodes (limit 1200)
+- pack 1,276,239 bytes (limit 1.8 MB)
 
 ## Architecture
 

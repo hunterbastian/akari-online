@@ -8,7 +8,6 @@ const _Post := preload("res://scripts/data/post_profile.gd")
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Walker := preload("res://scripts/flight/cabin_walker.gd")
 const _CRT := preload("res://assets/shaders/crt_green.gdshader")
-const _HAL := preload("res://assets/shaders/hal_lens.gdshader")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
@@ -80,8 +79,6 @@ var _spot: SpotLight3D
 var _spot_energy := 0.8
 var bay_door
 var show_hotbar := true
-var _hal: ShaderMaterial
-var _hal_t := 0.0
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -227,9 +224,6 @@ func _process(delta: float) -> void:
 	if _lamps != null:
 		_lamps.advance(delta)
 		_push_lamps()
-	if _hal != null:
-		_hal_t += delta
-		_hal.set_shader_parameter("glow", 0.8 + sin(_hal_t * 1.15) * 0.16)
 	if not _lines.has("terminal"):
 		return
 	# Shots must show the cursor. A long first frame would otherwise land in the off half.
@@ -508,10 +502,6 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 		var bolt: Vector3 = [Vector3(-0.36, 0.30, 0.09), Vector3(0.36, 0.30, 0.09), Vector3(-0.34, -0.34, 0.10), Vector3(0.34, -0.34, 0.10)][i]
 		_case_box(pivot, "BrowBolt%d" % i, Vector3(0.024, 0.024, 0.024), bolt, "steel")
 	_case_box(pivot, "Badge", Vector3(0.12, 0.032, 0.014), Vector3(0.30, 0.31, 0.09), "badge")
-	_case_box(pivot, "HalRing", Vector3(0.062, 0.062, 0.014), Vector3(0.0, 0.345, 0.09), "bezel")
-	_hal = ShaderMaterial.new()
-	_hal.shader = _HAL
-	_case_lens(pivot, "HalEye", 0.02, Vector3(0.0, 0.345, 0.112), _hal)
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -585,22 +575,6 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
-
-
-func _case_lens(parent: Node3D, node_name: String, radius: float, pos: Vector3, mat: Material) -> void:
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var sphere := SphereMesh.new()
-	sphere.radius = radius * _scale
-	sphere.height = radius * _scale * 2.0
-	sphere.radial_segments = 8
-	sphere.rings = 4
-	mesh_instance.mesh = sphere
-	mesh_instance.position = pos * _scale
-	mesh_instance.material_override = mat
-	mesh_instance.layers = INTERIOR_LAYER
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(mesh_instance)
 
 
 func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String, rot: Vector3 = Vector3.ZERO) -> void:
