@@ -38,6 +38,7 @@ var _prompt_held := false
 var _hum: AudioStreamPlayer
 var _whine: AudioStreamPlayer3D
 var _steps: AudioStreamPlayer
+var _clank: AudioStreamPlayer
 var _hum_pb: AudioStreamGeneratorPlayback
 var _whine_pb: AudioStreamGeneratorPlayback
 var _hum_phase := 0.0
@@ -374,7 +375,7 @@ func _build_walker() -> void:
 	walker.eye_height = standing_eye
 	walker.speed = _scale * 1.45
 	walker.radius = _scale * 0.24
-	walker._bob_amp = _scale * 0.028
+	walker.speed = 0.85
 	walker.position = Vector3(aisle_point.x, floor_y, aisle_point.z)
 	walker.limit_min = _v(-1.15, 0.0, -3.45)
 	walker.limit_max = _v(1.05, 0.0, 0.25)
@@ -482,8 +483,12 @@ func _setup_audio() -> void:
 	_whine.volume_db = -24.0
 	_steps = AudioStreamPlayer.new()
 	_steps.stream = _step_wav()
-	_steps.volume_db = -10.0
+	_steps.volume_db = -16.0
 	add_child(_steps)
+	_clank = AudioStreamPlayer.new()
+	_clank.stream = _clank_wav()
+	_clank.volume_db = -14.0
+	add_child(_clank)
 	_hum.play()
 	_whine.play()
 	_hum_pb = _hum.get_stream_playback() as AudioStreamGeneratorPlayback
@@ -496,6 +501,25 @@ func _attach_tone(player) -> void:
 	gen.buffer_length = 0.15
 	player.stream = gen
 	add_child(player)
+
+
+func _clank_wav() -> AudioStreamWAV:
+	var rate := 22050
+	var count := 3600
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	for i in count:
+		var t := float(i) / float(rate)
+		var env := exp(-t * 14.0)
+		var sample := sin(TAU * 210.0 * t) * 0.55
+		sample += sin(TAU * 640.0 * t) * 0.2 * exp(-t * 28.0)
+		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * env * 9000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.stereo = false
+	wav.data = data
+	return wav
 
 
 func _step_wav() -> AudioStreamWAV:
@@ -523,15 +547,14 @@ func _ambience(delta: float) -> void:
 	_fill_tone(_whine_pb, 2400.0, 0.03, _whine_phase)
 	_whine_phase += delta
 	if walker == null or not walker.active_walk or walker.locked or _steps == null:
-		if walker:
-			_last_walk = walker.position
 		return
-	_step_acc += walker.position.distance_to(_last_walk)
-	_last_walk = walker.position
-	if _step_acc > _scale * 0.52:
-		_step_acc = 0.0
-		_steps.pitch_scale = 0.92 + randf() * 0.16
-		_steps.play()
+	if not walker.foot_down:
+		return
+	if walker.boot_clank and _clank != null:
+		_clank.play()
+		return
+	_steps.pitch_scale = 0.94 if walker._bobber.steps % 2 == 0 else 1.05
+	_steps.play()
 
 
 func _fill_tone(playback: AudioStreamGeneratorPlayback, freq: float, amp: float, phase: float) -> void:

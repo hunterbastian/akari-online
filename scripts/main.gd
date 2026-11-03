@@ -30,6 +30,7 @@ var _sky_mat: ShaderMaterial
 var _kick_demo := ""
 var _lights_arg := ""
 var _lights_demo := ""
+var _walk_demo := false
 
 
 func _ready() -> void:
@@ -139,6 +140,16 @@ func _ready() -> void:
 		lights_demo.name = "LightsDemo"
 		add_child(lights_demo)
 		lights_demo.setup(ship)
+	if _walk_demo:
+		var walked = ship.get("_cabin")
+		if walked:
+			walked.show_hotbar = false
+			if walked.walker:
+				walked.walker.locked = false
+		var walk_demo = load("res://scripts/flight/walk_demo.gd").new()
+		walk_demo.name = "WalkDemo"
+		add_child(walk_demo)
+		walk_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -328,7 +339,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -642,6 +653,9 @@ func _read_cli() -> void:
 		elif arg == "--lights-demo" and i + 1 < args.size():
 			_lights_demo = str(args[i + 1])
 			i += 2
+		elif arg == "--walk-demo":
+			_walk_demo = true
+			i += 1
 		else:
 			i += 1
 	if _kick_demo == "inside":
@@ -650,6 +664,8 @@ func _read_cli() -> void:
 		_cabin_view = "wide"
 	elif _lights_demo == "inside" or not _lights_arg.is_empty():
 		_cabin_view = "seat"
+	if _walk_demo:
+		_cabin_view = "aisle"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()

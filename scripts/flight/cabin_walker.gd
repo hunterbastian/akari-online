@@ -16,8 +16,11 @@ var pitch := 0.0
 var eye: Camera3D
 var controls: Node
 
-var _bob := 0.0
-var _bob_amp := 0.01
+var _bobber = preload("res://scripts/flight/cabin_bob.gd").new()
+var foot_down := false
+var boot_clank := false
+## Extra wish from a walk demo. Zero in normal play.
+var script_wish := Vector2.ZERO
 
 const LOOK_YAW := 0.0028
 const LOOK_PITCH := 0.0022
@@ -84,6 +87,7 @@ func _process(delta: float) -> void:
 	var input := Input.get_vector("yaw_left", "yaw_right", "throttle_forward", "throttle_back")
 	if controls and controls.has_method("move_vector"):
 		input += controls.move_vector()
+	input += script_wish
 	input = input.limit_length(1.0)
 	var wish := Vector3(input.x, 0.0, input.y).rotated(Vector3.UP, rotation.y)
 	var step := wish * speed * delta
@@ -113,11 +117,16 @@ func _blocked(at: Vector3) -> bool:
 
 
 func _apply_bob(delta: float, moved: float) -> void:
-	if moved > 0.00005:
-		_bob += delta * 9.0
-		eye.position.y = eye_height + sin(_bob) * _bob_amp
-		eye.position.x = sin(_bob * 0.5) * _bob_amp * 0.35
-	else:
-		_bob = 0.0
-		eye.position.y = lerpf(eye.position.y, eye_height, 1.0 - exp(-8.0 * delta))
-		eye.position.x = lerpf(eye.position.x, 0.0, 1.0 - exp(-8.0 * delta))
+	var off: Vector3 = _bobber.advance(moved, delta, FlightProfile.BOB)
+	foot_down = _bobber.foot
+	boot_clank = _bobber.clank
+	if moved > 0.00005 and FlightProfile.BOB > 0.001:
+		eye.position = Vector3(off.x, eye_height + off.y, 0.0)
+		eye.rotation = Vector3(pitch, 0.0, off.z)
+		return
+	foot_down = false
+	boot_clank = false
+	var settle := 1.0 - exp(-8.0 * delta)
+	eye.position.y = lerpf(eye.position.y, eye_height, settle)
+	eye.position.x = lerpf(eye.position.x, 0.0, settle)
+	eye.rotation.z = lerpf(eye.rotation.z, 0.0, settle)
