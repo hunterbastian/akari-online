@@ -3,6 +3,8 @@ extends RefCounted
 ## One-line cabin terminal. HELP lists commands. LIGHTS is the first one.
 ## Later commands (AUTOPILOT, SCAN) can match here the same way.
 
+const _Edit := preload("res://scripts/flight/terminal_edit.gd")
+
 
 static func submit(line: String, lamps, log = null) -> String:
 	var text := line.strip_edges().to_upper()
@@ -33,7 +35,7 @@ static func submit(line: String, lamps, log = null) -> String:
 			return "AUTOPILOT OFF"
 		return "AUTOPILOT?"
 	if cmd != "LIGHTS":
-		return "?"
+		return _Edit.suggest(cmd)
 	if parts.size() < 2:
 		return "WARM  COLD  RED  OFF"
 	if not lamps.set_preset(str(parts[1]).to_lower()):
