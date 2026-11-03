@@ -8,6 +8,7 @@ const _Post := preload("res://scripts/data/post_profile.gd")
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Walker := preload("res://scripts/flight/cabin_walker.gd")
 const _CRT := preload("res://assets/shaders/crt_green.gdshader")
+const _HAL := preload("res://assets/shaders/hal_lens.gdshader")
 const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
@@ -79,6 +80,8 @@ var _spot: SpotLight3D
 var _spot_energy := 0.8
 var bay_door
 var show_hotbar := true
+var _hal: ShaderMaterial
+var _hal_t := 0.0
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -224,6 +227,9 @@ func _process(delta: float) -> void:
 	if _lamps != null:
 		_lamps.advance(delta)
 		_push_lamps()
+	if _hal != null:
+		_hal_t += delta
+		_hal.set_shader_parameter("glow", 0.8 + sin(_hal_t * 1.15) * 0.16)
 	if not _lines.has("terminal"):
 		return
 	# Shots must show the cursor. A long first frame would otherwise land in the off half.
@@ -466,35 +472,46 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	pivot.position = pos
 	pivot.rotation.x = 0.50
 	root.add_child(pivot)
-	# Ledger. Chamfered bone, one orange band, a stencil serial.
-	_case_box(root, "Chassis", Vector3(0.88, 0.30, 0.56), Vector3(0.0, 0.17, -3.40), "plastic")
-	_case_box(root, "Deck", Vector3(0.76, 0.06, 0.24), Vector3(0.0, 0.22, -3.08), "plastic")
-	_case_box(root, "Stripe", Vector3(0.84, 0.028, 0.03), Vector3(0.0, 0.29, -3.12), "accent")
-	_case_box(root, "Stencil", Vector3(0.16, 0.045, 0.02), Vector3(-0.28, 0.24, -3.11), "stencil")
+	# Ledger kept: chamfer, one stripe, a stencil serial. Palette is warm white and grey.
+	_case_box(root, "Chassis", Vector3(0.96, 0.28, 0.58), Vector3(0.0, 0.16, -3.40), "warmgrey")
+	_case_box(root, "Deck", Vector3(0.92, 0.05, 0.26), Vector3(0.0, 0.22, -3.07), "warmgrey")
+	_case_box(root, "Stripe", Vector3(0.86, 0.02, 0.028), Vector3(0.0, 0.255, -2.93), "accent")
+	_case_box(root, "Stencil", Vector3(0.13, 0.03, 0.014), Vector3(-0.36, 0.255, -3.02), "stencil")
+	_case_box(root, "Seam", Vector3(0.84, 0.008, 0.01), Vector3(0.0, 0.248, -2.95), "bezel")
 	for i in 4:
 		var vx := -0.18 + float(i) * 0.12
-		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.33, -3.52), "bezel")
+		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.31, -3.52), "bezel")
 	for i in 8:
 		var kx := -0.28 + float(i) * 0.08
 		_case_box(root, "Key%d" % i, Vector3(0.055, 0.04, 0.055), Vector3(kx, 0.27, -3.08), "key")
 	_case_box(root, "Space", Vector3(0.28, 0.032, 0.05), Vector3(0.0, 0.265, -2.98), "key")
-	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "plastic")
+	# One guarded switch on the right wing, clear of the key row.
+	_case_box(root, "ToggleBase", Vector3(0.05, 0.016, 0.042), Vector3(0.40, 0.252, -3.04), "steel")
+	_case_box(root, "Toggle", Vector3(0.014, 0.048, 0.014), Vector3(0.40, 0.286, -3.02), "steel", Vector3(0.5, 0.0, 0.0))
+	_case_box(root, "GuardL", Vector3(0.01, 0.042, 0.01), Vector3(0.372, 0.274, -3.04), "steel")
+	_case_box(root, "GuardR", Vector3(0.01, 0.042, 0.01), Vector3(0.428, 0.274, -3.04), "steel")
+	_case_box(root, "GuardBar", Vector3(0.068, 0.01, 0.01), Vector3(0.40, 0.296, -3.04), "steel")
+	_case_box(pivot, "Shell", Vector3(0.92, 0.70, 0.22), Vector3(0.0, -0.02, -0.14), "plastic")
 	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
-	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "plastic")
-	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "plastic")
-	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "plastic")
-	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "plastic")
-	_case_box(pivot, "ChamferL", Vector3(0.07, 0.50, 0.07), Vector3(-0.44, 0.02, 0.05), "plastic", Vector3(0.0, 0.78, 0.0))
-	_case_box(pivot, "ChamferR", Vector3(0.07, 0.50, 0.07), Vector3(0.44, 0.02, 0.05), "plastic", Vector3(0.0, -0.78, 0.0))
-	_case_box(pivot, "ChamferBrow", Vector3(0.78, 0.055, 0.055), Vector3(0.0, 0.35, 0.06), "plastic", Vector3(0.65, 0.0, 0.0))
-	_case_box(pivot, "Inset", Vector3(0.025, 0.18, 0.10), Vector3(-0.46, 0.04, -0.04), "warmgrey")
+	_case_box(pivot, "BezelTop", Vector3(0.92, 0.09, 0.11), Vector3(0.0, 0.31, 0.02), "plastic")
+	_case_box(pivot, "BezelChin", Vector3(0.92, 0.13, 0.13), Vector3(0.0, -0.29, 0.03), "plastic")
+	_case_box(pivot, "BezelL", Vector3(0.10, 0.52, 0.11), Vector3(-0.41, 0.02, 0.02), "plastic")
+	_case_box(pivot, "BezelR", Vector3(0.10, 0.52, 0.11), Vector3(0.41, 0.02, 0.02), "plastic")
+	_case_box(pivot, "ChamferL", Vector3(0.07, 0.52, 0.07), Vector3(-0.46, 0.02, 0.05), "plastic", Vector3(0.0, 0.78, 0.0))
+	_case_box(pivot, "ChamferR", Vector3(0.07, 0.52, 0.07), Vector3(0.46, 0.02, 0.05), "plastic", Vector3(0.0, -0.78, 0.0))
+	_case_box(pivot, "ChamferBrow", Vector3(0.80, 0.05, 0.05), Vector3(0.0, 0.36, 0.06), "plastic", Vector3(0.65, 0.0, 0.0))
+	_case_box(pivot, "Inset", Vector3(0.022, 0.20, 0.10), Vector3(-0.47, 0.04, -0.05), "warmgrey")
+	_case_box(pivot, "ChinSeam", Vector3(0.72, 0.008, 0.01), Vector3(0.0, -0.20, 0.095), "bezel")
 	for i in 3:
-		_case_box(pivot, "SideVent%d" % i, Vector3(0.04, 0.026, 0.10), Vector3(0.46, 0.12 - float(i) * 0.08, -0.05), "bezel")
+		_case_box(pivot, "SideVent%d" % i, Vector3(0.04, 0.022, 0.10), Vector3(0.47, 0.12 - float(i) * 0.08, -0.06), "bezel")
 	for i in 4:
-		var bolt: Vector3 = [Vector3(-0.36, 0.30, 0.08), Vector3(0.36, 0.30, 0.08), Vector3(-0.36, -0.22, 0.09), Vector3(0.36, -0.22, 0.09)][i]
-		_case_box(pivot, "BrowBolt%d" % i, Vector3(0.028, 0.028, 0.028), bolt, "steel")
-	_case_box(pivot, "Badge", Vector3(0.14, 0.04, 0.02), Vector3(0.28, 0.30, 0.09), "badge")
-	_case_box(pivot, "Pip", Vector3(0.02, 0.02, 0.018), Vector3(0.34, 0.30, 0.10), "lamp")
+		var bolt: Vector3 = [Vector3(-0.36, 0.30, 0.09), Vector3(0.36, 0.30, 0.09), Vector3(-0.34, -0.34, 0.10), Vector3(0.34, -0.34, 0.10)][i]
+		_case_box(pivot, "BrowBolt%d" % i, Vector3(0.024, 0.024, 0.024), bolt, "steel")
+	_case_box(pivot, "Badge", Vector3(0.12, 0.032, 0.014), Vector3(0.30, 0.31, 0.09), "badge")
+	_case_box(pivot, "HalRing", Vector3(0.062, 0.062, 0.014), Vector3(0.0, 0.345, 0.09), "bezel")
+	_hal = ShaderMaterial.new()
+	_hal.shader = _HAL
+	_case_lens(pivot, "HalEye", 0.02, Vector3(0.0, 0.345, 0.112), _hal)
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -509,7 +526,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	background.color = Color(0, 0, 0, 1)
 	background.size = Vector2(view_size)
 	viewport.add_child(background)
-	var status_size := 22 if view_size.y >= 400 else 16
+	var status_size := 28 if view_size.y >= 400 else 20
 	var header := Label.new()
 	header.position = Vector2(24, 14)
 	header.size = Vector2(view_size.x - 48, view_size.y * 0.64)
@@ -530,7 +547,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	reply.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	reply.clip_text = true
 	reply.add_theme_font_override("font", _font)
-	reply.add_theme_font_size_override("font_size", 20 if view_size.y >= 400 else 15)
+	reply.add_theme_font_size_override("font_size", 24 if view_size.y >= 400 else 18)
 	reply.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	reply.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(reply)
@@ -541,7 +558,7 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 24 if view_size.y >= 400 else 18)
+	label.add_theme_font_size_override("font_size", 28 if view_size.y >= 400 else 20)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = ">_"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -560,14 +577,30 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
 	material.set_shader_parameter("glow_spread", 0.0)
-	material.set_shader_parameter("brightness", 1.4 if _high else 1.22)
-	material.set_shader_parameter("curvature", 0.012)
-	material.set_shader_parameter("scanline_strength", 0.12)
+	material.set_shader_parameter("brightness", 1.12 if _high else 1.02)
+	material.set_shader_parameter("curvature", 0.008)
+	material.set_shader_parameter("scanline_strength", 0.06)
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
+
+
+func _case_lens(parent: Node3D, node_name: String, radius: float, pos: Vector3, mat: Material) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var sphere := SphereMesh.new()
+	sphere.radius = radius * _scale
+	sphere.height = radius * _scale * 2.0
+	sphere.radial_segments = 8
+	sphere.rings = 4
+	mesh_instance.mesh = sphere
+	mesh_instance.position = pos * _scale
+	mesh_instance.material_override = mat
+	mesh_instance.layers = INTERIOR_LAYER
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mesh_instance)
 
 
 func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String, rot: Vector3 = Vector3.ZERO) -> void:

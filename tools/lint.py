@@ -37,6 +37,7 @@ RULES = [
     ("crt-readout", "scripts/flight/flight_readout.gd", "SPD", "the cockpit CRT prints speed, altitude, heading, and thrust"),
     ("beige-terminal", "scripts/flight/cabin_interior.gd", "BeigeTerminal", "the cockpit is one beige terminal"),
     ("ledger-case", "scripts/flight/cabin_interior.gd", "ChamferBrow", "the terminal is the Ledger case"),
+    ("hal-lens", "scripts/flight/cabin_interior.gd", "HalEye", "the terminal face keeps a red lens"),
     ("beige-page", "scripts/flight/flight_readout.gd", "AUTOPILOT: ORBIT", "one screen carries autopilot and the old side readouts"),
     ("crt-linear", "assets/shaders/crt_green.gdshader", "filter_linear", "phosphor stays readable from the seat and the aisle"),
     ("ship-log", "scripts/flight/cabin_terminal.gd", "LOG", "HELP can list the LOG command"),

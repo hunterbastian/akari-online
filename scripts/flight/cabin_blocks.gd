@@ -607,52 +607,52 @@ static func _paint_concrete(image: Image) -> void:
 
 
 static func _paint_plastic(image: Image) -> void:
-	_fill(image, Color("e4d2ae"))
-	_rect(image, 0, 0, 16, 1, Color("b89a68"))
-	_rect(image, 0, 15, 16, 1, Color("8f7348"))
-	_rect(image, 0, 0, 1, 16, Color("c4aa78"))
-	_rect(image, 15, 0, 1, 16, Color("a88858"))
-	_px(image, 4, 5, Color("f0e2c4"))
-	_px(image, 11, 8, Color("c8b088"))
-	_px(image, 7, 12, Color("d8c4a0"))
+	_fill(image, Color("efeae2"))
+	_rect(image, 0, 0, 16, 1, Color("f7f4ee"))
+	_rect(image, 0, 15, 16, 1, Color("c8c2b8"))
+	_rect(image, 0, 0, 1, 16, Color("e4dfd6"))
+	_rect(image, 15, 0, 1, 16, Color("d4cfc6"))
+	_px(image, 4, 6, Color("f8f6f1"))
+	_px(image, 11, 9, Color("ddd8d0"))
 
 
 static func _paint_key(image: Image) -> void:
-	_fill(image, Color("cbb892"))
-	_rect(image, 1, 1, 14, 2, Color("f3e6c8"))
-	_rect(image, 0, 13, 16, 3, Color("8a7048"))
-	_rect(image, 0, 0, 1, 16, Color("a89068"))
-	_rect(image, 15, 0, 1, 16, Color("7a623c"))
+	_fill(image, Color("d5d0c8"))
+	_rect(image, 1, 1, 14, 2, Color("f4f1ea"))
+	_rect(image, 0, 13, 16, 3, Color("6e6a64"))
+	_rect(image, 0, 0, 1, 16, Color("bdb8b0"))
+	_rect(image, 15, 0, 1, 16, Color("8a8680"))
 
 
 static func _paint_badge(image: Image) -> void:
-	_fill(image, Color("6b4428"))
-	_rect(image, 0, 0, 16, 2, Color("e6d2a4"))
-	_rect(image, 1, 6, 10, 2, Color("d8c49a"))
-	_rect(image, 1, 10, 6, 2, Color("c4a878"))
-	_px(image, 13, 8, Color("7dff9a"))
+	_fill(image, Color("3a3e44"))
+	_rect(image, 1, 3, 12, 1, Color("e4e0d8"))
+	_rect(image, 1, 7, 8, 1, Color("c8c4bc"))
+	_rect(image, 1, 11, 5, 1, Color("a8a49c"))
 
 
 static func _paint_accent(image: Image) -> void:
-	_fill(image, Color("e07a28"))
-	_rect(image, 0, 0, 16, 2, Color("f0a060"))
-	_rect(image, 0, 14, 16, 2, Color("a84818"))
+	_fill(image, Color("d85a22"))
+	_rect(image, 0, 0, 16, 2, Color("e88848"))
+	_rect(image, 0, 14, 16, 2, Color("8a3414"))
 
 
 static func _paint_stencil(image: Image) -> void:
-	_fill(image, Color("cbb892"))
+	_fill(image, Color("e7e2da"))
 	for x in [1, 4, 7, 10, 13]:
-		_rect(image, x, 3, 2, 10, Color("2a241c"))
-	_rect(image, 0, 0, 16, 1, Color("a89068"))
-	_rect(image, 0, 15, 16, 1, Color("8a7048"))
+		_rect(image, x, 3, 2, 10, Color("2a2e32"))
+	_rect(image, 0, 0, 16, 1, Color("c8c2b8"))
+	_rect(image, 0, 15, 16, 1, Color("9a958c"))
 
 
 static func _paint_warmgrey(image: Image) -> void:
-	_fill(image, Color("b7aea2"))
-	_rect(image, 0, 0, 16, 1, Color("8e8680"))
-	_rect(image, 0, 15, 16, 1, Color("6e6862"))
-	_px(image, 4, 6, Color("c8c0b4"))
-	_px(image, 11, 10, Color("9a9288"))
+	_fill(image, Color("c8c3ba"))
+	_rect(image, 0, 0, 16, 1, Color("ddd8d0"))
+	_rect(image, 0, 15, 16, 1, Color("8e8982"))
+	_rect(image, 0, 0, 1, 16, Color("b7b2aa"))
+	_rect(image, 15, 0, 1, 16, Color("9c978f"))
+	_px(image, 5, 6, Color("d4cfc6"))
+	_px(image, 11, 10, Color("a39e96"))
 
 
 static func _paint_lamp(image: Image) -> void:
