@@ -21,6 +21,7 @@ var _world: SubViewport
 var _bounce: DirectionalLight3D
 var _ship: Node3D
 var _dither_layer: CanvasLayer
+var _signal_layer: CanvasLayer
 var _planet: Dictionary = {}
 var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
@@ -250,6 +251,7 @@ func _ready() -> void:
 			tour.setup(ship)
 	_add_sun_glare(camera, sun_dir)
 	_add_dither()
+	_add_signal()
 	_update_bounce()
 	if OS.get_cmdline_user_args().has("--bench"):
 		var bench = load("res://scripts/bench_run.gd").new()
@@ -332,6 +334,47 @@ func _add_dither() -> void:
 	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
 	_world.add_child(layer)
 	_dither_layer = layer
+
+
+## The console signal over the film pass: deflicker, then composite video (see console_signal.gdshader).
+func set_signal(deflicker: float, composite: float) -> void:
+	_add_signal()
+	if not is_instance_valid(_signal_layer):
+		return
+	_signal_layer.visible = deflicker > 0.0 or composite > 0.0
+	for node in get_tree().get_nodes_in_group("akari_signal"):
+		var material := (node as CanvasItem).material as ShaderMaterial
+		material.set_shader_parameter("deflicker", deflicker)
+		material.set_shader_parameter("composite", composite)
+
+
+func _add_signal() -> void:
+	if is_instance_valid(_signal_layer):
+		return
+	var deflicker := _PostProfile.deflicker()
+	var composite := _PostProfile.composite()
+	var layer := CanvasLayer.new()
+	layer.name = "Signal"
+	# Over the film pass (layer 1), inside the low-res view, so it works on rendered pixels.
+	layer.layer = 2
+	# The screen texture is copied once per frame unless asked again, so copy it
+	# after the film pass has drawn, or this pass would read the frame without it.
+	var copy := BackBufferCopy.new()
+	copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	layer.add_child(copy)
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var material := ShaderMaterial.new()
+	material.shader = load("res://assets/shaders/console_signal.gdshader")
+	material.set_shader_parameter("deflicker", deflicker)
+	material.set_shader_parameter("composite", composite)
+	rect.material = material
+	rect.add_to_group("akari_signal")
+	layer.add_child(rect)
+	layer.visible = deflicker > 0.0 or composite > 0.0
+	_world.add_child(layer)
+	_signal_layer = layer
 
 
 func _add_sun_glare(chase: Camera3D, sun_dir: Vector3) -> void:

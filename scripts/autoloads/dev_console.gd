@@ -179,6 +179,8 @@ func _register_builtins() -> void:
 	register_command("quality", _cmd_quality, "quality <low|med|high>  reloads the scene")
 	register_command("renderscale", _cmd_scale, "renderscale <0.3-1.0>")
 	register_command("dither", _cmd_dither, "dither on|off")
+	register_command("deflicker", _cmd_deflicker, "deflicker on|off|<0-1>  GameCube line blend")
+	register_command("composite", _cmd_composite, "composite on|off|<0-1>  composite video signal")
 	register_command("hud", _cmd_hud, "hud on|off")
 	register_command("seed", _cmd_seed, "seed  prints the system seed; seed <n> regenerates")
 	register_command("reload", _cmd_reload, "Reload the current scene")
@@ -487,7 +489,7 @@ func _complete_arg(command_name: String) -> void:
 			options = PackedStringArray(["helmet", "mug", "cartridge", "crate"])
 		"quality":
 			options = PackedStringArray(["low", "med", "high"])
-		"dither", "hud":
+		"dither", "hud", "deflicker", "composite":
 			options = PackedStringArray(["on", "off"])
 		_:
 			return
@@ -780,6 +782,47 @@ func _cmd_dither(args: PackedStringArray) -> void:
 	if scene and scene.has_method("set_dither_enabled"):
 		scene.set_dither_enabled(on)
 	_echo("dither %s" % ("on" if on else "off"))
+
+
+func _cmd_deflicker(args: PackedStringArray) -> void:
+	var amount := _signal_amount(args, "deflicker", _POST.deflicker(), _POST.DEFLICKER)
+	if amount < 0.0:
+		return
+	_POST.runtime_deflicker = amount
+	_apply_signal()
+	_echo("deflicker %s" % str(amount))
+
+
+func _cmd_composite(args: PackedStringArray) -> void:
+	var amount := _signal_amount(args, "composite", _POST.composite(), _POST.COMPOSITE)
+	if amount < 0.0:
+		return
+	_POST.runtime_composite = amount
+	_apply_signal()
+	_echo("composite %s" % str(amount))
+
+
+## Reads on, off or a number from 0 to 1 (on is the default amount). -1 when it
+## only printed the current amount, or the argument was bad.
+func _signal_amount(args: PackedStringArray, command_name: String, current: float, default_on: float) -> float:
+	if args.is_empty():
+		_echo("%s %s" % [command_name, str(current)])
+		return -1.0
+	var word := args[0].to_lower()
+	if word == "on":
+		return default_on if default_on > 0.0 else 1.0
+	if word == "off":
+		return 0.0
+	if word.is_valid_float() and float(word) >= 0.0 and float(word) <= 1.0:
+		return float(word)
+	_echo("%s on|off|<0-1>" % command_name, "err")
+	return -1.0
+
+
+func _apply_signal() -> void:
+	var scene := _scene()
+	if scene and scene.has_method("set_signal"):
+		scene.set_signal(_POST.deflicker(), _POST.composite())
 
 
 func _cmd_hud(args: PackedStringArray) -> void:

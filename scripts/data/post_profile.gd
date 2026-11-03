@@ -1,9 +1,13 @@
 class_name PostProfile
 extends RefCounted
 
-## Dither and the 3D render scale. Project settings override the consts when present.
+## Dither, the console signal and the 3D render scale. Project settings override the consts when present.
 
 const DITHER_ENABLED := true
+## The console's last steps after the film pass (assets/shaders/console_signal.gdshader),
+## each 0 (off) to 1: the GameCube deflicker filter, and a composite video signal.
+const DEFLICKER := 1.0
+const COMPOSITE := 0.6
 ## Internal 3D resolution as a fraction of the window. UI stays at native size.
 ## The debug console `renderscale` overrides this at runtime.
 const RENDER_SCALE := 0.6
@@ -12,6 +16,8 @@ const RENDER_SCALE := 0.6
 static var runtime_quality := ""
 static var runtime_scale := -1.0
 static var runtime_dither := -1
+static var runtime_deflicker := -1.0
+static var runtime_composite := -1.0
 static var capture_boost := 1.0
 
 
@@ -21,6 +27,24 @@ static func dither_enabled() -> bool:
 	if ProjectSettings.has_setting("akari/post/dither"):
 		return bool(ProjectSettings.get_setting("akari/post/dither"))
 	return DITHER_ENABLED
+
+
+## How strongly each line is blended with the lines above and below (the GameCube deflicker).
+static func deflicker() -> float:
+	if runtime_deflicker >= 0.0:
+		return clampf(runtime_deflicker, 0.0, 1.0)
+	if ProjectSettings.has_setting("akari/post/deflicker"):
+		return clampf(float(ProjectSettings.get_setting("akari/post/deflicker")), 0.0, 1.0)
+	return DEFLICKER
+
+
+## How much of the composite video signal shows: colour bleed, soft ringing brightness, edge crawl.
+static func composite() -> float:
+	if runtime_composite >= 0.0:
+		return clampf(runtime_composite, 0.0, 1.0)
+	if ProjectSettings.has_setting("akari/post/composite"):
+		return clampf(float(ProjectSettings.get_setting("akari/post/composite")), 0.0, 1.0)
+	return COMPOSITE
 
 
 static func render_scale() -> float:
