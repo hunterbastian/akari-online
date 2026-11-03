@@ -32,6 +32,7 @@ var _term_header: Label
 var _pitch_deg := 0
 var _yaw_deg := 0
 var _command := ""
+var orbit_hold := false
 var _cursor_on := true
 var _cursor_time := 0.0
 var _prompt_held := false
@@ -155,7 +156,8 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	var name := ship_name.to_upper()
 	if name.length() > 12:
 		name = name.substr(0, 12)
-	var auto := "HOLD" if autopilot == "HOLD" else "STBY"
+	var auto := "ORBIT" if autopilot == "ORBIT" else ("HOLD" if autopilot == "HOLD" else "STBY")
+	orbit_hold = autopilot == "ORBIT"
 	_pitch_deg = pitch_deg
 	_yaw_deg = yaw_deg
 	# No fuel tank yet. 1.00 is a full cell until that system exists.
@@ -262,7 +264,21 @@ func terminal_submit() -> void:
 	_command = ""
 	if not reply.is_empty():
 		_reply = reply
+	var pilot = _flight_ship()
+	if pilot != null and reply == "AUTOPILOT ORBIT":
+		pilot.engage_orbit()
+	elif pilot != null and reply == "AUTOPILOT OFF":
+		pilot.request_orbit_stop()
 	_refresh_prompt()
+
+
+func _flight_ship():
+	var node: Node = get_parent()
+	while node != null:
+		if node.has_method("engage_orbit"):
+			return node
+		node = node.get_parent()
+	return null
 
 
 func _refresh_prompt() -> void:
@@ -273,8 +289,16 @@ func _refresh_prompt() -> void:
 		_term_reply.text = _reply
 
 
+func show_orbit(on: bool) -> void:
+	orbit_hold = on
+	_refresh_header()
+
+
 func _refresh_header() -> void:
 	if _term_header == null:
+		return
+	if orbit_hold:
+		_term_header.text = "AUTOPILOT: ORBIT\nPIT %+03d\nYAW %03d" % [_pitch_deg, _yaw_deg]
 		return
 	_term_header.text = "ROUTE NONE\nPIT %+03d\nYAW %03d" % [_pitch_deg, _yaw_deg]
 
@@ -519,7 +543,9 @@ func _step_wav() -> AudioStreamWAV:
 func _ambience(delta: float) -> void:
 	_fill_tone(_hum_pb, 78.0, 0.05, _hum_phase)
 	_hum_phase += delta
-	_fill_tone(_whine_pb, 2400.0, 0.03, _whine_phase)
+	var tone := 460.0 if orbit_hold else 2400.0
+	var amp := 0.01 if orbit_hold else 0.03
+	_fill_tone(_whine_pb, tone, amp, _whine_phase)
 	_whine_phase += delta
 	if walker == null or not walker.active_walk or walker.locked or _steps == null:
 		if walker:
