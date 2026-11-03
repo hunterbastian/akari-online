@@ -3,7 +3,9 @@ render_mode unshaded, cull_disabled, shadows_disabled;
 
 // Green phosphor CRT. The albedo comes from a SubViewport so the terminal can go interactive later.
 
-uniform sampler2D screen_tex : filter_nearest, repeat_disable;
+// Linear so a glyph stays a glyph when the seat or the aisle sees the glass at an angle.
+// The viewport still draws the font nearest. Bayer dither and scanlines stay.
+uniform sampler2D screen_tex : filter_linear, repeat_disable;
 uniform vec4 phosphor : source_color = vec4(0.62, 1.0, 0.68, 1.0);
 uniform float curvature = 0.028;
 uniform float scanline_strength = 0.22;

@@ -35,6 +35,7 @@ var _readout_demo := false
 var _log_demo := false
 var _time_demo := false
 var _terminal_demo := false
+var _approach_demo := false
 var _orbit_demo := ""
 var _save_mode := ""
 var _save_demo := false
@@ -159,6 +160,14 @@ func _ready() -> void:
 		walk_demo.name = "WalkDemo"
 		add_child(walk_demo)
 		walk_demo.setup(ship)
+	if _approach_demo:
+		var approached = ship.get("_cabin")
+		if approached:
+			approached.show_hotbar = false
+		var approach_demo = load("res://scripts/flight/approach_demo.gd").new()
+		approach_demo.name = "ApproachDemo"
+		add_child(approach_demo)
+		approach_demo.setup(ship)
 	if _readout_demo:
 		ship.hold_seat_flight()
 		var read_seat = ship.get("_cabin")
@@ -414,7 +423,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or _terminal_demo or not _orbit_demo.is_empty() or _save_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _approach_demo or _readout_demo or _log_demo or _time_demo or _terminal_demo or not _orbit_demo.is_empty() or _save_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -707,7 +716,7 @@ func _input(event: InputEvent) -> void:
 
 func _arm_keeper(keeper) -> void:
 	var args := OS.get_cmdline_user_args()
-	var tools := _shot or _tour or _walk_demo or _readout_demo or _log_demo or _time_demo or _terminal_demo or _stand_test
+	var tools := _shot or _tour or _walk_demo or _approach_demo or _readout_demo or _log_demo or _time_demo or _terminal_demo or _stand_test
 	tools = tools or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty()
 	tools = tools or not _cli_shot.is_empty() or args.has("--bench") or args.has("--state-test") or args.has("--stand-test")
 	tools = tools or (not _cabin_view.is_empty() and not _save_demo)
@@ -755,6 +764,9 @@ func _read_cli() -> void:
 		elif arg == "--walk-demo":
 			_walk_demo = true
 			i += 1
+		elif arg == "--approach-demo":
+			_approach_demo = true
+			i += 1
 		elif arg == "--readout-demo":
 			_readout_demo = true
 			i += 1
@@ -790,7 +802,7 @@ func _read_cli() -> void:
 		_cabin_view = "wide"
 	elif _lights_demo == "inside" or not _lights_arg.is_empty():
 		_cabin_view = "seat"
-	if _walk_demo:
+	if _walk_demo or _approach_demo:
 		_cabin_view = "aisle"
 	if _readout_demo:
 		_cabin_view = "seat"

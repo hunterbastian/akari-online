@@ -37,6 +37,11 @@ var _term_header: Label
 var _pitch_deg := 0
 var _yaw_deg := 0
 var _readout := "SPD 000\nALT 00000\nHDG 000\nTHR 0.00"
+var _ship_name := "AKARI"
+var _hull := 0
+var _mina := "00000"
+var _bay_state := "SEALED"
+var _view_h := 360
 var _edit = _Edit.new()
 var _boot_left := -1.0
 var _boot_stage := -1
@@ -113,13 +118,9 @@ func build(scale: float, high_quality: bool) -> void:
 
 	# Practicals live in the block library. No floor-length colored strips.
 
-	var side_size := Vector2i(400, 272) if high_quality else Vector2i(320, 216)
-	var prompt_size := Vector2i(480, 360) if high_quality else Vector2i(360, 270)
-	_screen("Nav", _v(-0.85, 0.95, -3.4), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "nav", side_size)
-	_screen("Drive", _v(0.85, 0.95, -3.4), Vector2(0.5, 0.36) * _scale, 0.32, 0.0, "drive", side_size)
-	_screen("Bay", _v(0.0, 2.05, 0.62), Vector2(0.46, 0.3) * _scale, 0.0, PI, "bay", side_size)
-	# Chunky terminal on the dash. The forward window stays open.
-	_build_prompt(_v(0.0, 0.42, -3.15), prompt_size)
+	var prompt_size := Vector2i(640, 480) if high_quality else Vector2i(480, 360)
+	# One beige terminal, centered on the dash. The forward window stays open above it.
+	_build_prompt(_v(0.0, 0.52, -3.26), prompt_size)
 	_Blocks.dress(self)
 	_Detail.apply(self)
 	_build_walker()
@@ -174,11 +175,10 @@ func update_readouts(speed: float, throttle: float, mina_range: float, ship_name
 	_pitch_deg = pitch_deg
 	_yaw_deg = yaw_deg
 	_readout = _Read.block(int(round(speed)), int(round(mina_range)), yaw_deg, throttle)
-	# No fuel tank yet. 1.00 is a full cell until that system exists.
-	_set_line("nav", "NAV\n%s\nHULL %d\nMINA %s\nBRG FWD" % [name, hull, rng])
-	_set_line("drive", _readout)
-	var bay_state := "OPEN" if bay_is_open() else "SEALED"
-	_set_line("bay", "BAY\n%s\nCORE\n312" % bay_state)
+	_ship_name = name
+	_hull = hull
+	_mina = rng
+	_bay_state = "OPEN" if bay_is_open() else "SEALED"
 	_refresh_header()
 
 
@@ -398,19 +398,19 @@ func _refresh_prompt() -> void:
 	var multi := shown.contains("\n")
 	var prompt: Label = _lines.get("terminal")
 	if prompt:
-		prompt.position.y = 292.0 if multi else 250.0
+		prompt.position.y = _view_h * (0.78 if multi else 0.82)
 	_set_line("terminal", ">" + _edit.line + cursor)
 	if _term_header:
 		if multi:
-			_term_header.add_theme_font_size_override("font_size", 20)
-			_term_header.size.y = 230
+			_term_header.add_theme_font_size_override("font_size", 18 if _view_h >= 400 else 14)
+			_term_header.size.y = _view_h * 0.74
 			_term_header.text = shown
 		else:
-			_term_header.add_theme_font_size_override("font_size", 28)
-			_term_header.size.y = 150
+			_term_header.add_theme_font_size_override("font_size", 22 if _view_h >= 400 else 16)
+			_term_header.size.y = _view_h * 0.64
 			_refresh_header()
 	if _term_reply:
-		_term_reply.position.y = 172.0
+		_term_reply.position.y = _view_h * 0.68
 		if _session_log != null and _session_log.blip and shown.is_empty() and not multi:
 			_term_reply.text = "NEW LOG"
 		elif multi:
@@ -447,26 +447,43 @@ func _show_boot() -> void:
 
 
 func _refresh_header() -> void:
-	if _term_header == null:
+	if _term_header == null or _boot_left > 0.0:
 		return
-	if orbit_hold:
-		_term_header.text = "AUTOPILOT: ORBIT\n" + _readout
-	else:
-		_term_header.text = _readout
+	_term_header.text = _Read.page(_readout, orbit_hold, _ship_name, _hull, _mina, _bay_state)
 
 
 func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
-	var size := Vector2(0.52, 0.39) * _scale
+	_view_h = view_size.y
+	var root := Node3D.new()
+	root.name = "BeigeTerminal"
+	add_child(root)
+	root.add_to_group("akari_hud")
+	# Chassis on the dash, then a deep tube that leans back toward the seat and the aisle.
+	_case_box(root, "Chassis", Vector3(0.88, 0.30, 0.56), Vector3(0.0, 0.17, -3.40), "plastic")
+	_case_box(root, "Deck", Vector3(0.76, 0.06, 0.24), Vector3(0.0, 0.22, -3.08), "plastic")
+	for i in 4:
+		var vx := -0.18 + float(i) * 0.12
+		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.33, -3.52), "bezel")
+	for i in 8:
+		var kx := -0.28 + float(i) * 0.08
+		_case_box(root, "Key%d" % i, Vector3(0.055, 0.04, 0.055), Vector3(kx, 0.27, -3.08), "key")
+	_case_box(root, "Space", Vector3(0.28, 0.032, 0.05), Vector3(0.0, 0.265, -2.98), "key")
+
 	var pivot := Node3D.new()
 	pivot.name = "TerminalPivot"
 	pivot.position = pos
-	pivot.rotation.x = 0.48
-	add_child(pivot)
-	pivot.add_to_group("akari_hud")
-
-	var border := _scale * 0.055
-	var depth := _scale * 0.026
-	_Blocks.monitor_frame(pivot, size, border, depth, INTERIOR_LAYER)
+	pivot.rotation.x = 0.50
+	root.add_child(pivot)
+	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "plastic")
+	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
+	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "plastic")
+	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "plastic")
+	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "plastic")
+	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "plastic")
+	for i in 3:
+		_case_box(pivot, "SideVent%d" % i, Vector3(0.045, 0.028, 0.12), Vector3(0.455, 0.12 - float(i) * 0.08, -0.04), "bezel")
+	_case_box(pivot, "Badge", Vector3(0.18, 0.045, 0.025), Vector3(0.26, 0.30, 0.09), "badge")
+	_case_box(pivot, "Pip", Vector3(0.022, 0.022, 0.02), Vector3(0.33, 0.30, 0.105), "lamp")
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -481,35 +498,39 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	background.color = Color(0, 0, 0, 1)
 	background.size = Vector2(view_size)
 	viewport.add_child(background)
+	var status_size := 22 if view_size.y >= 400 else 16
 	var header := Label.new()
-	header.position = Vector2(28, 16)
-	header.size = Vector2(view_size.x - 48, 200)
+	header.position = Vector2(24, 14)
+	header.size = Vector2(view_size.x - 48, view_size.y * 0.64)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.autowrap_mode = TextServer.AUTOWRAP_OFF
+	header.clip_text = true
 	header.add_theme_font_override("font", _font)
-	header.add_theme_font_size_override("font_size", 32 if view_size.y >= 300 else 24)
+	header.add_theme_font_size_override("font_size", status_size)
 	header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
-	header.text = _readout
+	header.text = _Read.page(_readout, false, _ship_name, _hull, _mina, _bay_state)
 	header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(header)
 	_term_header = header
 	var reply := Label.new()
 	reply.name = "Reply"
-	reply.position = Vector2(28, 146)
-	reply.size = Vector2(view_size.x - 48, 40)
+	reply.position = Vector2(24, view_size.y * 0.68)
+	reply.size = Vector2(view_size.x - 48, 44)
 	reply.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	reply.clip_text = true
 	reply.add_theme_font_override("font", _font)
-	reply.add_theme_font_size_override("font_size", 28 if view_size.y >= 300 else 20)
+	reply.add_theme_font_size_override("font_size", 20 if view_size.y >= 400 else 15)
 	reply.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	reply.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(reply)
 	_term_reply = reply
 	var label := Label.new()
-	label.position = Vector2(28, view_size.y * 0.72)
-	label.size = Vector2(view_size.x - 56, 80)
+	label.position = Vector2(24, view_size.y * 0.82)
+	label.size = Vector2(view_size.x - 48, 64)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 28 if view_size.y >= 300 else 22)
+	label.add_theme_font_size_override("font_size", 24 if view_size.y >= 400 else 18)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = ">_"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -521,20 +542,25 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = "Terminal"
 	var quad := QuadMesh.new()
-	quad.size = size
+	quad.size = Vector2(0.68, 0.46) * _scale
 	mesh_instance.mesh = quad
-	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.95)
+	mesh_instance.position = Vector3(0.0, 0.02, 0.0) * _scale
 	var material := ShaderMaterial.new()
 	material.shader = _CRT
 	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
-	material.set_shader_parameter("brightness", 1.45 if _high else 1.25)
-	material.set_shader_parameter("curvature", 0.006)
+	material.set_shader_parameter("glow_spread", 0.0)
+	material.set_shader_parameter("brightness", 1.4 if _high else 1.22)
+	material.set_shader_parameter("curvature", 0.012)
+	material.set_shader_parameter("scanline_strength", 0.12)
 	mesh_instance.material_override = material
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
+
+
+func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String) -> void:
+	_Blocks._local_box(parent, node_name, size * _scale, pos * _scale, _Blocks.material(kind), INTERIOR_LAYER, true)
 
 
 func _build_walker() -> void:
@@ -845,61 +871,6 @@ func _omni(pos: Vector3, color: Color, energy: float, range_m: float, attenuatio
 	light.shadow_enabled = false
 	light.light_specular = 0.15
 	add_child(light)
-
-
-func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: float, kind: String, view_size: Vector2i) -> void:
-	var pivot := Node3D.new()
-	pivot.name = node_name + "Pivot"
-	pivot.position = pos
-	pivot.rotation = Vector3(tilt, yaw, 0.0)
-	add_child(pivot)
-	var border := _scale * 0.05
-	var depth := _scale * 0.03
-	_Blocks.monitor_frame(pivot, size, border, depth, INTERIOR_LAYER)
-
-	var viewport := SubViewport.new()
-	viewport.name = node_name + "View"
-	viewport.size = view_size
-	viewport.disable_3d = true
-	viewport.transparent_bg = false
-	viewport.handle_input_locally = false
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	viewport.gui_disable_input = true
-	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
-	var background := ColorRect.new()
-	background.color = Color(0, 0, 0, 1)
-	background.size = Vector2(view_size)
-	viewport.add_child(background)
-	var label := Label.new()
-	label.position = Vector2(16, 12)
-	label.size = Vector2(view_size) - Vector2(28, 20)
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 24 if view_size.y >= 250 else 16)
-	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
-	label.text = "AKARI"
-	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	viewport.add_child(label)
-	add_child(viewport)
-	_lines[kind] = label
-
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var quad := QuadMesh.new()
-	quad.size = size
-	mesh_instance.mesh = quad
-	mesh_instance.position = Vector3(0.0, 0.0, depth * 0.95)
-	var material := ShaderMaterial.new()
-	material.shader = _CRT
-	material.set_shader_parameter("screen_tex", viewport.get_texture())
-	material.set_shader_parameter("glow_spread", 0.004 if _Post.high_quality() else 0.0)
-	material.set_shader_parameter("brightness", 1.4 if _high else 1.2)
-	material.set_shader_parameter("curvature", 0.006)
-	mesh_instance.material_override = material
-	mesh_instance.layers = INTERIOR_LAYER
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mesh_instance.add_to_group("akari_crt")
-	pivot.add_child(mesh_instance)
 
 
 func _collect_lamps() -> void:

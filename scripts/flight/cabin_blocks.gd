@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Interior block library. Every module is a hard-edged box on a 0.5m grid.
 ## Each face gets its own 16x16 (nearest) so panel borders land on the block edge.
-## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel.
+## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel, plastic, key.
 
 const _SHADE := preload("res://assets/shaders/cabin_block.gdshader")
 const _SHADOW := preload("res://assets/shaders/cabin_shadow.gdshader")
@@ -66,6 +66,12 @@ static func texture(kind: String) -> Texture2D:
 			_paint_rollup(image)
 		"concrete":
 			_paint_concrete(image)
+		"plastic":
+			_paint_plastic(image)
+		"key":
+			_paint_key(image)
+		"badge":
+			_paint_badge(image)
 		_:
 			_paint_panel(image)
 	var image_texture := ImageTexture.create_from_image(image)
@@ -333,10 +339,7 @@ static func _light_at(point: Vector3) -> Vector2:
 		warm = maxf(warm, clampf(fall, 0.0, 1.0))
 	var green := 0.0
 	var screens: Array[Vector3] = [
-		Vector3(-0.85, 0.9, -3.35),
-		Vector3(0.85, 0.9, -3.35),
-		Vector3(0.0, 0.45, -3.1),
-		Vector3(0.0, 1.9, 0.55),
+		Vector3(0.0, 0.52, -3.26),
 	]
 	for screen in screens:
 		var fall := 1.0 - point.distance_to(screen) / 0.62
@@ -595,6 +598,33 @@ static func _paint_concrete(image: Image) -> void:
 	_px(image, 5, 11, Color("5e5a54"))
 	_px(image, 11, 12, Color("b0aca4"))
 	_px(image, 14, 9, Color("7a766f"))
+
+
+static func _paint_plastic(image: Image) -> void:
+	_fill(image, Color("e4d2ae"))
+	_rect(image, 0, 0, 16, 1, Color("b89a68"))
+	_rect(image, 0, 15, 16, 1, Color("8f7348"))
+	_rect(image, 0, 0, 1, 16, Color("c4aa78"))
+	_rect(image, 15, 0, 1, 16, Color("a88858"))
+	_px(image, 4, 5, Color("f0e2c4"))
+	_px(image, 11, 8, Color("c8b088"))
+	_px(image, 7, 12, Color("d8c4a0"))
+
+
+static func _paint_key(image: Image) -> void:
+	_fill(image, Color("cbb892"))
+	_rect(image, 1, 1, 14, 2, Color("f3e6c8"))
+	_rect(image, 0, 13, 16, 3, Color("8a7048"))
+	_rect(image, 0, 0, 1, 16, Color("a89068"))
+	_rect(image, 15, 0, 1, 16, Color("7a623c"))
+
+
+static func _paint_badge(image: Image) -> void:
+	_fill(image, Color("6b4428"))
+	_rect(image, 0, 0, 16, 2, Color("e6d2a4"))
+	_rect(image, 1, 6, 10, 2, Color("d8c49a"))
+	_rect(image, 1, 10, 6, 2, Color("c4a878"))
+	_px(image, 13, 8, Color("7dff9a"))
 
 
 static func _paint_lamp(image: Image) -> void:
