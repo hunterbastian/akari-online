@@ -56,7 +56,7 @@ const _FX := 2.5
 
 func _ready() -> void:
 	_shot = OS.get_environment("AKARI_SHOT") == "1"
-	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SEAM") == "1"
+	_closeup = OS.get_environment("AKARI_CLOSEUP") == "1" or OS.get_environment("AKARI_SIDE") == "1" or OS.get_environment("AKARI_HERO") == "1" or OS.get_environment("AKARI_SEAM") == "1" or OS.get_environment("AKARI_SUN") == "1"
 	if has_meta("flight_active"):
 		active = bool(get_meta("flight_active"))
 	var ship := Ships.get_ship(GameState.ship_id)
@@ -234,7 +234,7 @@ func start_cabin_view(mode: String) -> void:
 	if _cabin:
 		_cabin.snap_view(mode)
 	# The nose points at the sun in the cabin shots. Yaw it so the bloom sits beside the glass.
-	if mode == "seat":
+	if mode == "seat" or mode == "window":
 		global_rotate(Vector3.UP, 0.62)
 
 

@@ -4,6 +4,7 @@ extends CanvasLayer
 ## Lives inside the low-res world view so the dither grid covers it. Hidden when Mina eclipses the sun.
 
 const _PostProfile := preload("res://scripts/data/post_profile.gd")
+const _Look := preload("res://scripts/data/sixth_look.gd")
 
 var _view: SubViewport
 var _sun_position := Vector3.ZERO
@@ -165,7 +166,8 @@ func _process(delta: float) -> void:
 		_dirt.visible = not in_cabin
 		if not in_cabin:
 			_place(_dirt, screen, Vector2.ONE * unit * 0.55, _visibility * 0.22)
-	if in_cabin:
+	# Screen-space shafts replace these streaks while the sixth-gen pass is on.
+	if in_cabin or _Look.shafts > 0.0:
 		for shaft in _shafts:
 			shaft.visible = false
 	else:
