@@ -23,6 +23,29 @@ const CAM_LOOK_AHEAD := 28.0
 const FOV := 52.0
 const FOV_BOOST := 60.0
 const FOV_DAMP := 4.0
+## Extra degrees at full thrust. Smoothstep in over KICK_IN_TIME, out over KICK_OUT_TIME.
+const KICK_FOV := 9.0
+const KICK_IN_TIME := 1.5
+const KICK_OUT_TIME := 1.5
+## How long the heavy sway and the chase lag take to build.
+const SWAY_TIME := 1.4
+## Camera shake scale. 0 holds the view still. 1 is the default sway.
+const SHAKE := 1.0
+## Radians of pitch sway at full thrust. Roll uses a little more.
+const SHAKE_SWAY := 0.011
+const PUSH_IN := 0.45
+const PUSH_OUT := 1.15
+const PUSH_NOD := 0.018
+## Cabin feels the burn harder than the chase camera.
+const CABIN_SWAY := 1.9
+const CABIN_PUSH := 0.13
+const CABIN_HOLD := 0.045
+const CABIN_FOV := 1.35
+## Outside streaks are a milder version of the cabin window streaks.
+const STREAK_OUT := 0.42
+## Extra chase distance, in meters, once the boost has fully settled.
+const CAM_LAG := 3.6
+const CAM_CHASE_BOOST := 1.55
 const DT_CAP := 0.05
 const HULL_SCALE := 1.28
 ## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.

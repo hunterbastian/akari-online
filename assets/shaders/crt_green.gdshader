@@ -10,6 +10,7 @@ uniform float scanline_strength = 0.22;
 uniform float flicker_strength = 0.03;
 uniform float glow_spread = 0.004;
 uniform float brightness = 1.35;
+uniform float boost_flicker = 0.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -23,6 +24,7 @@ void fragment() {
 	vec2 centered = uv * 2.0 - 1.0;
 	float r2 = dot(centered, centered);
 	uv += centered * r2 * curvature;
+	uv += vec2(sin(TIME * 34.0), cos(TIME * 29.0)) * boost_flicker * 0.006;
 	float vignette = mix(0.72, 1.0, smoothstep(1.35, 0.15, r2));
 	vec3 col = vec3(0.01, 0.02, 0.012);
 	if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) {
@@ -37,6 +39,7 @@ void fragment() {
 		float scan = sin(uv.y * 210.0 + TIME * 1.5) * 0.5 + 0.5;
 		texel *= mix(1.0, 0.55 + scan, scanline_strength);
 		float flick = 1.0 + sin(TIME * 47.0) * flicker_strength + sin(TIME * 12.7) * flicker_strength * 0.45;
+		flick *= 1.0 + sin(TIME * 31.0) * boost_flicker * 0.45;
 		ivec2 pixel = ivec2(floor(FRAGCOORD.xy));
 		float bayer = BAYER[pixel.x & 3][pixel.y & 3];
 		texel += (bayer - 0.5) * 0.012;

@@ -29,6 +29,9 @@ RULES = [
     ("terminal-ejects", "scripts/flight/ship_controller.gd", "terminal_wants_keys", "the terminal owns the E key while you are typing"),
     ("tp-dead-end", "scripts/flight/cabin_interior.gd", "release_fixed_view", "a dev view must be able to unlock"),
     ("burn-after-stand", "scripts/flight/ship_controller.gd", "thrust = 0.0", "standing up clears engine thrust"),
+    ("thrust-shake-toggle", "scripts/flight/thrust_kick.gd", "FlightProfile.SHAKE", "shake intensity can be turned down"),
+    ("thrust-shake-default", "scripts/data/flight_profile.gd", "const SHAKE := 1.0", "shake defaults to on"),
+    ("star-streaks", "scripts/flight/thrust_kick.gd", "travel_dir", "boost stretches stars along the direction of travel"),
 ]
 
 
