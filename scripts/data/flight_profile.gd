@@ -23,6 +23,8 @@ const CAM_LOOK_AHEAD := 28.0
 const FOV := 52.0
 const FOV_BOOST := 60.0
 const FOV_DAMP := 4.0
+## Cabin head bob. 0 holds the view still. 1 is the default gentle walk.
+const BOB := 1.0
 const DT_CAP := 0.05
 const HULL_SCALE := 1.28
 ## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.

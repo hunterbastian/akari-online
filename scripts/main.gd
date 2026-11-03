@@ -26,6 +26,7 @@ var _planet_center := Vector3.ZERO
 var _planet_radius := 24.0
 var _planet_body: Node3D
 var _state_test := false
+var _walk_demo := false
 
 
 func _ready() -> void:
@@ -109,6 +110,16 @@ func _ready() -> void:
 	inventory_hud.bind(ship)
 	if not _cabin_view.is_empty():
 		ship.start_cabin_view(_cabin_view)
+	if _walk_demo:
+		var walked = ship.get("_cabin")
+		if walked:
+			walked.show_hotbar = false
+			if walked.walker:
+				walked.walker.locked = false
+		var walk_demo = load("res://scripts/flight/walk_demo.gd").new()
+		walk_demo.name = "WalkDemo"
+		add_child(walk_demo)
+		walk_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -273,7 +284,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _walk_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -566,8 +577,13 @@ func _read_cli() -> void:
 		elif arg == "--door" and i + 1 < args.size():
 			_cli_door = str(args[i + 1]).to_lower()
 			i += 2
+		elif arg == "--walk-demo":
+			_walk_demo = true
+			i += 1
 		else:
 			i += 1
+	if _walk_demo:
+		_cabin_view = "aisle"
 	if _cli_at.is_empty():
 		return
 	var at := _cli_at.to_lower()

@@ -29,6 +29,7 @@ RULES = [
     ("terminal-ejects", "scripts/flight/ship_controller.gd", "terminal_wants_keys", "the terminal owns the E key while you are typing"),
     ("tp-dead-end", "scripts/flight/cabin_interior.gd", "release_fixed_view", "a dev view must be able to unlock"),
     ("burn-after-stand", "scripts/flight/ship_controller.gd", "thrust = 0.0", "standing up clears engine thrust"),
+    ("cabin-bob", "scripts/data/flight_profile.gd", "const BOB := 1.0", "head bob defaults on and can be scaled off"),
 ]
 
 
