@@ -11,11 +11,13 @@ static func submit(line: String, lamps, log = null) -> String:
 	var parts := text.split(" ", false)
 	var cmd := str(parts[0])
 	if cmd == "HELP":
-		return "HELP  LIGHTS  LOG  TIME  AUTOPILOT"
+		return "HELP  LIGHTS  LOG  TIME  AUTOPILOT  SAVE"
 	if cmd == "TIME":
 		if log == null or not log.has_method("time_report"):
 			return "TIME?"
 		return log.time_report()
+	if cmd == "SAVE":
+		return "SHIP STATE SAVED"
 	if cmd == "LOG":
 		if log == null:
 			return "LOG EMPTY"

@@ -91,13 +91,94 @@ func to_save() -> Dictionary:
 		"elapsed": elapsed,
 		"flown": flown,
 		"flight_time": flight_time,
+		"cabin_time": cabin_time,
 		"count": entries.size(),
 		"entries": entries.duplicate(true),
+		"flags": {
+			"aboard": _aboard,
+			"burn": _burn,
+			"orbit": _orbit,
+			"air": _air,
+			"bay": _bay,
+			"space_mark": _space_mark,
+			"cabin_mark": _cabin_mark,
+			"flown_mark": _flown_mark,
+		},
 	}
 
 
 func time_report() -> String:
 	return "SHIP %s\nFLOWN %s\nSPACE %s" % [_clock(elapsed), _hms(flight_time), _hms(elapsed)]
+
+
+func from_save(data: Dictionary) -> void:
+	elapsed = float(data.get("elapsed", 0.0))
+	flown = float(data.get("flown", 0.0))
+	flight_time = float(data.get("flight_time", 0.0))
+	cabin_time = float(data.get("cabin_time", 0.0))
+	entries.clear()
+	var raw = data.get("entries", [])
+	if raw is Array:
+		for item in raw:
+			if item is Dictionary:
+				entries.append({
+					"t": float(item.get("t", 0.0)),
+					"stamp": str(item.get("stamp", "")),
+					"text": str(item.get("text", "")),
+				})
+	blip = false
+	_aboard = false
+	_burn = false
+	_orbit = false
+	_air = false
+	_bay = false
+	_space_mark = 0
+	_cabin_mark = false
+	_flown_mark = 0
+	var flags = data.get("flags", {})
+	if flags is Dictionary and not flags.is_empty():
+		_aboard = bool(flags.get("aboard", false))
+		_burn = bool(flags.get("burn", false))
+		_orbit = bool(flags.get("orbit", false))
+		_air = bool(flags.get("air", false))
+		_bay = bool(flags.get("bay", false))
+		_space_mark = int(flags.get("space_mark", 0))
+		_cabin_mark = bool(flags.get("cabin_mark", false))
+		_flown_mark = int(flags.get("flown_mark", 0))
+	else:
+		_infer_flags()
+	# Leaving the seat clears the live flag. The entry is what makes boarding permanent.
+	if not _aboard:
+		for item in entries:
+			if str(item.get("text", "")) == "Pilot aboard":
+				_aboard = true
+				break
+
+
+func _infer_flags() -> void:
+	for item in entries:
+		var text := str(item.get("text", ""))
+		if text == "Pilot aboard":
+			_aboard = true
+		elif text == "First burn":
+			_burn = true
+		elif text == "Pilot went to Mina":
+			_orbit = true
+		elif text.contains("Mina air"):
+			_air = true
+		elif text == "Bay open":
+			_bay = true
+		elif text.contains("Mina day aboard"):
+			_cabin_mark = true
+		elif text.contains("3 Mina days"):
+			_space_mark = 3
+	if _space_mark < 3 and elapsed >= MINA_DAY * 3.0:
+		_space_mark = int(elapsed / MINA_DAY)
+	if not _cabin_mark and cabin_time >= MINA_DAY:
+		_cabin_mark = true
+	var mark := int(flown / FLOWN_STEP)
+	if mark > _flown_mark:
+		_flown_mark = mark
 
 
 func _stamp() -> String:

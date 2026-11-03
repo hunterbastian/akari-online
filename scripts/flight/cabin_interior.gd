@@ -265,6 +265,20 @@ func set_log(log) -> void:
 	_session_log = log
 
 
+func lamp_preset() -> String:
+	if _lamps == null:
+		return ""
+	return _lamps.preset
+
+
+func restore_lamp_preset(name: String) -> void:
+	if _lamps == null or not _lamps.set_preset(name):
+		return
+	_lamps.tint = _lamps.target_tint
+	_lamps.gain = _lamps.target_gain
+	_push_lamps()
+
+
 func terminal_submit() -> void:
 	var reply: String = _Term.submit(_command, _lamps, _session_log)
 	_command = ""
@@ -272,20 +286,25 @@ func terminal_submit() -> void:
 		var preset := reply.trim_prefix("LIGHTS ")
 		if not preset.contains(" "):
 			_session_log.note("Cabin lights " + preset.to_lower())
-	if not reply.is_empty():
-		_reply = reply
 	var pilot = _flight_ship()
-	if pilot != null and reply == "AUTOPILOT ORBIT":
+	if reply == "SHIP STATE SAVED":
+		if pilot == null or not pilot.has_method("save_game") or not pilot.save_game():
+			reply = "SAVE FAILED"
+		elif _session_log != null:
+			_session_log.blip = false
+	elif pilot != null and reply == "AUTOPILOT ORBIT":
 		pilot.engage_orbit()
 	elif pilot != null and reply == "AUTOPILOT OFF":
 		pilot.request_orbit_stop()
+	if not reply.is_empty():
+		_reply = reply
 	_refresh_prompt()
 
 
 func _flight_ship():
 	var node: Node = get_parent()
 	while node != null:
-		if node.has_method("engage_orbit"):
+		if node.has_method("save_game") or node.has_method("engage_orbit"):
 			return node
 		node = node.get_parent()
 	return null

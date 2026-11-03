@@ -42,6 +42,7 @@ var _read_wait := 0.0
 var _read_due := true
 var script_yaw := 0.0
 var _log = preload("res://scripts/flight/ship_log.gd").new()
+var _keeper
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
 var _trails: Array[MeshInstance3D] = []
@@ -108,13 +109,86 @@ func ship_log():
 	return _log
 
 
-func hold_seat_flight() -> void:
-	walking = false
-	if _chase:
-		_chase.current = false
-	if _cabin and _cabin.walker and _cabin.walker.eye:
-		_cabin.walker.locked = true
-		_cabin.walker.eye.current = true
+func set_keeper(keeper) -> void:
+	_keeper = keeper
+
+
+func save_game() -> bool:
+	if _keeper != null and _keeper.has_method("save_now"):
+		return bool(_keeper.save_now())
+	return false
+
+
+func cabin_lamp_preset() -> String:
+	if _cabin != null and _cabin.has_method("lamp_preset"):
+		return str(_cabin.lamp_preset())
+	return ""
+
+
+func restore_lamp_preset(name: String) -> void:
+	if _cabin != null and _cabin.has_method("restore_lamp_preset"):
+		_cabin.restore_lamp_preset(name)
+
+
+func capture_flight() -> Dictionary:
+	var b := global_basis
+	return {
+		"position": [global_position.x, global_position.y, global_position.z],
+		"velocity": [velocity.x, velocity.y, velocity.z],
+		"basis": [b.x.x, b.x.y, b.x.z, b.y.x, b.y.y, b.y.z, b.z.x, b.z.y, b.z.z],
+	}
+
+
+func save_autopilot() -> Dictionary:
+	if _orbit == null or not _orbit.active:
+		return {}
+	return {
+		"mode": "orbit",
+		"center": [_orbit.center.x, _orbit.center.y, _orbit.center.z],
+		"target_radius": _orbit.target_radius,
+		"radius_now": _orbit.radius_now,
+		"angle": _orbit.angle,
+		"normal": [_orbit.normal.x, _orbit.normal.y, _orbit.normal.z],
+		"radial0": [_orbit.radial0.x, _orbit.radial0.y, _orbit.radial0.z],
+		"tangent0": [_orbit.tangent0.x, _orbit.tangent0.y, _orbit.tangent0.z],
+	}
+
+
+func load_autopilot(packet: Dictionary) -> void:
+	if _orbit == null or str(packet.get("mode", "")) != "orbit":
+		return
+	_orbit.active = true
+	_orbit.center = _vec3_of(packet.get("center", []))
+	_orbit.target_radius = float(packet.get("target_radius", _orbit.target_radius))
+	_orbit.radius_now = float(packet.get("radius_now", _orbit.radius_now))
+	_orbit.angle = float(packet.get("angle", 0.0))
+	_orbit.normal = _vec3_of(packet.get("normal", []))
+	_orbit.radial0 = _vec3_of(packet.get("radial0", []))
+	_orbit.tangent0 = _vec3_of(packet.get("tangent0", []))
+	if _cabin and _cabin.has_method("show_orbit"):
+		_cabin.show_orbit(true)
+
+
+func _vec3_of(raw) -> Vector3:
+	if raw is Array and raw.size() == 3:
+		return Vector3(float(raw[0]), float(raw[1]), float(raw[2]))
+	return Vector3.UP
+
+
+func apply_flight(packet: Dictionary) -> void:
+	var spot = packet.get("position", [])
+	if spot is Array and spot.size() == 3:
+		global_position = Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
+	var speed = packet.get("velocity", [])
+	if speed is Array and speed.size() == 3:
+		velocity = Vector3(float(speed[0]), float(speed[1]), float(speed[2]))
+	var raw = packet.get("basis", [])
+	if raw is Array and raw.size() == 9:
+		global_basis = Basis(
+			Vector3(float(raw[0]), float(raw[1]), float(raw[2])),
+			Vector3(float(raw[3]), float(raw[4]), float(raw[5])),
+			Vector3(float(raw[6]), float(raw[7]), float(raw[8]))
+		)
 
 
 func set_flight_active(on: bool) -> void:

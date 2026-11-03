@@ -35,6 +35,9 @@ var _readout_demo := false
 var _log_demo := false
 var _time_demo := false
 var _orbit_demo := ""
+var _save_mode := ""
+var _save_demo := false
+var _stand_test := false
 
 
 func _ready() -> void:
@@ -44,6 +47,7 @@ func _ready() -> void:
 	_title_card = OS.get_environment("AKARI_TITLE") == "1"
 	_cabin_view = OS.get_environment("AKARI_CABIN")
 	_read_cli()
+	_stand_test = user_args.has("--stand-test")
 	DisplayServer.window_set_title("AKARI ONLINE")
 	_mount_world()
 	var system := Galaxy.system_by_id(GameState.system_id)
@@ -95,7 +99,7 @@ func _ready() -> void:
 		_frame_side(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
 		_frame_seam(ship, camera)
-	elif not _shot and not _tour and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
+	elif not _shot and not _tour and not _stand_test and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -190,6 +194,27 @@ func _ready() -> void:
 		orbit_demo.name = "OrbitDemo"
 		add_child(orbit_demo)
 		orbit_demo.setup(ship, _orbit_demo == "out")
+	var keeper = load("res://scripts/flight/ship_keeper.gd").new()
+	keeper.name = "ShipKeeper"
+	add_child(keeper)
+	keeper.setup(ship, "user://akari_save.json")
+	ship.set_keeper(keeper)
+	_arm_keeper(keeper)
+	if _save_demo:
+		ship.hold_seat_flight()
+		var saved = ship.get("_cabin")
+		if saved:
+			saved.show_hotbar = false
+		var save_demo = load("res://scripts/flight/save_demo.gd").new()
+		save_demo.name = "SaveDemo"
+		add_child(save_demo)
+		save_demo.setup(ship, _save_mode)
+	if _stand_test:
+		ship.set_flight_active(true)
+		var stand = load("res://test/stand_check.gd").new()
+		stand.name = "StandCheck"
+		add_child(stand)
+		stand.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -379,7 +404,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or not _orbit_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or not _orbit_demo.is_empty() or _save_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -663,6 +688,30 @@ func _apply_shot_inventory() -> void:
 		inv.open("LockerL")
 
 
+func _input(event: InputEvent) -> void:
+	# The ship sits in the low-res SubViewport, so window keys never reach its _input.
+	# Throttle still works because the flight loop polls Input. E and mouse look do not.
+	if _world != null:
+		_world.push_input(event)
+
+
+func _arm_keeper(keeper) -> void:
+	var args := OS.get_cmdline_user_args()
+	var tools := _shot or _tour or _walk_demo or _readout_demo or _log_demo or _time_demo or _stand_test
+	tools = tools or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty()
+	tools = tools or not _cli_shot.is_empty() or args.has("--bench") or args.has("--state-test") or args.has("--stand-test")
+	tools = tools or (not _cabin_view.is_empty() and not _save_demo)
+	if _save_mode == "write":
+		keeper.armed = true
+		keeper.wipe()
+		return
+	if tools:
+		keeper.armed = false
+		return
+	keeper.armed = true
+	keeper.load_now()
+
+
 func _read_cli() -> void:
 	var args := OS.get_cmdline_user_args()
 	var i := 0
@@ -712,9 +761,17 @@ func _read_cli() -> void:
 				i += 2
 			else:
 				i += 1
+		elif arg == "--save-demo":
+			_save_mode = "write"
+			_save_demo = true
+			if i + 1 < args.size() and not str(args[i + 1]).begins_with("--"):
+				_save_mode = str(args[i + 1])
+				i += 2
+			else:
+				i += 1
 		else:
 			i += 1
-	if _kick_demo == "inside" or _log_demo or _time_demo or _orbit_demo == "in":
+	if _kick_demo == "inside" or _log_demo or _time_demo or _orbit_demo == "in" or _save_demo:
 		_cabin_view = "seat"
 	if _lights_demo == "wide":
 		_cabin_view = "wide"
