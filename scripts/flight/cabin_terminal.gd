@@ -4,14 +4,18 @@ extends RefCounted
 ## Later commands (AUTOPILOT, SCAN) can match here the same way.
 
 
-static func submit(line: String, lamps) -> String:
+static func submit(line: String, lamps, log = null) -> String:
 	var text := line.strip_edges().to_upper()
 	if text.is_empty():
 		return ""
 	var parts := text.split(" ", false)
 	var cmd := str(parts[0])
 	if cmd == "HELP":
-		return "HELP  LIGHTS"
+		return "HELP  LIGHTS  LOG"
+	if cmd == "LOG":
+		if log == null:
+			return "LOG EMPTY"
+		return log.page()
 	if cmd != "LIGHTS":
 		return "?"
 	if parts.size() < 2:

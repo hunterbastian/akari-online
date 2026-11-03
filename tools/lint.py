@@ -30,6 +30,7 @@ RULES = [
     ("tp-dead-end", "scripts/flight/cabin_interior.gd", "release_fixed_view", "a dev view must be able to unlock"),
     ("burn-after-stand", "scripts/flight/ship_controller.gd", "thrust = 0.0", "standing up clears engine thrust"),
     ("lights-command", "scripts/flight/cabin_terminal.gd", "LIGHTS", "HELP can list the LIGHTS command"),
+    ("ship-log", "scripts/flight/cabin_terminal.gd", "LOG", "HELP can list the LOG command"),
 ]
 
 
