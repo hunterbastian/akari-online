@@ -29,6 +29,8 @@ var _state_test := false
 var _lights_arg := ""
 var _lights_demo := ""
 var _log_demo := false
+var _save_mode := ""
+var _save_demo := false
 
 
 func _ready() -> void:
@@ -132,6 +134,21 @@ func _ready() -> void:
 		log_demo.name = "LogDemo"
 		add_child(log_demo)
 		log_demo.setup(ship)
+	var keeper = load("res://scripts/flight/ship_keeper.gd").new()
+	keeper.name = "ShipKeeper"
+	add_child(keeper)
+	keeper.setup(ship, "user://akari_save.json")
+	ship.set_keeper(keeper)
+	_arm_keeper(keeper)
+	if _save_demo:
+		ship.hold_seat_flight()
+		var saved = ship.get("_cabin")
+		if saved:
+			saved.show_hotbar = false
+		var save_demo = load("res://scripts/flight/save_demo.gd").new()
+		save_demo.name = "SaveDemo"
+		add_child(save_demo)
+		save_demo.setup(ship, _save_mode)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -296,7 +313,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if _log_demo or not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _save_demo or _log_demo or not _lights_demo.is_empty() or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -568,6 +585,22 @@ func _apply_shot_inventory() -> void:
 		inv.open("LockerL")
 
 
+func _arm_keeper(keeper) -> void:
+	var args := OS.get_cmdline_user_args()
+	var tools := _shot or _tour or not _lights_demo.is_empty() or _log_demo or not _lights_arg.is_empty()
+	tools = tools or not _cli_shot.is_empty() or args.has("--bench") or args.has("--state-test")
+	tools = tools or (not _cabin_view.is_empty() and not _save_demo)
+	if _save_mode == "write":
+		keeper.armed = true
+		keeper.wipe()
+		return
+	if tools:
+		keeper.armed = false
+		return
+	keeper.armed = true
+	keeper.load_now()
+
+
 func _read_cli() -> void:
 	var args := OS.get_cmdline_user_args()
 	var i := 0
@@ -598,9 +631,17 @@ func _read_cli() -> void:
 		elif arg == "--log-demo":
 			_log_demo = true
 			i += 1
+		elif arg == "--save-demo":
+			_save_mode = "write"
+			_save_demo = true
+			if i + 1 < args.size() and not str(args[i + 1]).begins_with("--"):
+				_save_mode = str(args[i + 1])
+				i += 2
+			else:
+				i += 1
 		else:
 			i += 1
-	if _log_demo:
+	if _log_demo or _save_demo:
 		_cabin_view = "seat"
 	if _lights_demo == "wide":
 		_cabin_view = "wide"

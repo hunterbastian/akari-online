@@ -31,6 +31,8 @@ RULES = [
     ("burn-after-stand", "scripts/flight/ship_controller.gd", "thrust = 0.0", "standing up clears engine thrust"),
     ("lights-command", "scripts/flight/cabin_terminal.gd", "LIGHTS", "HELP can list the LIGHTS command"),
     ("ship-log", "scripts/flight/cabin_terminal.gd", "LOG", "HELP can list the LOG command"),
+    ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
+    ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
 ]
 
 

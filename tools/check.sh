@@ -16,6 +16,7 @@ fi
 "$GODOT" --headless --path . -- --state-test
 "$GODOT" --headless --path . --script res://test/test_cabin_terminal.gd
 "$GODOT" --headless --path . --script res://test/test_ship_log.gd
+"$GODOT" --headless --path . --script res://test/test_ship_save.gd
 "$GODOT" --headless --path . --script res://test/test_sol_planet.gd
 if [ "${SKIP_BENCH:-}" = "1" ]; then
   exit 0

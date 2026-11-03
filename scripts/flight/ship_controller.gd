@@ -33,6 +33,7 @@ var _read_range := -1
 var _read_thr := -1
 var _read_ap := ""
 var _log = preload("res://scripts/flight/ship_log.gd").new()
+var _keeper
 var script_throttle := -1.0
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
@@ -94,6 +95,52 @@ func _ready() -> void:
 
 func ship_log():
 	return _log
+
+
+func set_keeper(keeper) -> void:
+	_keeper = keeper
+
+
+func save_game() -> bool:
+	if _keeper != null and _keeper.has_method("save_now"):
+		return bool(_keeper.save_now())
+	return false
+
+
+func cabin_lamp_preset() -> String:
+	if _cabin != null and _cabin.has_method("lamp_preset"):
+		return str(_cabin.lamp_preset())
+	return ""
+
+
+func restore_lamp_preset(name: String) -> void:
+	if _cabin != null and _cabin.has_method("restore_lamp_preset"):
+		_cabin.restore_lamp_preset(name)
+
+
+func capture_flight() -> Dictionary:
+	var b := global_basis
+	return {
+		"position": [global_position.x, global_position.y, global_position.z],
+		"velocity": [velocity.x, velocity.y, velocity.z],
+		"basis": [b.x.x, b.x.y, b.x.z, b.y.x, b.y.y, b.y.z, b.z.x, b.z.y, b.z.z],
+	}
+
+
+func apply_flight(packet: Dictionary) -> void:
+	var spot = packet.get("position", [])
+	if spot is Array and spot.size() == 3:
+		global_position = Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
+	var speed = packet.get("velocity", [])
+	if speed is Array and speed.size() == 3:
+		velocity = Vector3(float(speed[0]), float(speed[1]), float(speed[2]))
+	var raw = packet.get("basis", [])
+	if raw is Array and raw.size() == 9:
+		global_basis = Basis(
+			Vector3(float(raw[0]), float(raw[1]), float(raw[2])),
+			Vector3(float(raw[3]), float(raw[4]), float(raw[5])),
+			Vector3(float(raw[6]), float(raw[7]), float(raw[8]))
+		)
 
 
 func hold_seat_flight() -> void:
