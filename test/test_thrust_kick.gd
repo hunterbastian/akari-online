@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Thrust kick: FOV eases with thrust, shake bursts then hums, and intensity 0 is still.
+## Thrust kick: FOV eases slowly, sway builds, and intensity 0 is still.
 
 
 func _init() -> void:
@@ -20,8 +20,9 @@ func _run() -> int:
 		push_error("thrust feel script missing")
 		return 1
 	failed += _fov_settles(feel_script)
-	failed += _ease_in_is_quicker(feel_script)
-	failed += _shake_burst_then_hum(feel_script)
+	failed += _ease_is_slow(feel_script)
+	failed += _sway_builds(feel_script)
+	failed += _push_is_soft(feel_script)
 	failed += _shake_off(feel_script)
 	failed += _rumble_loops()
 	return failed
@@ -46,47 +47,68 @@ func _fov_settles(feel_script: Script) -> int:
 	return 0
 
 
-func _ease_in_is_quicker(feel_script: Script) -> int:
+func _ease_is_slow(feel_script: Script) -> int:
 	var rising = feel_script.new()
-	_hold(rising, 1.0, 0.12)
-	var rise: float = rising.fov_extra
+	_hold(rising, 1.0, 0.15)
+	if rising.fov_extra > FlightProfile.KICK_FOV * 0.12:
+		push_error("fov should not snap open, got %s" % rising.fov_extra)
+		return 1
+	_hold(rising, 1.0, 0.6)
+	var mid: float = rising.fov_extra / FlightProfile.KICK_FOV
+	if mid < 0.35 or mid > 0.7:
+		push_error("fov should be mid-ramp around 0.75s, got %s" % rising.fov_extra)
+		return 1
 	var falling = feel_script.new()
 	_hold(falling, 1.0, 2.0)
-	_hold(falling, 0.0, 0.12)
-	var drop: float = FlightProfile.KICK_FOV - falling.fov_extra
-	if rise <= drop * 1.35:
-		push_error("fov should ease in faster than it eases out (rise %s, drop %s)" % [rise, drop])
+	_hold(falling, 0.0, 0.2)
+	if falling.fov_extra < FlightProfile.KICK_FOV * 0.8:
+		push_error("fov should ease out slowly, got %s" % falling.fov_extra)
+		return 1
+	_hold(falling, 0.0, 1.6)
+	if falling.fov_extra > 0.35:
+		push_error("fov should be home after the release, got %s" % falling.fov_extra)
 		return 1
 	return 0
 
 
-func _shake_burst_then_hum(feel_script: Script) -> int:
+func _sway_builds(feel_script: Script) -> int:
 	var feel = feel_script.new()
-	_hold(feel, 0.0, 0.5)
-	feel.advance(1.0, 1.0 / 60.0)
-	var burst: float = feel.shake_amp
-	_hold(feel, 1.0, 2.0)
-	var hum: float = feel.shake_amp
-	if burst <= hum * 1.6:
-		push_error("boost start should shake harder than the settled hum (burst %s, hum %s)" % [burst, hum])
+	_hold(feel, 1.0, 0.1)
+	var early: float = feel.shake_amp
+	_hold(feel, 1.0, 1.4)
+	if early >= feel.shake_amp:
+		push_error("sway should build, early %s settled %s" % [early, feel.shake_amp])
 		return 1
-	if hum < 0.004:
-		push_error("settled thrust should keep a light hum, got %s" % hum)
+	if feel.shake_amp < 0.004:
+		push_error("settled thrust should keep a sway, got %s" % feel.shake_amp)
 		return 1
-	var moving := false
-	for _i in 20:
-		feel.advance(1.0, 1.0 / 60.0)
-		if feel.shake_offset(1.0).length() > 0.004:
-			moving = true
-	if not moving:
-		push_error("shake wave should move the camera")
+	var before: Vector3 = feel.shake_offset(1.0)
+	feel.advance(1.0, 0.05)
+	var after: Vector3 = feel.shake_offset(1.0)
+	if absf(before.x - after.x) > 0.004:
+		push_error("sway should stay low frequency")
 		return 1
 	var left = feel_script.new()
 	var right = feel_script.new()
-	_hold(left, 0.35, 0.4)
-	_hold(right, 0.35, 0.4)
+	_hold(left, 0.4, 0.8)
+	_hold(right, 0.4, 0.8)
 	if absf(left.shake_offset(1.0).y - right.shake_offset(1.0).y) > 0.00001:
-		push_error("shake is not deterministic")
+		push_error("sway is not deterministic")
+		return 1
+	return 0
+
+
+func _push_is_soft(feel_script: Script) -> int:
+	var feel = feel_script.new()
+	_hold(feel, 1.0, 0.04)
+	var tap: float = feel.push
+	_hold(feel, 1.0, 0.32)
+	if feel.push < 0.2 or tap >= feel.push:
+		push_error("boost push should ease in, tap %s then %s" % [tap, feel.push])
+		return 1
+	_hold(feel, 1.0, 2.0)
+	if feel.push > 0.12:
+		push_error("boost push should settle, got %s" % feel.push)
 		return 1
 	return 0
 

@@ -10,6 +10,7 @@ uniform float grain_strength : hint_range(0.0, 0.06) = 0.014;
 uniform float quantize_steps : hint_range(8.0, 128.0) = 36.0;
 uniform float vignette : hint_range(0.0, 0.6) = 0.14;
 uniform float ca_strength : hint_range(0.0, 0.02) = 0.0;
+uniform float streak : hint_range(0.0, 1.0) = 0.0;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -45,6 +46,12 @@ void fragment() {
 	float grain = hash12(vec2(pixel) + vec2(tick, tick * 0.37)) - 0.5;
 	col += grain * grain_strength;
 	vec2 p = uv * 2.0 - 1.0;
+	if (streak > 0.001) {
+		vec2 dir = (uv - 0.5) * streak * 0.01;
+		vec3 smear = col + texture(screen_tex, uv + dir).rgb + texture(screen_tex, uv + dir * 2.0).rgb;
+		float edge = smoothstep(0.2, 1.05, length(p));
+		col = mix(col, smear / 3.0, edge * streak);
+	}
 	float vig = smoothstep(1.2, 0.25, dot(p, p));
 	col *= mix(1.0 - vignette, 1.0, vig);
 	COLOR = vec4(clamp(col, 0.0, 1.0), 1.0);

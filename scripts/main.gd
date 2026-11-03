@@ -237,6 +237,7 @@ func _add_dither() -> void:
 	material.set_shader_parameter("vignette", 0.14)
 	material.set_shader_parameter("ca_strength", _PostProfile.film_ca())
 	rect.material = material
+	rect.add_to_group("akari_film")
 	layer.add_child(rect)
 	# Inside the low-res view, so the Bayer grid is one step per rendered pixel.
 	_world.add_child(layer)
