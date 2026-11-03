@@ -16,6 +16,7 @@ var _root: Control
 var _slots: Array[Control] = []
 var _drag := {}
 var _touch := false
+var _hide_shot := false
 var _font: FontFile
 var _icons := {}
 
@@ -37,9 +38,23 @@ func bind(ship: Node) -> void:
 	add_child(_root)
 	get_viewport().size_changed.connect(_rebuild)
 	visible = false
+	_hide_shot = _beauty_shot()
+
+
+func _beauty_shot() -> bool:
+	var args := OS.get_cmdline_user_args()
+	if args.has("--hull") or args.has("--mega") or args.has("--atmo") or args.has("--interior") or args.has("--exterior"):
+		return true
+	for arg in args:
+		if str(arg).begins_with("mega") or str(arg).begins_with("atmo"):
+			return true
+	return false
 
 
 func _process(_delta: float) -> void:
+	if _hide_shot:
+		visible = false
+		return
 	_inv = _inventory()
 	var walking := _ship != null and bool(_ship.get("walking"))
 	var seated := false

@@ -5,8 +5,8 @@ extends Node
 var _time := 0.0
 var _city: Node3D
 var _camera: Camera3D
-
-const _END := 28.0
+var _atmo := false
+var _end := 28.0
 
 
 func setup(planet: Node, ship: Node) -> void:
@@ -17,18 +17,39 @@ func setup(planet: Node, ship: Node) -> void:
 		_camera.current = true
 	if ship:
 		ship.global_position = ship.global_position + Vector3(0.0, 400.0, 0.0)
+	_atmo = OS.get_cmdline_user_args().has("--atmo")
+	_end = 24.0 if _atmo else 28.0
 
 
 func _process(delta: float) -> void:
 	if _city == null or _camera == null:
 		return
 	_time += delta
-	var u := clampf(_time / _END, 0.0, 1.0)
-	_camera.global_position = _city.to_global(_spot(u))
-	_camera.look_at(_city.to_global(_aim(u)), _city.global_basis.y)
-	_camera.fov = lerpf(34.0, 52.0, smoothstep(0.2, 0.55, u))
-	if _time >= _END:
+	var u := clampf(_time / _end, 0.0, 1.0)
+	var spot: Vector3 = _atmo_spot(u) if _atmo else _spot(u)
+	var aim: Vector3 = _atmo_aim(u) if _atmo else _aim(u)
+	_camera.global_position = _city.to_global(spot)
+	_camera.look_at(_city.to_global(aim), _city.global_basis.y)
+	_camera.fov = lerpf(28.0 if _atmo else 34.0, 52.0, smoothstep(0.25, 0.6, u))
+	if _time >= _end:
 		get_tree().quit()
+
+
+func _atmo_spot(u: float) -> Vector3:
+	if u < 0.35:
+		var t := u / 0.35
+		return Vector3(lerpf(12.0, 6.0, t), lerpf(92.0, 36.0, t), lerpf(40.0, 22.0, t))
+	if u < 0.7:
+		var t := (u - 0.35) / 0.35
+		return Vector3(lerpf(6.0, 0.6, t), lerpf(36.0, 6.0, t), lerpf(22.0, 10.0, t))
+	var t := (u - 0.7) / 0.3
+	return Vector3(lerpf(0.6, 0.2, t), lerpf(6.0, 3.0, t), lerpf(10.0, 5.0, t))
+
+
+func _atmo_aim(u: float) -> Vector3:
+	if u < 0.4:
+		return Vector3(0.0, -6.0, 2.0)
+	return Vector3(0.3, 12.0, 15.0)
 
 
 func _spot(u: float) -> Vector3:

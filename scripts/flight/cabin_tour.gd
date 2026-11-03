@@ -11,6 +11,7 @@ var _film := false
 var _zones := false
 var _bay := false
 var _hull_pass := false
+var _interior := false
 var _bay_opened := false
 var _bay_closed := false
 var _seated := false
@@ -83,7 +84,8 @@ func setup(ship: Node) -> void:
 	_film = OS.get_cmdline_user_args().has("--film")
 	_zones = OS.get_cmdline_user_args().has("--zones")
 	_bay = OS.get_cmdline_user_args().has("--bay")
-	_hull_pass = OS.get_cmdline_user_args().has("--hull")
+	_hull_pass = OS.get_cmdline_user_args().has("--hull") or OS.get_cmdline_user_args().has("--exterior")
+	_interior = OS.get_cmdline_user_args().has("--interior")
 	if _film:
 		var camera := _camera()
 		if camera:
@@ -110,6 +112,9 @@ func _process(delta: float) -> void:
 		return
 	if _bay:
 		_play_bay(cabin, walker, delta)
+		return
+	if _interior:
+		_play_interior(cabin, walker, delta)
 		return
 	walker.locked = false
 	if walker.eye:
@@ -194,23 +199,62 @@ func _play_bay(cabin, walker, delta: float) -> void:
 		get_tree().quit()
 
 
+func _play_interior(cabin, walker, delta: float) -> void:
+	walker.locked = true
+	if walker.eye:
+		walker.eye.current = true
+	if _time < 11.0:
+		_glide_keys(cabin, walker, delta, _INTERIOR_BAY, _time)
+	else:
+		_glide_keys(cabin, walker, delta, _INTERIOR_PIT, _time - 11.0)
+	if _time >= 6.0 and not _bay_opened:
+		_bay_opened = true
+		cabin.pulse_bay()
+	if _time >= 25.0:
+		get_tree().quit()
+
+
+const _INTERIOR_BAY := [
+	[0.0, 0.0, -1.25, PI, -0.06],
+	[4.2, 0.06, -0.42, PI, 0.0],
+	[8.5, 0.1, -0.34, PI, 0.04],
+	[11.0, 0.0, -0.7, PI, -0.02],
+]
+const _INTERIOR_PIT := [
+	[0.0, 0.0, -0.7, PI, -0.02],
+	[4.0, 0.0, -1.6, 0.2, -0.08],
+	[8.0, 0.0, -2.2, 0.0, -0.38],
+	[12.0, -0.08, -2.28, 0.35, -0.22],
+]
+
+
 func _play_hull() -> void:
 	var camera := _camera()
 	if camera == null:
 		return
 	camera.held = true
 	camera.current = true
-	var u := clampf(_time / 18.0, 0.0, 1.0)
-	var angle := lerpf(0.35, 2.35, u)
-	var radius := lerpf(12.0, 8.0, sin(u * PI))
-	var height := 1.1 + sin(u * PI) * 1.15
-	var forward: Vector3 = -_ship.global_basis.z
-	var right: Vector3 = _ship.global_basis.x
-	var offset: Vector3 = (-forward * cos(angle) + right * sin(angle)) * radius + Vector3.UP * height
+	var u := clampf(_time / 20.0, 0.0, 1.0)
+	var angle := lerpf(-0.45, 0.7, u)
+	var radius := lerpf(26.0, 16.0, sin(u * PI))
+	var height := 2.4 + sin(u * PI) * 3.0
+	var planet: Vector3 = _ship.get("planet_position")
+	var to_planet: Vector3 = planet - _ship.global_position
+	if to_planet.length_squared() > 0.01:
+		to_planet = to_planet.normalized()
+	else:
+		to_planet = -_ship.global_basis.z
+	var side: Vector3 = to_planet.cross(Vector3.UP)
+	if side.length_squared() < 0.001:
+		side = Vector3.RIGHT
+	else:
+		side = side.normalized()
+	var offset: Vector3 = (-to_planet * cos(angle) + side * sin(angle)) * radius + Vector3.UP * height
 	camera.global_position = _ship.global_position + offset
-	camera.look_at(_ship.global_position + Vector3.UP * 0.2, Vector3.UP)
-	camera.fov = 34.0
-	if _time >= 18.0:
+	var aim: Vector3 = _ship.global_position + to_planet * 10.0 + Vector3.UP * 0.3
+	camera.look_at(aim, Vector3.UP)
+	camera.fov = 46.0
+	if _time >= 20.0:
 		get_tree().quit()
 
 

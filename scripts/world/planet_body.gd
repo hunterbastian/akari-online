@@ -50,9 +50,14 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 	surface.material_override = _surface_mat
 	_spin.add_child(surface)
 
-	var atmo_color := _cool(Color.html(data.atmosphere), 0.74)
-	_atmo_mat = _add_atmosphere(radius * 1.045, atmo_color, sun, 2.6, 2.4, 1.25)
-	_add_atmosphere(radius * 1.16, atmo_color, sun, 2.2, 1.4, 0.5)
+	var atmo_color := _cool(Color.html(data.atmosphere), 0.55)
+	var detailed := _PostProfile.detailed()
+	var shell_seg := 40 if detailed else 24
+	if detailed:
+		_atmo_mat = _add_atmosphere(radius * 1.025, atmo_color, sun, 3.6, 2.6, 0.85, shell_seg)
+		_add_atmosphere(radius * 1.18, atmo_color, sun, 2.1, 1.6, 0.32, 28)
+	else:
+		_atmo_mat = _add_atmosphere(radius * 1.06, atmo_color, sun, 2.4, 1.8, 0.55, shell_seg)
 
 	if data.rings:
 		var rings := Node3D.new()
@@ -91,14 +96,15 @@ func _cool(color: Color, toward: float) -> Color:
 	return color.lerp(Color(0.5, 0.74, 0.88), toward)
 
 
-func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: float, falloff: float, strength: float) -> ShaderMaterial:
+func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: float, falloff: float, strength: float, segments: int) -> ShaderMaterial:
 	var shell := SphereMesh.new()
 	shell.radius = shell_radius
 	shell.height = shell_radius * 2.0
-	shell.radial_segments = 64
-	shell.rings = 40
+	shell.radial_segments = segments
+	shell.rings = maxi(segments / 2, 12)
 	var atmo := MeshInstance3D.new()
 	atmo.name = "Atmosphere"
+	atmo.add_to_group("planet_atmo")
 	atmo.mesh = shell
 	var material := ShaderMaterial.new()
 	material.shader = _ATMO_SHADER
