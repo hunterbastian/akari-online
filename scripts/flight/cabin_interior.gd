@@ -17,6 +17,8 @@ const _Edit := preload("res://scripts/flight/terminal_edit.gd")
 const BOOT_A := "AKARI 01"
 const BOOT_B := "AKARI 01\nCRT OK"
 const BOOT_C := "AKARI 01\nCRT OK\nLINK MINA"
+## Dev compare: --terminal-variant=A..E. A ledger, B cowl, C plinth, D facet, E hauler.
+const TERMINAL_VARIANT := "A"
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -193,9 +195,12 @@ func release_fixed_view() -> void:
 
 
 func snap_view(mode: String) -> void:
-	show_hotbar = mode != "seat"
+	show_hotbar = mode != "seat" and mode != "quarter"
 	if mode == "seat":
 		walker.snap(seat_point, seated_eye, -0.12, 0.0)
+	elif mode == "quarter":
+		# Off the aisle, so the terminal's right cheek and top read together.
+		walker.snap(_v(0.78, 0.0, -1.85), standing_eye, -0.38, 0.48)
 	elif mode == "wide":
 		walker.snap(_v(0.0, 0.0, 0.05), standing_eye, -0.16, 0.0)
 	elif mode == "locker" or mode == "storage":
@@ -458,32 +463,14 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	root.name = "BeigeTerminal"
 	add_child(root)
 	root.add_to_group("akari_hud")
-	# Chassis on the dash, then a deep tube that leans back toward the seat and the aisle.
-	_case_box(root, "Chassis", Vector3(0.88, 0.30, 0.56), Vector3(0.0, 0.17, -3.40), "plastic")
-	_case_box(root, "Deck", Vector3(0.76, 0.06, 0.24), Vector3(0.0, 0.22, -3.08), "plastic")
-	for i in 4:
-		var vx := -0.18 + float(i) * 0.12
-		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.33, -3.52), "bezel")
-	for i in 8:
-		var kx := -0.28 + float(i) * 0.08
-		_case_box(root, "Key%d" % i, Vector3(0.055, 0.04, 0.055), Vector3(kx, 0.27, -3.08), "key")
-	_case_box(root, "Space", Vector3(0.28, 0.032, 0.05), Vector3(0.0, 0.265, -2.98), "key")
-
 	var pivot := Node3D.new()
 	pivot.name = "TerminalPivot"
 	pivot.position = pos
 	pivot.rotation.x = 0.50
 	root.add_child(pivot)
-	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "plastic")
-	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
-	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "plastic")
-	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "plastic")
-	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "plastic")
-	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "plastic")
-	for i in 3:
-		_case_box(pivot, "SideVent%d" % i, Vector3(0.045, 0.028, 0.12), Vector3(0.455, 0.12 - float(i) * 0.08, -0.04), "bezel")
-	_case_box(pivot, "Badge", Vector3(0.18, 0.045, 0.025), Vector3(0.26, 0.30, 0.09), "badge")
-	_case_box(pivot, "Pip", Vector3(0.022, 0.022, 0.02), Vector3(0.33, 0.30, 0.105), "lamp")
+	var variant := _terminal_variant()
+	print("TERMINAL ", variant)
+	_dress_terminal(root, pivot, variant)
 
 	var viewport := SubViewport.new()
 	viewport.name = "TerminalView"
@@ -559,8 +546,172 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	pivot.add_child(mesh_instance)
 
 
-func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String) -> void:
+static func variant_letter(raw: String) -> String:
+	var letter := raw.strip_edges().to_upper()
+	if letter.length() == 1 and letter >= "A" and letter <= "E":
+		return letter
+	return "A"
+
+
+func _terminal_variant() -> String:
+	var args := OS.get_cmdline_user_args()
+	for arg in args:
+		var text := str(arg)
+		if text.begins_with("--terminal-variant="):
+			return variant_letter(text.trim_prefix("--terminal-variant="))
+	return variant_letter(TERMINAL_VARIANT)
+
+
+func _dress_terminal(root: Node3D, pivot: Node3D, kind: String) -> void:
+	# The glass transform stays put. Only the case around it changes.
+	match kind:
+		"B":
+			_case_b(root, pivot)
+		"C":
+			_case_c(root, pivot)
+		"D":
+			_case_d(root, pivot)
+		"E":
+			_case_e(root, pivot)
+		_:
+			_case_a(root, pivot)
+
+
+func _terminal_keys(root: Node3D, deck_kind: String, deck_pos: Vector3, deck_size: Vector3, worn_key: bool) -> void:
+	_case_box(root, "Deck", deck_size, deck_pos, deck_kind)
+	for i in 8:
+		var kx := -0.28 + float(i) * 0.08
+		var key_kind := "bezel" if worn_key and i == 6 else "key"
+		_case_box(root, "Key%d" % i, Vector3(0.055, 0.04, 0.055), Vector3(kx, deck_pos.y + 0.05, deck_pos.z), key_kind)
+	_case_box(root, "Space", Vector3(0.28, 0.032, 0.05), Vector3(0.0, deck_pos.y + 0.045, deck_pos.z + 0.10), "key")
+
+
+func _case_a(root: Node3D, pivot: Node3D) -> void:
+	# Golden Age workstation. Chamfered bone, one orange band, a stencil serial.
+	_case_box(root, "Chassis", Vector3(0.88, 0.30, 0.56), Vector3(0.0, 0.17, -3.40), "plastic")
+	_terminal_keys(root, "plastic", Vector3(0.0, 0.22, -3.08), Vector3(0.76, 0.06, 0.24), false)
+	_case_box(root, "Stripe", Vector3(0.84, 0.028, 0.03), Vector3(0.0, 0.29, -3.12), "accent")
+	_case_box(root, "Stencil", Vector3(0.16, 0.045, 0.02), Vector3(-0.28, 0.24, -3.11), "stencil")
+	for i in 4:
+		var vx := -0.18 + float(i) * 0.12
+		_case_box(root, "Vent%d" % i, Vector3(0.08, 0.025, 0.04), Vector3(vx, 0.33, -3.52), "bezel")
+	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "plastic")
+	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
+	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "plastic")
+	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "plastic")
+	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "plastic")
+	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "plastic")
+	_case_box(pivot, "ChamferL", Vector3(0.07, 0.50, 0.07), Vector3(-0.44, 0.02, 0.05), "plastic", Vector3(0.0, 0.78, 0.0))
+	_case_box(pivot, "ChamferR", Vector3(0.07, 0.50, 0.07), Vector3(0.44, 0.02, 0.05), "plastic", Vector3(0.0, -0.78, 0.0))
+	_case_box(pivot, "ChamferBrow", Vector3(0.78, 0.055, 0.055), Vector3(0.0, 0.35, 0.06), "plastic", Vector3(0.65, 0.0, 0.0))
+	_case_box(pivot, "Inset", Vector3(0.025, 0.18, 0.10), Vector3(-0.46, 0.04, -0.04), "warmgrey")
+	for i in 3:
+		_case_box(pivot, "SideVent%d" % i, Vector3(0.04, 0.026, 0.10), Vector3(0.46, 0.12 - float(i) * 0.08, -0.05), "bezel")
+	_bolts(pivot, "Brow", [Vector3(-0.36, 0.30, 0.08), Vector3(0.36, 0.30, 0.08), Vector3(-0.36, -0.22, 0.09), Vector3(0.36, -0.22, 0.09)])
+	_case_box(pivot, "Badge", Vector3(0.14, 0.04, 0.02), Vector3(0.28, 0.30, 0.09), "badge")
+	_case_box(pivot, "Pip", Vector3(0.02, 0.02, 0.018), Vector3(0.34, 0.30, 0.10), "lamp")
+
+
+func _case_b(root: Node3D, pivot: Node3D) -> void:
+	# Jumpship cowl. A faceted hood and two struts bolted to the dash.
+	_case_box(root, "Chassis", Vector3(1.02, 0.18, 0.50), Vector3(0.0, 0.12, -3.42), "plastic")
+	_terminal_keys(root, "plastic", Vector3(0.0, 0.20, -3.08), Vector3(0.72, 0.05, 0.22), false)
+	_case_box(root, "StrutL", Vector3(0.07, 0.58, 0.08), Vector3(-0.56, 0.40, -3.24), "steel", Vector3(0.0, 0.0, 0.28))
+	_case_box(root, "StrutR", Vector3(0.07, 0.58, 0.08), Vector3(0.56, 0.40, -3.24), "steel", Vector3(0.0, 0.0, -0.28))
+	_case_box(root, "FootL", Vector3(0.14, 0.03, 0.12), Vector3(-0.62, 0.20, -3.22), "steel")
+	_case_box(root, "FootR", Vector3(0.14, 0.03, 0.12), Vector3(0.62, 0.20, -3.22), "steel")
+	_bolts(root, "Foot", [Vector3(-0.66, 0.23, -3.18), Vector3(-0.58, 0.23, -3.26), Vector3(0.66, 0.23, -3.18), Vector3(0.58, 0.23, -3.26)])
+	_case_box(pivot, "Shell", Vector3(0.86, 0.62, 0.16), Vector3(0.0, -0.02, -0.14), "plastic")
+	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
+	_case_box(pivot, "BezelTop", Vector3(0.78, 0.06, 0.08), Vector3(0.0, 0.28, 0.02), "warmgrey")
+	_case_box(pivot, "BezelChin", Vector3(0.78, 0.08, 0.08), Vector3(0.0, -0.26, 0.02), "warmgrey")
+	_case_box(pivot, "BezelL", Vector3(0.06, 0.46, 0.08), Vector3(-0.38, 0.02, 0.02), "warmgrey")
+	_case_box(pivot, "BezelR", Vector3(0.06, 0.46, 0.08), Vector3(0.38, 0.02, 0.02), "warmgrey")
+	_case_box(pivot, "Hood", Vector3(1.06, 0.08, 0.26), Vector3(0.0, 0.40, 0.06), "plastic", Vector3(-0.22, 0.0, 0.0))
+	_case_box(pivot, "HoodLip", Vector3(1.08, 0.025, 0.03), Vector3(0.0, 0.36, 0.18), "accent")
+	_bolts(pivot, "Strut", [Vector3(-0.40, 0.16, 0.06), Vector3(0.40, 0.16, 0.06)])
+	_case_box(pivot, "Badge", Vector3(0.12, 0.035, 0.02), Vector3(-0.32, 0.40, 0.12), "badge")
+
+
+func _case_c(root: Node3D, pivot: Node3D) -> void:
+	# Tower terminal. Stepped plinth, cable loops, a hazard-striped tray.
+	_case_box(root, "Plinth", Vector3(1.16, 0.10, 0.72), Vector3(0.0, 0.06, -3.36), "warmgrey")
+	_case_box(root, "PlinthTop", Vector3(0.98, 0.12, 0.58), Vector3(0.0, 0.16, -3.40), "plastic")
+	_terminal_keys(root, "plastic", Vector3(0.0, 0.24, -3.02), Vector3(0.82, 0.05, 0.30), false)
+	_case_box(root, "TrayLip", Vector3(0.84, 0.032, 0.045), Vector3(0.0, 0.27, -2.86), "caution")
+	_cable(root, "CableL", Vector3(-0.58, 0.50, -3.30))
+	_cable(root, "CableR", Vector3(0.58, 0.48, -3.22))
+	_case_box(pivot, "Shell", Vector3(0.98, 0.72, 0.22), Vector3(0.0, -0.02, -0.14), "plastic")
+	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
+	_case_box(pivot, "BezelTop", Vector3(0.98, 0.10, 0.12), Vector3(0.0, 0.32, 0.02), "warmgrey")
+	_case_box(pivot, "BezelChin", Vector3(0.98, 0.14, 0.14), Vector3(0.0, -0.30, 0.03), "warmgrey")
+	_case_box(pivot, "BezelL", Vector3(0.12, 0.52, 0.12), Vector3(-0.43, 0.02, 0.02), "warmgrey")
+	_case_box(pivot, "BezelR", Vector3(0.12, 0.52, 0.12), Vector3(0.43, 0.02, 0.02), "warmgrey")
+	_case_box(pivot, "Keeper", Vector3(0.10, 0.04, 0.02), Vector3(0.32, -0.30, 0.10), "accent")
+	_bolts(pivot, "Plinth", [Vector3(-0.42, 0.32, 0.09), Vector3(0.42, 0.32, 0.09)])
+	_case_box(pivot, "Badge", Vector3(0.14, 0.04, 0.02), Vector3(-0.30, 0.32, 0.09), "badge")
+
+
+func _case_d(root: Node3D, pivot: Node3D) -> void:
+	# Ghost shell. Faceted bone plates around the same green tube.
+	_case_box(root, "Chassis", Vector3(0.84, 0.24, 0.50), Vector3(0.0, 0.14, -3.40), "plastic")
+	_terminal_keys(root, "plastic", Vector3(0.0, 0.22, -3.08), Vector3(0.70, 0.05, 0.22), false)
+	_case_box(pivot, "Core", Vector3(0.80, 0.58, 0.10), Vector3(0.0, 0.02, -0.06), "bezel")
+	_case_box(pivot, "CrownL", Vector3(0.42, 0.07, 0.08), Vector3(-0.18, 0.34, 0.05), "plastic", Vector3(0.15, 0.0, 0.28))
+	_case_box(pivot, "CrownR", Vector3(0.42, 0.07, 0.08), Vector3(0.18, 0.34, 0.05), "plastic", Vector3(0.15, 0.0, -0.28))
+	_case_box(pivot, "CheekL", Vector3(0.09, 0.40, 0.14), Vector3(-0.46, 0.04, 0.06), "plastic", Vector3(0.0, 0.55, 0.0))
+	_case_box(pivot, "CheekR", Vector3(0.11, 0.32, 0.14), Vector3(0.48, 0.00, 0.05), "warmgrey", Vector3(0.0, -0.62, 0.16))
+	_case_box(pivot, "JawL", Vector3(0.38, 0.07, 0.08), Vector3(-0.16, -0.30, 0.05), "plastic", Vector3(-0.1, 0.0, -0.2))
+	_case_box(pivot, "JawR", Vector3(0.34, 0.08, 0.08), Vector3(0.18, -0.31, 0.05), "plastic", Vector3(-0.15, 0.15, 0.16))
+	_case_box(pivot, "Brow", Vector3(0.22, 0.045, 0.06), Vector3(0.0, 0.30, 0.07), "warmgrey")
+	_case_box(pivot, "Tick", Vector3(0.06, 0.02, 0.02), Vector3(0.30, 0.36, 0.08), "accent")
+	_case_box(pivot, "Badge", Vector3(0.10, 0.032, 0.018), Vector3(-0.28, -0.30, 0.09), "badge")
+
+
+func _case_e(root: Node3D, pivot: Node3D) -> void:
+	# Field rig. Scuffed bone, a handle, latches, and a short antenna.
+	_case_box(root, "Chassis", Vector3(0.90, 0.28, 0.54), Vector3(0.0, 0.16, -3.40), "worn")
+	_terminal_keys(root, "worn", Vector3(0.0, 0.22, -3.08), Vector3(0.76, 0.06, 0.24), true)
+	_case_box(root, "Tape", Vector3(0.16, 0.02, 0.10), Vector3(-0.26, 0.26, -3.06), "caution", Vector3(0.0, 0.5, 0.0))
+	_case_box(root, "Mast", Vector3(0.03, 0.32, 0.03), Vector3(-0.50, 0.52, -3.50), "steel")
+	_case_box(root, "MastTip", Vector3(0.055, 0.04, 0.055), Vector3(-0.50, 0.70, -3.50), "accent")
+	_case_box(pivot, "Shell", Vector3(0.90, 0.66, 0.18), Vector3(0.0, -0.02, -0.12), "worn")
+	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
+	_case_box(pivot, "BezelTop", Vector3(0.90, 0.08, 0.10), Vector3(0.0, 0.30, 0.02), "worn")
+	_case_box(pivot, "BezelChin", Vector3(0.90, 0.12, 0.12), Vector3(0.0, -0.28, 0.03), "worn")
+	_case_box(pivot, "BezelL", Vector3(0.09, 0.52, 0.10), Vector3(-0.405, 0.02, 0.02), "worn")
+	_case_box(pivot, "BezelR", Vector3(0.09, 0.52, 0.10), Vector3(0.405, 0.02, 0.02), "worn")
+	_case_box(pivot, "Dent", Vector3(0.18, 0.07, 0.025), Vector3(-0.18, -0.26, 0.09), "bezel")
+	_case_box(pivot, "PostL", Vector3(0.04, 0.08, 0.04), Vector3(-0.22, 0.38, -0.02), "steel")
+	_case_box(pivot, "PostR", Vector3(0.04, 0.08, 0.04), Vector3(0.22, 0.38, -0.02), "steel")
+	_case_box(pivot, "Handle", Vector3(0.50, 0.045, 0.045), Vector3(0.0, 0.42, -0.02), "steel")
+	_case_box(pivot, "LatchA", Vector3(0.035, 0.12, 0.05), Vector3(0.47, 0.10, 0.02), "steel")
+	_case_box(pivot, "LatchB", Vector3(0.035, 0.12, 0.05), Vector3(0.47, -0.10, 0.02), "steel")
+	_case_box(pivot, "KeeperA", Vector3(0.02, 0.03, 0.02), Vector3(0.49, 0.10, 0.05), "accent")
+	_case_box(pivot, "KeeperB", Vector3(0.02, 0.03, 0.02), Vector3(0.49, -0.10, 0.05), "accent")
+	_case_box(pivot, "Badge", Vector3(0.12, 0.035, 0.02), Vector3(0.26, 0.30, 0.09), "badge")
+
+
+func _cable(root: Node3D, prefix: String, origin: Vector3) -> void:
+	var side := 1.0 if origin.x > 0.0 else -1.0
+	for i in 4:
+		var sag := Vector3(side * 0.045 * float(i), -0.09 * float(i), 0.05 * float(i))
+		_case_box(root, "%s%d" % [prefix, i], Vector3(0.05, 0.055, 0.10), origin + sag, "cable")
+
+
+func _bolts(parent: Node3D, prefix: String, spots: Array) -> void:
+	for i in spots.size():
+		var spot: Vector3 = spots[i]
+		_case_box(parent, "%sBolt%d" % [prefix, i], Vector3(0.028, 0.028, 0.028), spot, "steel")
+
+
+func _case_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, kind: String, rot: Vector3 = Vector3.ZERO) -> void:
 	_Blocks._local_box(parent, node_name, size * _scale, pos * _scale, _Blocks.material(kind), INTERIOR_LAYER, true)
+	if rot == Vector3.ZERO:
+		return
+	var node := parent.get_node(node_name) as MeshInstance3D
+	if node:
+		node.rotation = rot
 
 
 func _build_walker() -> void:

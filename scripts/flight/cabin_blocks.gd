@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Interior block library. Every module is a hard-edged box on a 0.5m grid.
 ## Each face gets its own 16x16 (nearest) so panel borders land on the block edge.
-## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel, plastic, key.
+## Kinds: panel, vent, hazard, grate, ceiling, locker, crate, bunk, bezel, plastic, key, accent, caution, worn, stencil, cable, warmgrey.
 
 const _SHADE := preload("res://assets/shaders/cabin_block.gdshader")
 const _SHADOW := preload("res://assets/shaders/cabin_shadow.gdshader")
@@ -72,6 +72,18 @@ static func texture(kind: String) -> Texture2D:
 			_paint_key(image)
 		"badge":
 			_paint_badge(image)
+		"accent":
+			_paint_accent(image)
+		"caution":
+			_paint_caution(image)
+		"worn":
+			_paint_worn(image)
+		"stencil":
+			_paint_stencil(image)
+		"cable":
+			_paint_cable(image)
+		"warmgrey":
+			_paint_warmgrey(image)
 		_:
 			_paint_panel(image)
 	var image_texture := ImageTexture.create_from_image(image)
@@ -625,6 +637,70 @@ static func _paint_badge(image: Image) -> void:
 	_rect(image, 1, 6, 10, 2, Color("d8c49a"))
 	_rect(image, 1, 10, 6, 2, Color("c4a878"))
 	_px(image, 13, 8, Color("7dff9a"))
+
+
+static func _paint_accent(image: Image) -> void:
+	_fill(image, Color("d4652f"))
+	_rect(image, 0, 0, 16, 2, Color("f0a060"))
+	_rect(image, 0, 14, 16, 2, Color("8a3a18"))
+	_px(image, 3, 6, Color("e88848"))
+	_px(image, 11, 9, Color("a84820"))
+
+
+static func _paint_caution(image: Image) -> void:
+	for y in 16:
+		for x in 16:
+			var stripe := int((x + y) / 4) % 2 == 0
+			_px(image, x, y, Color("e07828") if stripe else Color("241c16"))
+	_rect(image, 0, 0, 16, 1, Color("2a2018"))
+	_rect(image, 0, 15, 16, 1, Color("2a2018"))
+
+
+static func _paint_worn(image: Image) -> void:
+	_fill(image, Color("cbb892"))
+	_rect(image, 0, 0, 16, 2, Color("8a7050"))
+	_rect(image, 0, 14, 16, 2, Color("6a5438"))
+	_rect(image, 0, 0, 2, 16, Color("a08860"))
+	_rect(image, 14, 0, 2, 16, Color("7a6244"))
+	_rect(image, 4, 6, 7, 1, Color("6e5a40"))
+	_px(image, 2, 4, Color("4a3c2c"))
+	_px(image, 9, 11, Color("3e3428"))
+	_px(image, 12, 5, Color("e4d4b4"))
+	_px(image, 6, 13, Color("5a4834"))
+
+
+static func _paint_stencil(image: Image) -> void:
+	_fill(image, Color("e6d4b0"))
+	_rect(image, 0, 0, 16, 1, Color("8a7048"))
+	_rect(image, 0, 15, 16, 1, Color("8a7048"))
+	_rect(image, 2, 4, 2, 3, Color("2c241c"))
+	_rect(image, 5, 4, 1, 3, Color("2c241c"))
+	_rect(image, 7, 4, 2, 3, Color("2c241c"))
+	_rect(image, 10, 4, 1, 3, Color("2c241c"))
+	_rect(image, 12, 4, 2, 3, Color("2c241c"))
+	_rect(image, 2, 10, 12, 1, Color("2c241c"))
+	_px(image, 3, 12, Color("2c241c"))
+	_px(image, 6, 12, Color("2c241c"))
+	_px(image, 9, 12, Color("2c241c"))
+	_px(image, 13, 12, Color("2c241c"))
+
+
+static func _paint_cable(image: Image) -> void:
+	_fill(image, Color("2a261f"))
+	_rect(image, 0, 6, 16, 3, Color("5a5044"))
+	_rect(image, 0, 7, 16, 1, Color("8a7d6c"))
+	_px(image, 4, 2, Color("3a342c"))
+	_px(image, 11, 13, Color("1a1612"))
+
+
+static func _paint_warmgrey(image: Image) -> void:
+	_fill(image, Color("c2b6a4"))
+	_rect(image, 0, 0, 16, 1, Color("8e8474"))
+	_rect(image, 0, 15, 16, 1, Color("6e665c"))
+	_rect(image, 0, 0, 1, 16, Color("d4c8b6"))
+	_rect(image, 15, 0, 1, 16, Color("7a7268"))
+	_px(image, 5, 5, Color("a89884"))
+	_px(image, 11, 10, Color("ddd2c2"))
 
 
 static func _paint_lamp(image: Image) -> void:

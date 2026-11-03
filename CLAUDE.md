@@ -45,6 +45,7 @@ The flight world is drawn in a low-res `SubViewport` (`handle_input_locally = fa
 - `--readout-demo` beige terminal numbers
 - `--terminal-demo` typing on the beige terminal
 - `--approach-demo` walk up the aisle to the terminal
+- `--terminal-variant=A` through `E` swaps the beige case: A ledger, B cowl, C plinth, D facet, E hauler. `--at quarter` is the 3/4 aisle view.
 - `--log-demo` `--time-demo`
 - `--orbit-demo` and `--orbit-demo out`
 - `--save-demo write` then `--save-demo read`
@@ -56,7 +57,7 @@ The ship is home. You personalize it and it grows with you.
 
 - Exterior: hand-made glossy white Destiny 1-inspired Blender jumpship, `assets/ships/jumpship.glb`, no Draco, dithered.
 - Interior: blocky warehouse cabin and a Star Trek-style shuttle bay door.
-- Ship computer: one chunky beige terminal on the dash (late-70s plastic, deep bezel, curved green phosphor). It shows the flight readout, autopilot, hull and bay lines, the prompt, and the NEW LOG flash. Boot, key clicks, history, and tab live on that glass. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
+- Ship computer: one chunky beige terminal on the dash (late-70s plastic, deep bezel, curved green phosphor), with five Destiny-leaning cases behind `--terminal-variant`. It shows the flight readout, autopilot, hull and bay lines, the prompt, and the NEW LOG flash. Boot, key clicks, history, and tab live on that glass. No floating HUD glass. The only overlay is the small green pixel speed line and the E hint.
 - Look: flat 2012-Minecraft lighting (per-face shading, soft corner AO, contact shadows) plus a little shader polish. Pixelated and dithered. Destiny filmic grade: teal shadows, warm highlights, lifted blacks, bloom, film grain.
 - Mina: brutalist megastructures are the style reference. City work is paused.
 
@@ -68,8 +69,8 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 
 - worst frame 75.0 ms (limit 140)
 - 205 draw calls (limit 500)
-- 406 nodes (limit 1200)
-- pack 1,273,531 bytes (limit 1.8 MB)
+- 416 nodes (limit 1200)
+- pack 1,285,527 bytes (limit 1.8 MB)
 
 ## Architecture
 

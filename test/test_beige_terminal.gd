@@ -34,4 +34,14 @@ func _run() -> int:
 	if not shader.contains("filter_linear"):
 		push_error("the phosphor should sample linear so angled text stays readable")
 		return 1
+	for letter in ["A", "B", "C", "D", "E"]:
+		if not cabin.contains("_case_%s" % letter.to_lower()):
+			push_error("missing terminal variant %s" % letter)
+			return 1
+	if not cabin.contains("--terminal-variant="):
+		push_error("the variant needs a dev flag")
+		return 1
+	if not cabin.contains("letter >= \"A\" and letter <= \"E\""):
+		push_error("variant letters should stay inside A through E")
+		return 1
 	return 0
