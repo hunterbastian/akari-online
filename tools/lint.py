@@ -40,6 +40,7 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("detail-ranges", "scripts/data/detail_ranges.gd", "MOBILE_NEAR_END", "phone detail distances are tighter than desktop"),
 ]
 
 

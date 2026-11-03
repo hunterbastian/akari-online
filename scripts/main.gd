@@ -37,6 +37,7 @@ var _time_demo := false
 var _orbit_demo := ""
 var _save_mode := ""
 var _save_demo := false
+var _lod_demo := false
 var _stand_test := false
 
 
@@ -72,12 +73,12 @@ func _ready() -> void:
 	var ship := Node3D.new()
 	ship.name = "Ship"
 	ship.set_script(load("res://scripts/flight/ship_controller.gd"))
-	ship.set_meta("flight_active", _shot or _tour or not _cabin_view.is_empty() or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty())
+	ship.set_meta("flight_active", _shot or _tour or _lod_demo or not _cabin_view.is_empty() or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty())
 	_world.add_child(ship)
 	ship.planet_position = planet.position
 	ship.planet_radius = planet.radius
 	_ship = ship
-	if _shot or _tour or not _cabin_view.is_empty() or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty():
+	if _shot or _tour or _lod_demo or not _cabin_view.is_empty() or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty():
 		_place_for_shot(ship, planet)
 	else:
 		ship.global_position = chart.spawn
@@ -87,7 +88,7 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
-	camera.set_meta("title_hold", not _shot and not _tour and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty())
+	camera.set_meta("title_hold", not _shot and not _tour and not _lod_demo and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty())
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
@@ -99,7 +100,7 @@ func _ready() -> void:
 		_frame_side(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
 		_frame_seam(ship, camera)
-	elif not _shot and not _tour and not _stand_test and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
+	elif not _shot and not _tour and not _stand_test and not _lod_demo and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -194,6 +195,11 @@ func _ready() -> void:
 		orbit_demo.name = "OrbitDemo"
 		add_child(orbit_demo)
 		orbit_demo.setup(ship, _orbit_demo == "out")
+	if _lod_demo:
+		var lod_demo = load("res://scripts/flight/lod_demo.gd").new()
+		lod_demo.name = "LodDemo"
+		add_child(lod_demo)
+		lod_demo.setup(ship)
 	var keeper = load("res://scripts/flight/ship_keeper.gd").new()
 	keeper.name = "ShipKeeper"
 	add_child(keeper)
@@ -404,7 +410,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or not _orbit_demo.is_empty() or _save_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if _lod_demo or not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or _time_demo or not _orbit_demo.is_empty() or _save_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -697,7 +703,7 @@ func _input(event: InputEvent) -> void:
 
 func _arm_keeper(keeper) -> void:
 	var args := OS.get_cmdline_user_args()
-	var tools := _shot or _tour or _walk_demo or _readout_demo or _log_demo or _time_demo or _stand_test
+	var tools := _shot or _tour or _walk_demo or _readout_demo or _log_demo or _time_demo or _lod_demo or _stand_test
 	tools = tools or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty()
 	tools = tools or not _cli_shot.is_empty() or args.has("--bench") or args.has("--state-test") or args.has("--stand-test")
 	tools = tools or (not _cabin_view.is_empty() and not _save_demo)
@@ -761,6 +767,9 @@ func _read_cli() -> void:
 				i += 2
 			else:
 				i += 1
+		elif arg == "--lod-demo":
+			_lod_demo = true
+			i += 1
 		elif arg == "--save-demo":
 			_save_mode = "write"
 			_save_demo = true

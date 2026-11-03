@@ -7,6 +7,7 @@ const _PLANET_SHADER := preload("res://assets/shaders/planet.gdshader")
 const _ATMO_SHADER := preload("res://assets/shaders/atmosphere.gdshader")
 const _RING_SHADER := preload("res://assets/shaders/ring.gdshader")
 const _PostProfile := preload("res://scripts/data/post_profile.gd")
+const _Ranges := preload("res://scripts/data/detail_ranges.gd")
 
 var planet: Dictionary = {}
 var surface: MeshInstance3D
@@ -26,15 +27,6 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 	_spin.name = "Spin"
 	add_child(_spin)
 
-	var sphere := SphereMesh.new()
-	sphere.radius = radius
-	sphere.height = radius * 2.0
-	sphere.radial_segments = 64
-	sphere.rings = 48
-
-	surface = MeshInstance3D.new()
-	surface.name = "Surface"
-	surface.mesh = sphere
 	_surface_mat = ShaderMaterial.new()
 	_surface_mat.shader = _PLANET_SHADER
 	_surface_mat.set_shader_parameter("u_center", data.position)
@@ -47,17 +39,42 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 	_surface_mat.set_shader_parameter("u_seed", float(data.seed))
 	_surface_mat.set_shader_parameter("u_biome", Universe.biome_index(data.biome))
 	_surface_mat.set_shader_parameter("u_time", 0.0)
-	surface.material_override = _surface_mat
-	_spin.add_child(surface)
+	_surface_mat.set_shader_parameter("u_simple", 0.0)
+	var phone := _Ranges.mobile()
+	var near_d := _Ranges.near_end(phone)
+	var mid_d := _Ranges.mid_end(phone)
+	var band := _Ranges.fade(phone)
+	var near_seg := 40 if phone else 64
+	var near_rings := 28 if phone else 48
+	surface = _add_surface("Surface", radius, near_seg, near_rings, _surface_mat)
+	if _Ranges.enabled():
+		_Ranges.show_near(surface, near_d, band)
+		var mid_mat := _surface_mat.duplicate() as ShaderMaterial
+		mid_mat.set_shader_parameter("u_simple", 1.0)
+		var mid := _add_surface("SurfaceMid", radius, 24 if phone else 32, 16 if phone else 22, mid_mat)
+		_Ranges.show_mid(mid, near_d, mid_d, band)
+		var far := _add_surface("SurfaceFar", radius, 12, 8, mid_mat)
+		_Ranges.show_far(far, mid_d, band)
 
 	var atmo_color := _cool(Color.html(data.atmosphere), 0.55)
 	var detailed := _PostProfile.detailed()
-	var shell_seg := 40 if detailed else 24
-	if detailed:
-		_atmo_mat = _add_atmosphere(radius * 1.025, atmo_color, sun, 3.6, 2.6, 0.85, shell_seg)
-		_add_atmosphere(radius * 1.18, atmo_color, sun, 2.1, 1.6, 0.32, 28)
+	var shell_seg := 28 if phone else (40 if detailed else 24)
+	if detailed and not phone:
+		var inner := _add_atmosphere(radius * 1.025, atmo_color, sun, 3.6, 2.6, 0.85, shell_seg)
+		var haze := _add_atmosphere(radius * 1.18, atmo_color, sun, 2.1, 1.6, 0.32, 28)
+		if _Ranges.enabled():
+			_Ranges.show_near(inner, near_d, band)
+			_Ranges.cull_after(haze, near_d, band)
+			var far_inner := _add_atmosphere(radius * 1.04, atmo_color, sun, 2.2, 1.7, 0.4, 16)
+			var far_haze := _add_atmosphere(radius * 1.16, atmo_color, sun, 1.6, 1.3, 0.22, 12)
+			_Ranges.show_far(far_inner, near_d, band)
+			_Ranges.show_far(far_haze, near_d, band)
 	else:
-		_atmo_mat = _add_atmosphere(radius * 1.06, atmo_color, sun, 2.4, 1.8, 0.55, shell_seg)
+		var inner := _add_atmosphere(radius * 1.06, atmo_color, sun, 2.4, 1.8, 0.55, shell_seg)
+		if _Ranges.enabled():
+			_Ranges.show_near(inner, mid_d, band)
+			var far_atmo := _add_atmosphere(radius * 1.05, atmo_color, sun, 1.8, 1.4, 0.35, 12)
+			_Ranges.show_far(far_atmo, mid_d, band)
 
 	if data.rings:
 		var rings := Node3D.new()
@@ -69,6 +86,8 @@ func setup(data: Dictionary, sun_dir: Vector3) -> void:
 		var band_color := _cool(Color.html(colors[2]), 0.7)
 		_add_ring(rings, radius * 1.42, radius * 1.62, ring_color, 0.55, data.position, radius, sun)
 		_add_ring(rings, radius * 1.72, radius * 2.22, band_color, 0.28, data.position, radius, sun)
+		if _Ranges.enabled() and rings.get_child_count() > 1:
+			_Ranges.cull_after(rings.get_child(1), mid_d, band)
 
 	var moons: Array = data.get("moons", [{"kind": "primary", "radius": 0.16, "color": data.moon, "roughness": 0.92, "craters": false}])
 	var primary := _moon_offset(data)
@@ -96,12 +115,27 @@ func _cool(color: Color, toward: float) -> Color:
 	return color.lerp(Color(0.5, 0.74, 0.88), toward)
 
 
-func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: float, falloff: float, strength: float, segments: int) -> ShaderMaterial:
+func _add_surface(surface_name: String, radius: float, radial: int, rings: int, material: ShaderMaterial) -> MeshInstance3D:
+	var sphere := SphereMesh.new()
+	sphere.radius = radius
+	sphere.height = radius * 2.0
+	sphere.radial_segments = radial
+	sphere.rings = rings
+	var body := MeshInstance3D.new()
+	body.name = surface_name
+	body.mesh = sphere
+	body.material_override = material
+	body.extra_cull_margin = 0.0
+	_spin.add_child(body)
+	return body
+
+
+func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: float, falloff: float, strength: float, segments: int) -> MeshInstance3D:
 	var shell := SphereMesh.new()
 	shell.radius = shell_radius
 	shell.height = shell_radius * 2.0
 	shell.radial_segments = segments
-	shell.rings = maxi(segments / 2, 12)
+	shell.rings = maxi(segments / 2, 8)
 	var atmo := MeshInstance3D.new()
 	atmo.name = "Atmosphere"
 	atmo.add_to_group("planet_atmo")
@@ -115,8 +149,11 @@ func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: flo
 	material.set_shader_parameter("u_strength", strength)
 	atmo.material_override = material
 	atmo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	atmo.extra_cull_margin = 0.0
 	add_child(atmo)
-	return material
+	if _atmo_mat == null:
+		_atmo_mat = material
+	return atmo
 
 
 func _add_ring(parent: Node3D, inner: float, outer: float, color: Color, alpha: float, center: Vector3, planet_radius: float, sun: Vector3) -> void:
@@ -182,7 +219,27 @@ func _add_moon(moon_name: String, spec: Dictionary, offset: Vector3, planet_radi
 	moon.material_override = moon_mat
 	moon.position = offset
 	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	moon.extra_cull_margin = 0.0
 	add_child(moon)
+	if _Ranges.enabled():
+		var phone := _Ranges.mobile()
+		var reach := _Ranges.moon_near(phone)
+		var band := _Ranges.fade(phone)
+		_Ranges.show_near(moon, reach, band)
+		var far := MeshInstance3D.new()
+		far.name = moon_name + "Far"
+		var low := SphereMesh.new()
+		low.radius = moon_radius
+		low.height = moon_radius * 2.0
+		low.radial_segments = 8
+		low.rings = 6
+		far.mesh = low
+		far.material_override = moon_mat
+		far.position = offset
+		far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		far.extra_cull_margin = 0.0
+		add_child(far)
+		_Ranges.show_far(far, reach, band)
 
 
 func _crater_texture() -> NoiseTexture2D:

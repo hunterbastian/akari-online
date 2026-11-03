@@ -14,6 +14,7 @@ uniform vec3 u_atmo : source_color = vec3(0.9, 0.7, 0.6);
 uniform float u_seed = 0.5;
 uniform float u_time = 0.0;
 uniform float u_biome = 3.0;
+uniform float u_simple = 0.0;
 
 float hash13(vec3 p3) {
 	p3 = fract(p3 * 0.1031);
@@ -156,9 +157,13 @@ void fragment() {
 	color += vec3(1.0, 0.97, 0.92) * glint * spec_mask * smoothstep(-0.02, 0.22, ndl);
 
 	float band = sin(nrm.y * 2.4 + u_seed * 1.4 + shape * 1.6 + u_time * 0.012);
-	float cn = vnoise(nrm * 1.8 + vec3(u_time * 0.01, u_seed, 0.4));
 	float cloud = smoothstep(0.18, 0.88, band * 0.5 + 0.5);
-	cloud = clamp(cloud * 0.7 + smoothstep(0.42, 0.8, cn) * 0.55, 0.0, 1.0);
+	if (u_simple < 0.5) {
+		float cn = vnoise(nrm * 1.8 + vec3(u_time * 0.01, u_seed, 0.4));
+		cloud = clamp(cloud * 0.7 + smoothstep(0.42, 0.8, cn) * 0.55, 0.0, 1.0);
+	} else {
+		cloud *= 0.35;
+	}
 	vec3 cloud_col = mix(vec3(0.78, 0.86, 0.92), vec3(0.9, 0.94, 0.97), 0.55) * 0.68;
 	float cloud_vis = mix(0.03, 1.0, smoothstep(-0.03, 0.3, ndl_geo));
 	color = mix(color, cloud_col * mix(0.02, 1.0, day) * mix(0.7, 1.0, lambert), clamp(cloud * cloud_amt, 0.0, 0.42) * cloud_vis);

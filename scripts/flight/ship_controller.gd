@@ -49,6 +49,8 @@ var _trails: Array[MeshInstance3D] = []
 var _streaks: CPUParticles3D
 
 const _PostProfile := preload("res://scripts/data/post_profile.gd")
+const _Lod := preload("res://scripts/flight/mesh_lod.gd")
+const _Ranges := preload("res://scripts/data/detail_ranges.gd")
 const _Dress := preload("res://scripts/flight/jumpship_dress.gd")
 const _Cabin := preload("res://scripts/flight/cabin_interior.gd")
 const _FX := 2.5
@@ -98,6 +100,12 @@ func _ready() -> void:
 		_build_reflection_probe()
 	if _cabin.has_method("set_log"):
 		_cabin.set_log(_log)
+	if _model:
+		_Lod.apply(_model)
+	if _Ranges.enabled():
+		var reach := _Ranges.ship_detail(_Ranges.mobile())
+		for flame in _flames:
+			_Ranges.cull_after(flame, reach, _Ranges.SHIP_FADE)
 	_update_cabin()
 	var kick = load("res://scripts/flight/thrust_kick.gd").new()
 	kick.name = "ThrustKick"
