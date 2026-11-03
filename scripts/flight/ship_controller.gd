@@ -34,7 +34,11 @@ var _ship_cache: Dictionary = {}
 var _read_spd := -1
 var _read_range := -1
 var _read_thr := -1
+var _read_hdg := -1
 var _read_ap := ""
+var _read_wait := 0.0
+var _read_due := true
+var script_yaw := 0.0
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
 var _trails: Array[MeshInstance3D] = []
@@ -257,6 +261,10 @@ func _process(delta: float) -> void:
 		_mouse_dy = 0.0
 		return
 	var step := minf(delta, FlightProfile.DT_CAP)
+	_read_wait -= step
+	if _read_wait <= 0.0:
+		_read_wait = 0.1
+		_read_due = true
 	if walking:
 		_hold_course(step)
 		return
@@ -270,6 +278,8 @@ func _process(delta: float) -> void:
 		yaw -= FlightProfile.KEY_YAW_RATE * step
 	if _shot and not _closeup:
 		yaw += 0.05 * step
+	if script_yaw != 0.0:
+		yaw += script_yaw * step
 
 	rotate_object_local(Vector3.UP, yaw)
 	rotate_object_local(Vector3.RIGHT, pitch)
@@ -286,7 +296,7 @@ func _process(delta: float) -> void:
 	var forward := -global_basis.z
 	var throttle := 0.0
 	if script_throttle >= 0.0:
-		boosting = script_boost
+		boosting = script_boost or script_throttle > 0.85
 		throttle = script_throttle
 	else:
 		boosting = Input.is_action_pressed("boost")
@@ -356,16 +366,21 @@ func _update_cabin() -> void:
 	var autopilot := "STBY"
 	if walking and _cabin.walker != null and not _cabin.walker.locked:
 		autopilot = "HOLD"
-	if spd == _read_spd and mina_range == _read_range and thr == _read_thr and autopilot == _read_ap:
+	var yaw_deg := int(round(rad_to_deg(rotation.y)))
+	var heading := int(posmod(yaw_deg, 360))
+	if not _read_due:
+		return
+	_read_due = false
+	if spd == _read_spd and mina_range == _read_range and thr == _read_thr and heading == _read_hdg and autopilot == _read_ap:
 		return
 	_read_spd = spd
 	_read_range = mina_range
 	_read_thr = thr
+	_read_hdg = heading
 	_read_ap = autopilot
 	var hull := int(_ship_cache.stats.hull)
 	var pitch_deg := int(round(rad_to_deg(rotation.x)))
-	var yaw_deg := int(round(rad_to_deg(rotation.y)))
-	_cabin.update_readouts(float(spd), thrust, float(mina_range), str(_ship_cache.name), hull, autopilot, pitch_deg, yaw_deg)
+	_cabin.update_readouts(float(spd), thrust, float(mina_range), str(_ship_cache.name), hull, autopilot, pitch_deg, heading)
 
 
 func _keep_off_star() -> void:

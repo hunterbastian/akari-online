@@ -12,6 +12,7 @@ const _FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
 const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
 const _Inv := preload("res://scripts/flight/cabin_inventory.gd")
+const _Read := preload("res://scripts/flight/flight_readout.gd")
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -31,6 +32,7 @@ var _font: FontFile
 var _term_header: Label
 var _pitch_deg := 0
 var _yaw_deg := 0
+var _readout := "SPD 000\nALT 00000\nHDG 000\nTHR 0.00"
 var _command := ""
 var _cursor_on := true
 var _cursor_time := 0.0
@@ -150,18 +152,16 @@ func set_walking(on: bool) -> void:
 
 
 func update_readouts(speed: float, throttle: float, mina_range: float, ship_name: String, hull: int, autopilot: String, pitch_deg: int, yaw_deg: int) -> void:
-	var spd := "%03d" % int(round(speed))
 	var rng := "%05d" % int(round(maxf(mina_range, 0.0)))
-	var thr := "%04.2f" % clampf(throttle, 0.0, 1.0)
 	var name := ship_name.to_upper()
 	if name.length() > 12:
 		name = name.substr(0, 12)
-	var auto := "HOLD" if autopilot == "HOLD" else "STBY"
 	_pitch_deg = pitch_deg
 	_yaw_deg = yaw_deg
+	_readout = _Read.block(int(round(speed)), int(round(mina_range)), yaw_deg, throttle)
 	# No fuel tank yet. 1.00 is a full cell until that system exists.
 	_set_line("nav", "NAV\n%s\nHULL %d\nMINA %s\nBRG FWD" % [name, hull, rng])
-	_set_line("drive", "DRIVE\nSPD %s\nFUEL 1.00\nTHR %s\nAP %s" % [spd, thr, auto])
+	_set_line("drive", _readout)
 	var bay_state := "OPEN" if bay_is_open() else "SEALED"
 	_set_line("bay", "BAY\n%s\nCORE\n312" % bay_state)
 	_refresh_header()
@@ -277,7 +277,7 @@ func _refresh_prompt() -> void:
 func _refresh_header() -> void:
 	if _term_header == null:
 		return
-	_term_header.text = "ROUTE NONE\nPIT %+03d\nYAW %03d" % [_pitch_deg, _yaw_deg]
+	_term_header.text = _readout
 
 
 func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
@@ -307,13 +307,13 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	background.size = Vector2(view_size)
 	viewport.add_child(background)
 	var header := Label.new()
-	header.position = Vector2(28, 20)
-	header.size = Vector2(view_size.x - 48, 120)
+	header.position = Vector2(28, 16)
+	header.size = Vector2(view_size.x - 48, 200)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	header.add_theme_font_override("font", _font)
 	header.add_theme_font_size_override("font_size", 32 if view_size.y >= 300 else 24)
 	header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
-	header.text = "ROUTE NONE\nPIT +00\nYAW 000"
+	header.text = _readout
 	header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(header)
 	_term_header = header
@@ -329,8 +329,8 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	viewport.add_child(reply)
 	_term_reply = reply
 	var label := Label.new()
-	label.position = Vector2(28, view_size.y * 0.58)
-	label.size = Vector2(view_size.x - 48, 64)
+	label.position = Vector2(28, view_size.y * 0.72)
+	label.size = Vector2(view_size.x - 56, 80)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", _font)

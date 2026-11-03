@@ -34,6 +34,7 @@ RULES = [
     ("star-streaks", "scripts/flight/thrust_kick.gd", "travel_dir", "boost stretches stars along the direction of travel"),
     ("lights-command", "scripts/flight/cabin_terminal.gd", "LIGHTS", "HELP can list the LIGHTS command"),
     ("cabin-bob", "scripts/data/flight_profile.gd", "const BOB := 1.0", "head bob defaults on and can be scaled off"),
+    ("crt-readout", "scripts/flight/flight_readout.gd", "SPD", "the cockpit CRT prints speed, altitude, heading, and thrust"),
 ]
 
 
