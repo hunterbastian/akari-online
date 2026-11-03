@@ -32,6 +32,7 @@ var _lights_arg := ""
 var _lights_demo := ""
 var _walk_demo := false
 var _readout_demo := false
+var _log_demo := false
 
 
 func _ready() -> void:
@@ -160,6 +161,15 @@ func _ready() -> void:
 		readout_demo.name = "ReadoutDemo"
 		add_child(readout_demo)
 		readout_demo.setup(ship)
+	if _log_demo:
+		ship.hold_seat_flight()
+		var logged = ship.get("_cabin")
+		if logged:
+			logged.show_hotbar = false
+		var log_demo = load("res://scripts/flight/log_demo.gd").new()
+		log_demo.name = "LogDemo"
+		add_child(log_demo)
+		log_demo.setup(ship)
 	if not _cli_at.is_empty():
 		dev_teleport(_cli_at)
 	_apply_shot_inventory()
@@ -349,7 +359,7 @@ func _process(delta: float) -> void:
 			_shot_saved = true
 			_capture.call_deferred()
 		return
-	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
+	if not _kick_demo.is_empty() or not _lights_demo.is_empty() or _walk_demo or _readout_demo or _log_demo or (not _shot and _cabin_view.is_empty()) or _shot_saved:
 		return
 	_shot_time += delta
 	_shot_frames += 1
@@ -669,9 +679,12 @@ func _read_cli() -> void:
 		elif arg == "--readout-demo":
 			_readout_demo = true
 			i += 1
+		elif arg == "--log-demo":
+			_log_demo = true
+			i += 1
 		else:
 			i += 1
-	if _kick_demo == "inside":
+	if _kick_demo == "inside" or _log_demo:
 		_cabin_view = "seat"
 	if _lights_demo == "wide":
 		_cabin_view = "wide"
