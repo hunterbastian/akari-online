@@ -91,9 +91,9 @@ static func _dash(cabin, white: Material, dark: Material) -> void:
 	_Blocks.retile(cabin._box("DashLip", cabin._v(0.0, 0.02, -3.23), cabin._v(1.45, 0.035, 0.16), white, false), "panel")
 	_Blocks.retile(cabin._box("DashRail", cabin._v(0.0, 0.0, -3.65), cabin._v(1.55, 0.02, 0.03), dark, false), "bezel")
 	for i in 4:
-		var x := -0.62 + float(i) * 0.09
+		var x := -0.74 + float(i) * 0.07
 		var up := i % 2 == 0
-		_Blocks.retile(cabin._box("Switch%d" % i, cabin._v(x, 0.08, -3.19), cabin._v(0.035, 0.055, 0.03), dark, false), "bezel")
+		_Blocks.retile(cabin._box("Switch%d" % i, cabin._v(x, 0.08, -3.22), cabin._v(0.035, 0.055, 0.03), dark, false), "bezel")
 		var cap_y := 0.115 if up else 0.055
 		var cap := Color(0.35, 1.15, 0.5) if up else Color(0.2, 0.22, 0.2)
 		if i == 3:
@@ -106,12 +106,12 @@ static func _dash(cabin, white: Material, dark: Material) -> void:
 	]
 	for i in buttons.size():
 		var color: Color = buttons[i]
-		cabin._glow("Button%d" % i, cabin._v(0.45 + float(i) * 0.08, 0.07, -3.17), cabin._v(0.04, 0.025, 0.04), color)
-	_Blocks.retile(cabin._box("ThrottleBase", cabin._v(0.62, 0.04, -3.29), cabin._v(0.1, 0.04, 0.16), dark, false), "bezel")
-	var lever: MeshInstance3D = cabin._box("Throttle", cabin._v(0.62, 0.12, -3.25), cabin._v(0.03, 0.16, 0.03), dark, false)
+		cabin._glow("Button%d" % i, cabin._v(0.58 + float(i) * 0.08, 0.07, -3.17), cabin._v(0.04, 0.025, 0.04), color)
+	_Blocks.retile(cabin._box("ThrottleBase", cabin._v(0.70, 0.04, -3.32), cabin._v(0.1, 0.04, 0.16), dark, false), "bezel")
+	var lever: MeshInstance3D = cabin._box("Throttle", cabin._v(0.70, 0.12, -3.28), cabin._v(0.03, 0.16, 0.03), dark, false)
 	lever.rotation.x = -0.7
 	_Blocks.retile(lever, "bezel")
-	cabin._glow("ThrottleCap", cabin._v(0.62, 0.2, -3.17), cabin._v(0.04, 0.025, 0.04), Color(0.95, 0.85, 0.55))
+	cabin._glow("ThrottleCap", cabin._v(0.70, 0.2, -3.20), cabin._v(0.04, 0.025, 0.04), Color(0.95, 0.85, 0.55))
 
 
 static func _props(cabin, white: Material, dark: Material, cloth: Material) -> void:
@@ -128,7 +128,7 @@ static func _props(cabin, white: Material, dark: Material, cloth: Material) -> v
 	_Blocks.retile(cabin._box("ExtHead", cabin._v(1.55, 0.1, 0.15), cabin._v(0.06, 0.05, 0.06), dark, false), "bezel")
 	for i in 5:
 		var tape: Material = dark if i % 2 == 0 else white
-		var tape_mesh: MeshInstance3D = cabin._box("Tape%d" % i, cabin._v(0.36 + float(i) * 0.045, 0.08, -3.35), cabin._v(0.03, 0.07, 0.055), tape, false)
+		var tape_mesh: MeshInstance3D = cabin._box("Tape%d" % i, cabin._v(-0.74 + float(i) * 0.04, 0.08, -3.55), cabin._v(0.03, 0.07, 0.055), tape, false)
 		_Blocks.retile(tape_mesh, "bezel" if i % 2 == 0 else "panel")
 	_Blocks.retile(cabin._box("BunkStrap", cabin._v(1.28, -0.1, -1.85), cabin._v(0.5, 0.02, 0.04), cloth, false), "bezel")
 

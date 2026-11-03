@@ -38,6 +38,7 @@ var _read_range := -1
 var _read_thr := -1
 var _read_hdg := -1
 var _read_ap := ""
+var _read_bay := false
 var _read_wait := 0.0
 var _read_due := true
 var script_yaw := 0.0
@@ -471,13 +472,15 @@ func _update_cabin() -> void:
 	if not _read_due:
 		return
 	_read_due = false
-	if spd == _read_spd and mina_range == _read_range and thr == _read_thr and heading == _read_hdg and autopilot == _read_ap:
+	var bay_open: bool = _cabin.bay_is_open()
+	if spd == _read_spd and mina_range == _read_range and thr == _read_thr and heading == _read_hdg and autopilot == _read_ap and bay_open == _read_bay:
 		return
 	_read_spd = spd
 	_read_range = mina_range
 	_read_thr = thr
 	_read_hdg = heading
 	_read_ap = autopilot
+	_read_bay = bay_open
 	var hull := int(_ship_cache.stats.hull)
 	var pitch_deg := int(round(rad_to_deg(rotation.x)))
 	_cabin.update_readouts(float(spd), thrust, float(mina_range), str(_ship_cache.name), hull, autopilot, pitch_deg, heading)

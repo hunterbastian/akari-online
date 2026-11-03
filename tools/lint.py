@@ -35,11 +35,16 @@ RULES = [
     ("lights-command", "scripts/flight/cabin_terminal.gd", "LIGHTS", "HELP can list the LIGHTS command"),
     ("cabin-bob", "scripts/data/flight_profile.gd", "const BOB := 1.0", "head bob defaults on and can be scaled off"),
     ("crt-readout", "scripts/flight/flight_readout.gd", "SPD", "the cockpit CRT prints speed, altitude, heading, and thrust"),
+    ("beige-terminal", "scripts/flight/cabin_interior.gd", "BeigeTerminal", "the cockpit is one beige terminal"),
+    ("ledger-case", "scripts/flight/cabin_interior.gd", "ChamferBrow", "the terminal is the Ledger case"),
+    ("beige-page", "scripts/flight/flight_readout.gd", "AUTOPILOT: ORBIT", "one screen carries autopilot and the old side readouts"),
+    ("crt-linear", "assets/shaders/crt_green.gdshader", "filter_linear", "phosphor stays readable from the seat and the aisle"),
     ("ship-log", "scripts/flight/cabin_terminal.gd", "LOG", "HELP can list the LOG command"),
     ("time-command", "scripts/flight/cabin_terminal.gd", "TIME", "HELP can list the TIME command"),
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("terminal-suggest", "scripts/flight/cabin_terminal.gd", "suggest", "a typo names the closest command"),
 ]
 
 

@@ -21,3 +21,13 @@ static func block(speed: int, alt: int, heading: int, thrust: float) -> String:
 	var hdg := int(posmod(heading, 360))
 	var thr := clampf(thrust, 0.0, 1.0)
 	return "SPD %03d\nALT %05d\nHDG %03d\nTHR %04.2f" % [spd, height, hdg, thr]
+
+
+## One glass: flight numbers, autopilot, and the old side and bay lines.
+static func page(readout: String, orbit: bool, ship_name: String, hull: int, mina: String, bay_state: String) -> String:
+	var text := readout
+	if orbit:
+		text += "\nAUTOPILOT: ORBIT"
+	var rest := "\n%s\nHULL %d  MINA %s  BRG FWD\nBAY %s  CORE 312" % [ship_name, hull, mina, bay_state]
+	text += rest
+	return text
