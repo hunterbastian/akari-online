@@ -22,6 +22,7 @@ fi
 "$GODOT" --headless --path . --script res://test/test_time_command.gd
 "$GODOT" --headless --path . --script res://test/test_orbit_pilot.gd
 "$GODOT" --headless --path . --script res://test/test_ship_save.gd
+"$GODOT" --headless --path . --script res://test/test_detail_ranges.gd
 "$GODOT" --headless --path . -- --stand-test
 "$GODOT" --headless --path . --script res://test/test_sol_planet.gd
 if [ "${SKIP_BENCH:-}" = "1" ]; then

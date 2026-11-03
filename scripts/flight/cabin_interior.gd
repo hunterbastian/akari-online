@@ -119,8 +119,27 @@ func build(scale: float, high_quality: bool) -> void:
 	bay_door.name = "BayDoor"
 	add_child(bay_door)
 	bay_door.setup(self)
+	_add_occluders()
 	_setup_audio()
 	_collect_lamps()
+
+
+func _add_occluders() -> void:
+	# Solid cabin shell. The forward glass is left open so the window still sees space.
+	_occlude("OccLeft", _v(-1.9, 1.05, -1.5), Vector3(0.4, 2.6, 4.8))
+	_occlude("OccRight", _v(1.9, 1.05, -1.5), Vector3(0.4, 2.6, 4.8))
+	_occlude("OccFloor", _v(0.0, -0.55, -1.5), Vector3(3.8, 0.35, 5.0))
+	_occlude("OccAft", _v(0.0, 1.15, 1.05), Vector3(3.6, 2.5, 0.35))
+
+
+func _occlude(node_name: String, pos: Vector3, size: Vector3) -> void:
+	var blocker := OccluderInstance3D.new()
+	blocker.name = node_name
+	var box := BoxOccluder3D.new()
+	box.size = size * _scale
+	blocker.occluder = box
+	blocker.position = pos
+	add_child(blocker)
 
 
 func try_bay_door() -> bool:
