@@ -13,6 +13,10 @@ const _Detail := preload("res://scripts/flight/cabin_detail.gd")
 const _Blocks := preload("res://scripts/flight/cabin_blocks.gd")
 const _Inv := preload("res://scripts/flight/cabin_inventory.gd")
 const _Read := preload("res://scripts/flight/flight_readout.gd")
+const _Edit := preload("res://scripts/flight/terminal_edit.gd")
+const BOOT_A := "AKARI 01"
+const BOOT_B := "AKARI 01\nCRT OK"
+const BOOT_C := "AKARI 01\nCRT OK\nLINK MINA"
 
 const INTERIOR_LAYER := 1 << 2
 
@@ -33,7 +37,15 @@ var _term_header: Label
 var _pitch_deg := 0
 var _yaw_deg := 0
 var _readout := "SPD 000\nALT 00000\nHDG 000\nTHR 0.00"
-var _command := ""
+var _edit = _Edit.new()
+var _boot_left := -1.0
+var _boot_stage := -1
+var _reveal_len := 0
+var _reveal_goal := 0
+var _reveal_wait := 0.0
+var _click: AudioStreamPlayer
+var _enter_key: AudioStreamPlayer
+var _error_key: AudioStreamPlayer
 var orbit_hold := false
 var _cursor_on := true
 var _cursor_time := 0.0
@@ -219,10 +231,32 @@ func _process(delta: float) -> void:
 			_refresh_prompt()
 		return
 	_cursor_time += delta
-	var on := fmod(_cursor_time, 1.05) < 0.62
+	var on := fmod(_cursor_time, 0.9) < 0.55
 	if on != _cursor_on:
 		_cursor_on = on
 		_refresh_prompt()
+	if _boot_stage < 0 and terminal_wants_keys():
+		_boot_stage = 0
+		_boot_left = 1.6
+		_show_boot()
+	if _boot_left > 0.0:
+		_boot_left -= delta
+		var stage := 2
+		if _boot_left > 1.1:
+			stage = 0
+		elif _boot_left > 0.55:
+			stage = 1
+		elif _boot_left <= 0.0:
+			stage = 3
+		if stage != _boot_stage:
+			_boot_stage = stage
+			_show_boot()
+	elif _reveal_len < _reveal_goal:
+		_reveal_wait += delta
+		if _reveal_wait >= 0.012:
+			_reveal_wait = 0.0
+			_reveal_len += 1
+			_refresh_prompt()
 	_ambience(delta)
 
 
@@ -235,14 +269,32 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	var key := event as InputEventKey
-	if key.keycode == KEY_BACKSPACE:
-		_command = _command.substr(0, maxi(_command.length() - 1, 0))
+	if _boot_left > 0.0:
+		_finish_boot()
+		get_viewport().set_input_as_handled()
+		return
+	if _reveal_len < _reveal_goal:
+		_reveal_len = _reveal_goal
+		_refresh_prompt()
+		get_viewport().set_input_as_handled()
+		return
+	if key.keycode == KEY_UP:
+		_edit.up()
+	elif key.keycode == KEY_DOWN:
+		_edit.down()
+	elif key.keycode == KEY_TAB:
+		_edit.complete()
+		_key_sound(0)
+	elif key.keycode == KEY_BACKSPACE:
+		_edit.backspace()
+		_key_sound(0)
 	elif key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER:
 		terminal_submit()
 		get_viewport().set_input_as_handled()
 		return
-	elif key.unicode >= 32 and key.unicode < 127 and _command.length() < 24:
-		_command += char(key.unicode).to_upper()
+	elif key.unicode >= 32 and key.unicode < 127:
+		_edit.type_char(char(key.unicode))
+		_key_sound(0)
 	else:
 		return
 	get_viewport().set_input_as_handled()
@@ -250,14 +302,31 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func terminal_type(ch: String) -> void:
-	if _command.length() >= 24:
-		return
-	_command += ch.to_upper()
+	_finish_boot()
+	_edit.type_char(ch)
+	_key_sound(0)
+	_refresh_prompt()
+
+
+func terminal_tab() -> void:
+	_finish_boot()
+	_edit.complete()
+	_key_sound(0)
+	_refresh_prompt()
+
+
+func terminal_history(step: int) -> void:
+	_finish_boot()
+	if step < 0:
+		_edit.up()
+	else:
+		_edit.down()
 	_refresh_prompt()
 
 
 func terminal_submit_text(line: String) -> void:
-	_command = line
+	_finish_boot()
+	_edit.line = line
 	terminal_submit()
 
 
@@ -280,8 +349,9 @@ func restore_lamp_preset(name: String) -> void:
 
 
 func terminal_submit() -> void:
-	var reply: String = _Term.submit(_command, _lamps, _session_log)
-	_command = ""
+	var typed: String = _edit.line
+	_edit.remember(typed)
+	var reply: String = _Term.submit(typed, _lamps, _session_log)
 	if reply.begins_with("LIGHTS ") and not reply.contains("?") and _session_log != null:
 		var preset := reply.trim_prefix("LIGHTS ")
 		if not preset.contains(" "):
@@ -298,6 +368,13 @@ func terminal_submit() -> void:
 		pilot.request_orbit_stop()
 	if not reply.is_empty():
 		_reply = reply
+	_reveal_len = 0
+	_reveal_goal = reply.length()
+	_reveal_wait = 0.0
+	if reply.begins_with("?"):
+		_key_sound(2)
+	else:
+		_key_sound(1)
 	_refresh_prompt()
 
 
@@ -311,33 +388,62 @@ func _flight_ship():
 
 
 func _refresh_prompt() -> void:
-	var cursor := "_" if _cursor_on else " "
-	var multi := _reply.contains("\n")
+	if _boot_left > 0.0:
+		_set_line("terminal", "")
+		return
+	var cursor := "█" if _cursor_on else " "
+	var shown := _reply
+	if _reveal_goal > 0 and _reveal_len < _reveal_goal:
+		shown = _reply.substr(0, _reveal_len)
+	var multi := shown.contains("\n")
 	var prompt: Label = _lines.get("terminal")
 	if prompt:
-		prompt.position.y = 248.0 if multi else 210.0
-	_set_line("terminal", ">" + _command + cursor)
+		prompt.position.y = 292.0 if multi else 250.0
+	_set_line("terminal", ">" + _edit.line + cursor)
 	if _term_header:
 		if multi:
 			_term_header.add_theme_font_size_override("font_size", 20)
-			_term_header.size.y = 210
-			_term_header.text = _reply
+			_term_header.size.y = 230
+			_term_header.text = shown
 		else:
 			_term_header.add_theme_font_size_override("font_size", 28)
-			_term_header.size.y = 120
+			_term_header.size.y = 150
 			_refresh_header()
 	if _term_reply:
-		if _session_log != null and _session_log.blip and not multi:
+		_term_reply.position.y = 172.0
+		if _session_log != null and _session_log.blip and shown.is_empty() and not multi:
 			_term_reply.text = "NEW LOG"
 		elif multi:
 			_term_reply.text = ""
 		else:
-			_term_reply.text = _reply
+			_term_reply.text = shown
 
 
 func show_orbit(on: bool) -> void:
 	orbit_hold = on
 	_refresh_header()
+
+
+func _finish_boot() -> void:
+	if _boot_stage >= 3 and _boot_left <= 0.0:
+		return
+	_boot_left = 0.0
+	_boot_stage = 3
+	_show_boot()
+
+
+func _show_boot() -> void:
+	if _term_header == null:
+		return
+	if _boot_stage <= 0:
+		_term_header.text = BOOT_A
+	elif _boot_stage == 1:
+		_term_header.text = BOOT_B
+	elif _boot_stage == 2:
+		_term_header.text = BOOT_C
+	else:
+		_refresh_header()
+		_refresh_prompt()
 
 
 func _refresh_header() -> void:
@@ -558,6 +664,18 @@ func _setup_audio() -> void:
 	_clank.stream = _clank_wav()
 	_clank.volume_db = -14.0
 	add_child(_clank)
+	_click = AudioStreamPlayer.new()
+	_click.stream = _blip_wav(1680.0, 500, 0.35)
+	_click.volume_db = -22.0
+	add_child(_click)
+	_enter_key = AudioStreamPlayer.new()
+	_enter_key.stream = _blip_wav(520.0, 1100, 0.45)
+	_enter_key.volume_db = -18.0
+	add_child(_enter_key)
+	_error_key = AudioStreamPlayer.new()
+	_error_key.stream = _blip_wav(180.0, 1600, 0.5)
+	_error_key.volume_db = -16.0
+	add_child(_error_key)
 	_hum.play()
 	_whine.play()
 	_hum_pb = _hum.get_stream_playback() as AudioStreamGeneratorPlayback
@@ -583,6 +701,33 @@ func _clank_wav() -> AudioStreamWAV:
 		var sample := sin(TAU * 210.0 * t) * 0.55
 		sample += sin(TAU * 640.0 * t) * 0.2 * exp(-t * 28.0)
 		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * env * 9000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.stereo = false
+	wav.data = data
+	return wav
+
+
+func _key_sound(kind: int) -> void:
+	var player: AudioStreamPlayer = _click
+	if kind == 1:
+		player = _enter_key
+	elif kind == 2:
+		player = _error_key
+	if player != null:
+		player.play()
+
+
+func _blip_wav(freq: float, count: int, amp: float) -> AudioStreamWAV:
+	var rate := 22050
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	for i in count:
+		var t := float(i) / float(rate)
+		var env := exp(-t * 38.0)
+		var sample := sin(TAU * freq * t) * amp * env
+		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 14000.0))
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = rate
