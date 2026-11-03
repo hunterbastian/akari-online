@@ -46,6 +46,15 @@ var _step_acc := 0.0
 var _last_walk := Vector3.ZERO
 var _shot_hold := false
 var inventory
+var _lamps = preload("res://scripts/flight/cabin_lamps.gd").new()
+const _Term := preload("res://scripts/flight/cabin_terminal.gd")
+var _reply := ""
+var _term_reply: Label
+var _lamp_mats: Array[ShaderMaterial] = []
+var _bulbs: Array[MeshInstance3D] = []
+var _bulb_color: Array[Color] = []
+var _spot: SpotLight3D
+var _spot_energy := 0.8
 var bay_door
 var show_hotbar := true
 
@@ -106,6 +115,7 @@ func build(scale: float, high_quality: bool) -> void:
 	add_child(bay_door)
 	bay_door.setup(self)
 	_setup_audio()
+	_collect_lamps()
 
 
 func try_bay_door() -> bool:
@@ -192,6 +202,9 @@ func snap_view(mode: String) -> void:
 
 # hot
 func _process(delta: float) -> void:
+	if _lamps != null:
+		_lamps.advance(delta)
+		_push_lamps()
 	if not _lines.has("terminal"):
 		return
 	# Shots must show the cursor. A long first frame would otherwise land in the off half.
@@ -221,8 +234,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key.keycode == KEY_BACKSPACE:
 		_command = _command.substr(0, maxi(_command.length() - 1, 0))
 	elif key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER:
-		_command = ""
-	elif key.unicode >= 32 and key.unicode < 127 and _command.length() < 8:
+		terminal_submit()
+		get_viewport().set_input_as_handled()
+		return
+	elif key.unicode >= 32 and key.unicode < 127 and _command.length() < 24:
 		_command += char(key.unicode).to_upper()
 	else:
 		return
@@ -230,10 +245,32 @@ func _unhandled_input(event: InputEvent) -> void:
 	_refresh_prompt()
 
 
+func terminal_type(ch: String) -> void:
+	if _command.length() >= 24:
+		return
+	_command += ch.to_upper()
+	_refresh_prompt()
+
+
+func terminal_submit_text(line: String) -> void:
+	_command = line
+	terminal_submit()
+
+
+func terminal_submit() -> void:
+	var reply: String = _Term.submit(_command, _lamps)
+	_command = ""
+	if not reply.is_empty():
+		_reply = reply
+	_refresh_prompt()
+
+
 func _refresh_prompt() -> void:
 	var cursor := "_" if _cursor_on else " "
 	_refresh_header()
 	_set_line("terminal", ">" + _command + cursor)
+	if _term_reply:
+		_term_reply.text = _reply
 
 
 func _refresh_header() -> void:
@@ -279,13 +316,24 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(header)
 	_term_header = header
+	var reply := Label.new()
+	reply.name = "Reply"
+	reply.position = Vector2(28, 146)
+	reply.size = Vector2(view_size.x - 48, 40)
+	reply.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	reply.add_theme_font_override("font", _font)
+	reply.add_theme_font_size_override("font_size", 28 if view_size.y >= 300 else 20)
+	reply.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
+	reply.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	viewport.add_child(reply)
+	_term_reply = reply
 	var label := Label.new()
-	label.position = Vector2(28, view_size.y * 0.46)
-	label.size = Vector2(view_size.x - 56, 80)
+	label.position = Vector2(28, view_size.y * 0.58)
+	label.size = Vector2(view_size.x - 48, 64)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", _font)
-	label.add_theme_font_size_override("font_size", 48 if view_size.y >= 300 else 32)
+	label.add_theme_font_size_override("font_size", 28 if view_size.y >= 300 else 22)
 	label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.62))
 	label.text = ">_"
 	label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -613,6 +661,46 @@ func _screen(node_name: String, pos: Vector3, size: Vector2, tilt: float, yaw: f
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_instance.add_to_group("akari_crt")
 	pivot.add_child(mesh_instance)
+
+
+func _collect_lamps() -> void:
+	for mat in paints:
+		_lamp_mats.append(mat)
+	for kind in _Blocks._mats.keys():
+		var mat: ShaderMaterial = _Blocks._mats[kind]
+		_lamp_mats.append(mat)
+	for child in get_children():
+		if not str(child.name).begins_with("Bulb") or not (child is MeshInstance3D):
+			continue
+		var mesh := child as MeshInstance3D
+		var material := mesh.material_override as StandardMaterial3D
+		if material == null:
+			continue
+		_bulbs.append(mesh)
+		_bulb_color.append(material.emission)
+	var spot := get_node_or_null("CeilShadow") as SpotLight3D
+	if spot:
+		_spot = spot
+		_spot_energy = spot.light_energy
+
+
+func _push_lamps() -> void:
+	var shown: float = _lamps.shown_gain()
+	var tint: Color = _lamps.tint
+	var rgb := Vector3(tint.r, tint.g, tint.b)
+	for mat in _lamp_mats:
+		mat.set_shader_parameter("lamp_tint", rgb)
+		mat.set_shader_parameter("lamp_gain", shown)
+	for i in _bulbs.size():
+		var material := _bulbs[i].material_override as StandardMaterial3D
+		if material == null:
+			continue
+		var col: Color = _bulb_color[i] * tint * shown
+		material.emission = col
+		material.albedo_color = col
+	if _spot:
+		_spot.light_energy = _spot_energy * shown
+		_spot.light_color = tint
 
 
 func _set_line(kind: String, text: String) -> void:

@@ -32,6 +32,7 @@ RULES = [
     ("thrust-shake-toggle", "scripts/flight/thrust_kick.gd", "FlightProfile.SHAKE", "shake intensity can be turned down"),
     ("thrust-shake-default", "scripts/data/flight_profile.gd", "const SHAKE := 1.0", "shake defaults to on"),
     ("star-streaks", "scripts/flight/thrust_kick.gd", "travel_dir", "boost stretches stars along the direction of travel"),
+    ("lights-command", "scripts/flight/cabin_terminal.gd", "LIGHTS", "HELP can list the LIGHTS command"),
 ]
 
 
