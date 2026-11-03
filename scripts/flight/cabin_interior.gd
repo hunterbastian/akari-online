@@ -120,7 +120,7 @@ func build(scale: float, high_quality: bool) -> void:
 
 	var prompt_size := Vector2i(640, 480) if high_quality else Vector2i(480, 360)
 	# One beige terminal, centered on the dash. The forward window stays open above it.
-	_build_prompt(_v(0.0, 0.52, -3.26), prompt_size)
+	_build_prompt(_v(0.0, 0.86, -3.26), prompt_size)
 	_Blocks.dress(self)
 	_Detail.apply(self)
 	_build_walker()
@@ -195,7 +195,7 @@ func release_fixed_view() -> void:
 func snap_view(mode: String) -> void:
 	show_hotbar = mode != "seat" and mode != "quarter"
 	if mode == "seat":
-		walker.snap(seat_point, seated_eye, -0.12, 0.0)
+		walker.snap(seat_point, seated_eye, 0.02, 0.0)
 	elif mode == "wide":
 		walker.snap(_v(0.0, 0.0, 0.05), standing_eye, -0.16, 0.0)
 	elif mode == "locker" or mode == "storage":
@@ -464,7 +464,8 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	var pivot := Node3D.new()
 	pivot.name = "TerminalPivot"
 	pivot.position = pos
-	pivot.rotation.x = 0.50
+	# About four degrees back. The face stays close to vertical.
+	pivot.rotation.x = 0.07
 	root.add_child(pivot)
 	# Ledger kept: chamfer, one stripe, a stencil serial. Palette is warm white and grey.
 	_case_box(root, "Chassis", Vector3(0.96, 0.28, 0.58), Vector3(0.0, 0.16, -3.40), "warmgrey")
@@ -485,15 +486,15 @@ func _build_prompt(pos: Vector3, view_size: Vector2i) -> void:
 	_case_box(root, "GuardL", Vector3(0.01, 0.042, 0.01), Vector3(0.372, 0.274, -3.04), "steel")
 	_case_box(root, "GuardR", Vector3(0.01, 0.042, 0.01), Vector3(0.428, 0.274, -3.04), "steel")
 	_case_box(root, "GuardBar", Vector3(0.068, 0.01, 0.01), Vector3(0.40, 0.296, -3.04), "steel")
-	_case_box(pivot, "Shell", Vector3(0.92, 0.70, 0.22), Vector3(0.0, -0.02, -0.14), "plastic")
+	_case_box(pivot, "Shell", Vector3(0.92, 0.92, 0.24), Vector3(0.0, -0.12, -0.14), "plastic")
 	_case_box(pivot, "Tube", Vector3(0.74, 0.52, 0.03), Vector3(0.0, 0.02, -0.02), "bezel")
 	_case_box(pivot, "BezelTop", Vector3(0.92, 0.09, 0.11), Vector3(0.0, 0.31, 0.02), "plastic")
 	_case_box(pivot, "BezelChin", Vector3(0.92, 0.13, 0.13), Vector3(0.0, -0.29, 0.03), "plastic")
 	_case_box(pivot, "BezelL", Vector3(0.10, 0.52, 0.11), Vector3(-0.41, 0.02, 0.02), "plastic")
 	_case_box(pivot, "BezelR", Vector3(0.10, 0.52, 0.11), Vector3(0.41, 0.02, 0.02), "plastic")
-	_case_box(pivot, "ChamferL", Vector3(0.07, 0.52, 0.07), Vector3(-0.46, 0.02, 0.05), "plastic", Vector3(0.0, 0.78, 0.0))
-	_case_box(pivot, "ChamferR", Vector3(0.07, 0.52, 0.07), Vector3(0.46, 0.02, 0.05), "plastic", Vector3(0.0, -0.78, 0.0))
-	_case_box(pivot, "ChamferBrow", Vector3(0.80, 0.05, 0.05), Vector3(0.0, 0.36, 0.06), "plastic", Vector3(0.65, 0.0, 0.0))
+	_case_box(pivot, "ChamferL", Vector3(0.05, 0.52, 0.05), Vector3(-0.47, 0.02, 0.04), "plastic", Vector3(0.0, 0.12, 0.0))
+	_case_box(pivot, "ChamferR", Vector3(0.05, 0.52, 0.05), Vector3(0.47, 0.02, 0.04), "plastic", Vector3(0.0, -0.12, 0.0))
+	_case_box(pivot, "ChamferBrow", Vector3(0.84, 0.035, 0.04), Vector3(0.0, 0.35, 0.05), "plastic", Vector3(0.10, 0.0, 0.0))
 	_case_box(pivot, "Inset", Vector3(0.022, 0.20, 0.10), Vector3(-0.47, 0.04, -0.05), "warmgrey")
 	_case_box(pivot, "ChinSeam", Vector3(0.72, 0.008, 0.01), Vector3(0.0, -0.20, 0.095), "bezel")
 	for i in 3:
