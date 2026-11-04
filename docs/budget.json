@@ -6,9 +6,9 @@
     "pack_bytes": 1800000
   },
   "measured": {
-    "worst_ms": 75.0,
-    "worst_draws": 209,
-    "worst_nodes": 405,
-    "pack_bytes": 1208953
+    "worst_ms": 74.94,
+    "worst_draws": 207,
+    "worst_nodes": 419,
+    "pack_bytes": 1286479
   }
 }

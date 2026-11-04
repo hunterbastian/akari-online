@@ -64,10 +64,10 @@ Every fixed bug gets a lint rule in `tools/lint.py` or a test under `test/`. A f
 
 Performance budget in `tools/budget.py`, last measured on this merge:
 
-- worst frame 75.0 ms (limit 140)
-- 209 draw calls (limit 500)
-- 411 nodes (limit 1200)
-- pack 1,263,157 bytes (limit 1.8 MB)
+- worst frame 74.94 ms (limit 140)
+- 207 draw calls (limit 500)
+- 419 nodes (limit 1200)
+- pack 1,286,479 bytes (limit 1.8 MB)
 
 ## Architecture
 
@@ -82,7 +82,7 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 - TIME prints ship clock (Mina days plus hh:mm of a 24-hour day squeezed into 180 real seconds), real time flown, and total time in space.
 - `scripts/flight/orbit_pilot.gd` circular orbit. `AUTOPILOT ORBIT` eases onto it. Manual thrust, yaw, lift, or boost cancels it while seated. `AUTOPILOT OFF` and `STOP` cancel from anywhere. Walking the cabin does not cancel it. Engaging notes `Autopilot set to orbit Mina`.
 - `scripts/flight/ship_save.gd` and `ship_keeper.gd` write `user://akari_save.json`. The file has `save_version` (currently 1). `migrate()` lifts an old bare log into version 1. A newer file is left alone. Writes go to a temp file, then rename. Sections: `log`, `lights`, `flight`, `autopilot`, `extras`. `extras` is the open slot for a ship name, decorations, and upgrades. The ship implements `save_autopilot()` / `load_autopilot()`. Autosave is about every 60 s, and also on pause, window close, and quit. `SAVE` prints `SHIP STATE SAVED`. A return notes `Pilot returned after N Mina days away` when at least one Mina day passed, otherwise `Pilot returned`.
-- `scripts/world/planet_body.gd` Mina, atmosphere shells, and the paused megastructure city.
+- `scripts/world/planet_body.gd` Mina. Relief (ridges, canyons, craters) is baked by `planet_terrain.gd` into three fading meshes. A cloud shell scrolls and the ground shader samples it for soft shadows. Two atmosphere shells carry a sunward limb. Close to the surface, a nearest-filter detail grain and rock clusters fade in. Phone (`quality == low`) uses coarser meshes and shorter ranges. The mesh does not spin, so the paused city stays on its flat pad. `--mina orbit|ridge|canyon|crater|clouds|land|fly` frames stills and the descent. `PLANET_CLEARANCE` is 8 so the ship clears the peaks.
 - `scripts/ui/flight_hud.gd` the green pixel HUD. `scripts/ui/title_director.gd` the title drift. It calls `set_flight_active(true)` when the fade finishes. Until then the ship is inactive on a normal launch.
 
 ## Workflow

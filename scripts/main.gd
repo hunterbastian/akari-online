@@ -38,6 +38,7 @@ var _orbit_demo := ""
 var _save_mode := ""
 var _save_demo := false
 var _stand_test := false
+var _mina := ""
 
 
 func _ready() -> void:
@@ -87,7 +88,7 @@ func _ready() -> void:
 	camera.name = "ChaseCamera"
 	camera.set_script(load("res://scripts/flight/chase_camera.gd"))
 	camera.ship_path = ship.get_path()
-	camera.set_meta("title_hold", not _shot and not _tour and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty())
+	camera.set_meta("title_hold", not _shot and not _tour and _mina.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty())
 	camera.set_meta("planet_center", planet.position)
 	camera.set_meta("planet_radius", float(planet.radius))
 	_world.add_child(camera)
@@ -99,7 +100,7 @@ func _ready() -> void:
 		_frame_side(ship, camera)
 	elif _shot and OS.get_environment("AKARI_SEAM") == "1":
 		_frame_seam(ship, camera)
-	elif not _shot and not _tour and not _stand_test and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
+	elif not _shot and not _tour and not _stand_test and _mina.is_empty() and _cabin_view.is_empty() and _kick_demo.is_empty() and _lights_demo.is_empty() and _lights_arg.is_empty() and _orbit_demo.is_empty():
 		var director = load("res://scripts/ui/title_director.gd").new()
 		director.name = "TitleDirector"
 		add_child(director)
@@ -115,6 +116,11 @@ func _ready() -> void:
 	add_child(cabin_controls)
 	cabin_controls.setup(ship)
 	ship.set_chase_camera(camera)
+	if not _mina.is_empty():
+		var mina_shot = load("res://scripts/world/mina_shot.gd").new()
+		mina_shot.name = "MinaShot"
+		add_child(mina_shot)
+		mina_shot.setup(camera, _planet_body, sun_dir, _mina)
 	ship.set_cabin_controls(cabin_controls)
 	var inventory_hud = load("res://scripts/ui/inventory_hud.gd").new()
 	inventory_hud.name = "InventoryHud"
@@ -699,7 +705,7 @@ func _arm_keeper(keeper) -> void:
 	var args := OS.get_cmdline_user_args()
 	var tools := _shot or _tour or _walk_demo or _readout_demo or _log_demo or _time_demo or _stand_test
 	tools = tools or not _kick_demo.is_empty() or not _lights_demo.is_empty() or not _lights_arg.is_empty() or not _orbit_demo.is_empty()
-	tools = tools or not _cli_shot.is_empty() or args.has("--bench") or args.has("--state-test") or args.has("--stand-test")
+	tools = tools or not _cli_shot.is_empty() or not _mina.is_empty() or args.has("--bench") or args.has("--state-test") or args.has("--stand-test")
 	tools = tools or (not _cabin_view.is_empty() and not _save_demo)
 	if _save_mode == "write":
 		keeper.armed = true
@@ -732,6 +738,11 @@ func _read_cli() -> void:
 			i += 2
 		elif arg == "--door" and i + 1 < args.size():
 			_cli_door = str(args[i + 1]).to_lower()
+			i += 2
+		elif arg == "--mina" and i + 1 < args.size():
+			_mina = str(args[i + 1]).to_lower()
+			if _mina != "fly":
+				_shot = true
 			i += 2
 		elif arg == "--thrust-demo" and i + 1 < args.size():
 			_kick_demo = str(args[i + 1])

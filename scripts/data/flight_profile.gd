@@ -53,7 +53,7 @@ const HULL_SCALE := 1.28
 ## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.
 const JUMPSHIP_SCALE := 0.466
 const STAR_CLEARANCE := 12.0
-const PLANET_CLEARANCE := 3.0
+const PLANET_CLEARANCE := 8.0
 const SPAWN := Vector3(0, 6, 48)
 ## Directional key from the space scene, aimed at the origin.
 const SUN_OFFSET := Vector3(28, 46, 18)
