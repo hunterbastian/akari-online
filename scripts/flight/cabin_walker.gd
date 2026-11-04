@@ -120,7 +120,7 @@ func _apply_bob(delta: float, moved: float) -> void:
 	var off: Vector3 = _bobber.advance(moved, delta, FlightProfile.BOB)
 	foot_down = _bobber.foot
 	boot_clank = _bobber.clank
-	if moved > 0.00005 and FlightProfile.BOB > 0.001:
+	if _bobber.blend > 0.015 and FlightProfile.BOB > 0.001:
 		eye.position = Vector3(off.x, eye_height + off.y, 0.0)
 		eye.rotation = Vector3(pitch, 0.0, off.z)
 		return

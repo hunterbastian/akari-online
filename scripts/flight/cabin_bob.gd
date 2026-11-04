@@ -1,6 +1,7 @@
 extends RefCounted
 
-## Gentle cabin walk. Scale 0 holds the head still. A stride plants a foot; every few steps clank.
+## Footstep bob for the cabin camera. One stride is one full rise and fall.
+## The head is lowest when a foot plants, and the amplitude eases in and out.
 
 const STRIDE := 0.62
 const CLANK_EVERY := 6
@@ -10,6 +11,7 @@ var carry := 0.0
 var steps := 0
 var foot := false
 var clank := false
+var blend := 0.0
 
 
 func advance(moved: float, delta: float, scale: float) -> Vector3:
@@ -18,18 +20,23 @@ func advance(moved: float, delta: float, scale: float) -> Vector3:
 	if scale <= 0.001:
 		phase = 0.0
 		carry = 0.0
+		blend = 0.0
 		return Vector3.ZERO
-	if moved <= 0.00005:
-		phase = lerpf(phase, 0.0, 1.0 - exp(-6.0 * delta))
+	var goal := 0.0
+	if moved > 0.00005:
+		goal = 1.0
+		carry += moved
+		if carry >= STRIDE:
+			carry -= STRIDE
+			steps += 1
+			foot = true
+			clank = steps % CLANK_EVERY == 0
+		phase = carry / STRIDE * TAU
+	blend = lerpf(blend, goal, 1.0 - exp(-FlightProfile.BOB_EASE * delta))
+	if blend <= 0.001:
 		return Vector3.ZERO
-	phase += moved * 9.2
-	carry += moved
-	if carry >= STRIDE:
-		carry -= STRIDE
-		steps += 1
-		foot = true
-		clank = steps % CLANK_EVERY == 0
-	var bob := sin(phase) * 0.016 * scale
-	var sway := sin(phase * 0.5) * 0.006 * scale
-	var roll := sin(phase * 0.5) * 0.008 * scale
+	var amount := scale * blend
+	var bob := -cos(phase) * FlightProfile.BOB_HEIGHT * amount
+	var sway := sin(phase) * FlightProfile.BOB_SWAY * amount
+	var roll := sin(phase) * FlightProfile.BOB_ROLL * amount
 	return Vector3(sway, bob, roll)

@@ -46,8 +46,16 @@ const STREAK_OUT := 0.42
 ## Extra chase distance, in meters, once the boost has fully settled.
 const CAM_LAG := 3.6
 const CAM_CHASE_BOOST := 1.55
-## Cabin head bob. 0 holds the view still. 1 is the default gentle walk.
+## Cabin head bob. 0 holds the view still. 1 is the default walk.
 const BOB := 1.0
+## Vertical bob at BOB 1, in meters. About 5 cm, readable on the pipes.
+const BOB_HEIGHT := 0.05
+## Lateral sway, in meters. Smaller than the vertical bob.
+const BOB_SWAY := 0.015
+## Roll with each step, in radians. A small tilt, not a lean.
+const BOB_ROLL := 0.028
+## How fast the bob fades in and out. Higher is snappier.
+const BOB_EASE := 3.4
 const DT_CAP := 0.05
 const HULL_SCALE := 1.28
 ## jumpship.glb is about 7.0 wide. 0.466 brings that in line with the old hull's chase-cam size.
