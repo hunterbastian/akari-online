@@ -40,6 +40,8 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("mina-terrain", "scripts/world/planet_body.gd", "PlanetTerrain.build_mesh", "Mina relief is baked into the mesh"),
+    ("mina-clearance", "scripts/data/flight_profile.gd", "const PLANET_CLEARANCE := 8.0", "the ship clears the baked peaks"),
 ]
 
 
