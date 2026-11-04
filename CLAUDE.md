@@ -67,14 +67,14 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 - worst frame 75.0 ms (limit 140)
 - 209 draw calls (limit 500)
 - 411 nodes (limit 1200)
-- pack 1,263,157 bytes (limit 1.8 MB)
+- pack 1,263,934 bytes (limit 1.8 MB)
 
 ## Architecture
 
 `scripts/main.gd` builds the world, title, ship, and demos.
 
 - `scripts/flight/ship_controller.gd` flight loop, seat toggle, flames, CRT readout push, ship log tick, orbit coast, save capture.
-- `scripts/flight/chase_camera.gd` exterior camera. `scripts/flight/thrust_kick.gd` and `thrust_feel.gd` ease FOV, sway, and lag. Star streaks are `assets/shaders/star_streak.gdshader`. Tune with `FlightProfile` in `scripts/data/flight_profile.gd`: `SHAKE` (0 off, 1 default), `KICK_FOV`, `KICK_IN_TIME` (1.5 s), `CAM_LAG`, `STREAK_OUT`, `BOB` (0 off, 1 the gentle walk).
+- `scripts/flight/chase_camera.gd` exterior camera. `scripts/flight/thrust_kick.gd` and `thrust_feel.gd` ease FOV, sway, and lag. Star streaks are `assets/shaders/star_streak.gdshader`. Tune with `FlightProfile` in `scripts/data/flight_profile.gd`: `SHAKE` (0 off, 1 default), `KICK_FOV`, `KICK_IN_TIME` (1.5 s), `CAM_LAG`, `STREAK_OUT`, `BOB` (0 off, 1 the gentle walk). Hull bank is `bank_for_rate` on yaw rate (rad/s): a held key leans about 25 degrees, eased by `BANK_DAMP`. The chase camera rolls `CAM_BANK` of that lean.
 - `scripts/flight/cabin_interior.gd` warehouse cabin, CRT, terminal keyboard, lamps. `cabin_walker.gd` plus `cabin_bob.gd` walk and bob. `cabin_bay_door.gd` the shuttle bay. `cabin_lamps.gd` LIGHTS presets.
 - `scripts/flight/cabin_terminal.gd` `submit(line, lamps, log)`. Add a command by matching the first word next to HELP, LOG, TIME, AUTOPILOT, and SAVE, and teach `terminal_submit()` in the cabin if the command has a side effect. HELP is one line: `HELP  LIGHTS  LOG  TIME  AUTOPILOT  SAVE`.
 - LIGHTS: `WARM`, `COLD`, `RED`, `OFF`. The cabin notes the change in the log.

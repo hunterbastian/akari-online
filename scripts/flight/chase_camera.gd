@@ -6,6 +6,7 @@ extends Camera3D
 
 var _ship: Node3D
 var _kick: Node
+var _hull: Node3D
 var _ready_cam := false
 var held := false
 var _planet_bias := Vector3.ZERO
@@ -28,6 +29,7 @@ func _ready() -> void:
 	current = true
 	if _ship:
 		_kick = _ship.get_node_or_null("ThrustKick")
+		_hull = _ship.get_node_or_null("Hull") as Node3D
 		_apply(0.0, true)
 
 
@@ -76,6 +78,11 @@ func _apply(step: float, snap: bool) -> void:
 	else:
 		_planet_bias = _planet_bias.lerp(target_bias, 1.0 - exp(-2.0 * step))
 	look_at(aim + _planet_bias, Vector3.UP)
+	var hull_bank := 0.0
+	if _hull != null:
+		hull_bank = _hull.rotation.z
+	# FORWARD is local -Z, so the sign flips to roll with the hull, not against it.
+	rotate_object_local(Vector3.FORWARD, -hull_bank * FlightProfile.CAM_BANK)
 	if snap:
 		fov = FlightProfile.FOV
 		return

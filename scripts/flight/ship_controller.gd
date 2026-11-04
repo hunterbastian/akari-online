@@ -386,7 +386,10 @@ func _process(delta: float) -> void:
 	euler.z = 0.0
 	basis = Basis.from_euler(euler, EULER_ORDER_YXZ)
 
-	var target_bank := clampf(-yaw * FlightProfile.BANK_YAW_SCALE, -FlightProfile.BANK_LIMIT, FlightProfile.BANK_LIMIT)
+	var yaw_rate := 0.0
+	if step > 0.00001:
+		yaw_rate = yaw / step
+	var target_bank := FlightProfile.bank_for_rate(yaw_rate)
 	_bank = FlightProfile.damp(_bank, target_bank, FlightProfile.BANK_DAMP, step)
 	if _hull:
 		_hull.rotation.z = _bank

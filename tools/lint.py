@@ -40,6 +40,8 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("bank-rate", "scripts/flight/ship_controller.gd", "bank_for_rate", "hull bank follows yaw rate, not the frame delta"),
+    ("cam-bank", "scripts/flight/chase_camera.gd", "CAM_BANK", "the chase camera rolls a fraction of the hull bank"),
 ]
 
 

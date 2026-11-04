@@ -15,6 +15,7 @@ fi
 "$GODOT" --headless --path . --script res://test/test_inventory.gd
 "$GODOT" --headless --path . -- --state-test
 "$GODOT" --headless --path . --script res://test/test_thrust_kick.gd
+"$GODOT" --headless --path . --script res://test/test_bank.gd
 "$GODOT" --headless --path . --script res://test/test_cabin_terminal.gd
 "$GODOT" --headless --path . --script res://test/test_cabin_bob.gd
 "$GODOT" --headless --path . --script res://test/test_flight_readout.gd
