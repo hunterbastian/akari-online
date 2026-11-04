@@ -8,9 +8,14 @@ const MOUSE_YAW := 0.0032
 const MOUSE_PITCH := 0.0022
 const KEY_YAW_RATE := 1.15
 const PITCH_LIMIT := 1.05
-const BANK_YAW_SCALE := 5.5
-const BANK_LIMIT := 0.42
-const BANK_DAMP := 5.0
+## Radians of hull roll per rad/s of yaw. A held key lands near 25 degrees.
+const BANK_PER_RATE := 0.38
+## Clamp, about 26 degrees. A mouse flick cannot roll past this.
+const BANK_LIMIT := 0.46
+## Ease toward the lean. Lower is heavier and slower.
+const BANK_DAMP := 2.6
+## Chase camera roll as a fraction of the hull bank.
+const CAM_BANK := 0.38
 const THROTTLE_LERP := 2.5
 const COAST_DRAG := 0.32
 const REVERSE_SCALE := 0.45
@@ -76,3 +81,8 @@ static func for_speed_stat(speed_stat: float = 1.0) -> Dictionary:
 
 static func damp(current: float, target: float, lambda: float, delta: float) -> float:
 	return lerpf(current, target, 1.0 - exp(-lambda * delta))
+
+
+## Hull roll for a yaw rate in rad/s. Positive yaw (a left turn) banks negative.
+static func bank_for_rate(yaw_rate: float) -> float:
+	return clampf(-yaw_rate * BANK_PER_RATE, -BANK_LIMIT, BANK_LIMIT)
