@@ -22,6 +22,7 @@ var _bay := false
 var _space_mark := 0
 var _cabin_mark := false
 var _flown_mark := 0
+var _eva_out := false
 
 
 func mark_aboard() -> void:
@@ -29,6 +30,20 @@ func mark_aboard() -> void:
 		return
 	_aboard = true
 	note("Pilot aboard")
+
+
+func mark_eva_out() -> void:
+	if _eva_out:
+		return
+	_eva_out = true
+	note("Pilot stepped out")
+
+
+func mark_eva_in() -> void:
+	if not _eva_out:
+		return
+	_eva_out = false
+	note("Pilot returned to the ship")
 
 
 func note(text: String) -> void:
@@ -103,6 +118,7 @@ func to_save() -> Dictionary:
 			"space_mark": _space_mark,
 			"cabin_mark": _cabin_mark,
 			"flown_mark": _flown_mark,
+			"eva_out": _eva_out,
 		},
 	}
 
@@ -135,6 +151,7 @@ func from_save(data: Dictionary) -> void:
 	_space_mark = 0
 	_cabin_mark = false
 	_flown_mark = 0
+	_eva_out = false
 	var flags = data.get("flags", {})
 	if flags is Dictionary and not flags.is_empty():
 		_aboard = bool(flags.get("aboard", false))
@@ -145,6 +162,7 @@ func from_save(data: Dictionary) -> void:
 		_space_mark = int(flags.get("space_mark", 0))
 		_cabin_mark = bool(flags.get("cabin_mark", false))
 		_flown_mark = int(flags.get("flown_mark", 0))
+		_eva_out = bool(flags.get("eva_out", false))
 	else:
 		_infer_flags()
 	# Leaving the seat clears the live flag. The entry is what makes boarding permanent.

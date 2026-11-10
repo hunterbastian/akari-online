@@ -65,9 +65,9 @@ Every fixed bug gets a lint rule in `tools/lint.py` or a test under `test/`. A f
 Performance budget in `tools/budget.py`, last measured on this merge:
 
 - worst frame 75.0 ms (limit 140)
-- 209 draw calls (limit 500)
-- 411 nodes (limit 1200)
-- pack 1,263,157 bytes (limit 1.8 MB)
+- 211 draw calls (limit 500)
+- 444 nodes (limit 1200)
+- pack 1,290,066 bytes (limit 1.8 MB)
 
 ## Architecture
 
@@ -75,7 +75,7 @@ Performance budget in `tools/budget.py`, last measured on this merge:
 
 - `scripts/flight/ship_controller.gd` flight loop, seat toggle, flames, CRT readout push, ship log tick, orbit coast, save capture.
 - `scripts/flight/chase_camera.gd` exterior camera. `scripts/flight/thrust_kick.gd` and `thrust_feel.gd` ease FOV, sway, and lag. Star streaks are `assets/shaders/star_streak.gdshader`. Tune with `FlightProfile` in `scripts/data/flight_profile.gd`: `SHAKE` (0 off, 1 default), `KICK_FOV`, `KICK_IN_TIME` (1.5 s), `CAM_LAG`, `STREAK_OUT`, `BOB` (0 off, 1 the gentle walk).
-- `scripts/flight/cabin_interior.gd` warehouse cabin, CRT, terminal keyboard, lamps. `cabin_walker.gd` plus `cabin_bob.gd` walk and bob. `cabin_bay_door.gd` the shuttle bay. `cabin_lamps.gd` LIGHTS presets.
+- `scripts/flight/cabin_interior.gd` warehouse cabin, CRT, terminal keyboard, lamps. `cabin_walker.gd` plus `cabin_bob.gd` walk and bob. `cabin_bay_door.gd` the shuttle bay. `cabin_lamps.gd` LIGHTS presets. An open bay suits the pilot (`eva_walk.gd`): the visor drops, the rear wall lets them through, and past the threshold they float on a 40 m tether (`eva_motion.gd`). The cabin is larger than the hull, so the doorway frosts the visor and the camera swaps onto the real hull under that whiteout. Phones (`PostProfile` low) use `MOTES_LOW` motes and skip visor condensation. The log notes `Pilot stepped out` and `Pilot returned to the ship`.
 - `scripts/flight/cabin_terminal.gd` `submit(line, lamps, log)`. Add a command by matching the first word next to HELP, LOG, TIME, AUTOPILOT, and SAVE, and teach `terminal_submit()` in the cabin if the command has a side effect. HELP is one line: `HELP  LIGHTS  LOG  TIME  AUTOPILOT  SAVE`.
 - LIGHTS: `WARM`, `COLD`, `RED`, `OFF`. The cabin notes the change in the log.
 - `scripts/flight/ship_log.gd` session log. `MINA_DAY` is 180 real seconds. `note("text")` stamps ship time. `observe()` adds the automatic lines (aboard, first burn, Mina, air, bay, days). Add a new automatic event there, not in a `# hot` function.

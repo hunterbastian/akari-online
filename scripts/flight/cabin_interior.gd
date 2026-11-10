@@ -62,6 +62,7 @@ var _spot: SpotLight3D
 var _spot_energy := 0.8
 var bay_door
 var show_hotbar := true
+var eva_quiet := false
 
 
 func build(scale: float, high_quality: bool) -> void:
@@ -462,6 +463,22 @@ func _build_walker() -> void:
 		_aabb(_v(0.0, 0.0, -4.1), _v(3.7, 0.2, 0.2)),
 	]
 	add_child(walker)
+	_mark_rear_wall()
+
+
+func _mark_rear_wall() -> void:
+	var rear_z := _v(0.0, 0.0, 0.78).z
+	for i in walker.boxes.size():
+		var box: Dictionary = walker.boxes[i]
+		var mid_z := (float(box["min_z"]) + float(box["max_z"])) * 0.5
+		if absf(mid_z - rear_z) < 0.03:
+			box["rear"] = true
+	walker.limit_z_open = _v(0.0, 0.0, 1.25).z
+	walker.exit_z = _v(0.0, 0.0, 0.98).z
+
+
+func set_eva_quiet(on: bool) -> void:
+	eva_quiet = on
 
 
 func _aabb(center: Vector3, size: Vector3) -> Dictionary:
@@ -611,12 +628,17 @@ func _step_wav() -> AudioStreamWAV:
 
 
 func _ambience(delta: float) -> void:
-	_fill_tone(_hum_pb, 78.0, 0.05, _hum_phase)
+	var hum := 0.012 if eva_quiet else 0.05
+	_fill_tone(_hum_pb, 78.0, hum, _hum_phase)
 	_hum_phase += delta
 	var tone := 460.0 if orbit_hold else 2400.0
 	var amp := 0.01 if orbit_hold else 0.03
+	if eva_quiet:
+		amp *= 0.2
 	_fill_tone(_whine_pb, tone, amp, _whine_phase)
 	_whine_phase += delta
+	if eva_quiet:
+		return
 	if walker == null or not walker.active_walk or walker.locked or _steps == null:
 		return
 	if not walker.foot_down:
