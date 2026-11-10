@@ -40,6 +40,10 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("eva-tether", "scripts/flight/eva_motion.gd", "const LIMIT := 40.0", "a spacewalk stays on a 40 m tether"),
+    ("eva-log", "scripts/flight/ship_log.gd", "Pilot stepped out", "leaving the ship is written in the log"),
+    ("eva-rear", "scripts/flight/cabin_walker.gd", "rear_open", "an open bay drops the rear wall"),
+    ("eva-phone", "scripts/flight/eva_motion.gd", "MOTES_LOW", "phones get fewer ice motes"),
 ]
 
 

@@ -42,6 +42,8 @@ var _read_wait := 0.0
 var _read_due := true
 var script_yaw := 0.0
 var _log = preload("res://scripts/flight/ship_log.gd").new()
+var _eva
+var eva_overlay := false
 var _keeper
 var _flames: Array[MeshInstance3D] = []
 var _halos: Array[MeshInstance3D] = []
@@ -103,6 +105,10 @@ func _ready() -> void:
 	kick.name = "ThrustKick"
 	add_child(kick)
 	kick.setup(self)
+	_eva = load("res://scripts/flight/eva_walk.gd").new()
+	_eva.name = "EvaWalk"
+	add_child(_eva)
+	_eva.setup(self)
 
 
 func ship_log():
@@ -298,6 +304,8 @@ func _input(event: InputEvent) -> void:
 	if not active or _shot:
 		return
 	if event.is_action_pressed("interact"):
+		if _eva != null and _eva.holds_ship():
+			return
 		# The seat terminal is typing. E is a letter there, not the eject key.
 		if _cabin and _cabin.has_method("terminal_wants_keys") and _cabin.terminal_wants_keys():
 			return
@@ -323,6 +331,13 @@ func _input(event: InputEvent) -> void:
 				_cabin.inventory.drop_selected()
 				return
 	if walking:
+		if _eva != null and _eva.owns_look():
+			if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+				_eva.add_look(event.relative)
+			elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				if DisplayServer.get_name() != "headless":
+					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			return
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			if DisplayServer.get_name() != "headless":
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -432,6 +447,9 @@ func _process(delta: float) -> void:
 # hot
 func _hold_course(step: float) -> void:
 	# Autopilot: keep the velocity the ship had when the pilot stood up. No new input, no drag.
+	# A spacewalk holds the hull unless an orbit is already running.
+	if _eva != null and _eva.holds_ship():
+		velocity = Vector3.ZERO
 	_mouse_dx = 0.0
 	_mouse_dy = 0.0
 	_bank = FlightProfile.damp(_bank, 0.0, FlightProfile.BANK_DAMP, step)
@@ -612,6 +630,14 @@ func _update_flames() -> void:
 		plume.position = (plume.get_meta("anchor") as Vector3) + Vector3(0.0, 0.0, 0.1 + length * 0.5)
 	if _streaks:
 		_streaks.emitting = not walking and boosting and velocity.length() > _speeds.cruise * 1.2
+
+
+func set_engines_cold(cold: bool) -> void:
+	# A drifting ship on a spacewalk. The bay lamp is the light, not the nozzles.
+	for flame in _flames:
+		flame.visible = not cold
+	for halo in _halos:
+		halo.visible = not cold
 
 
 func _soft_dot() -> GradientTexture2D:

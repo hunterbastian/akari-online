@@ -17,6 +17,7 @@ var _field: MeshInstance3D
 var _field_mat: ShaderMaterial
 var _warn: Array[MeshInstance3D] = []
 var _lever := Vector3.ZERO
+var _handle: MeshInstance3D
 var _amount := 0.0
 var _from := 0.0
 var _to := 0.0
@@ -34,6 +35,10 @@ func setup(cabin) -> void:
 
 func is_open() -> bool:
 	return _want_open and not _moving
+
+
+func openness() -> float:
+	return _amount
 
 
 func near_lever() -> bool:
@@ -103,6 +108,8 @@ func _apply(amount: float) -> void:
 		u = u * u * (3.0 - 2.0 * u)
 		var y := lerpf(_closed[i], _open[i], u)
 		_segs[i].position.y = y
+	if _handle:
+		_handle.rotation.x = -amount * 1.15
 	if _field_mat:
 		_field_mat.set_shader_parameter("openness", amount)
 	if _field:
@@ -135,7 +142,7 @@ func _hazard() -> void:
 func _lever_panel() -> void:
 	var panel := _BLOCKS.place(_cabin, "BayLever", Vector3(1.02, 0.95, 0.52), Vector3(0.06, 0.32, 0.24), "panel", false)
 	_lever = panel.position
-	_BLOCKS.place(_cabin, "BayHandle", Vector3(0.98, 0.98, 0.52), Vector3(0.08, 0.1, 0.05), "bezel", false)
+	_handle = _BLOCKS.place(_cabin, "BayHandle", Vector3(0.98, 0.98, 0.52), Vector3(0.08, 0.1, 0.05), "bezel", false)
 
 
 func _field_quad() -> void:

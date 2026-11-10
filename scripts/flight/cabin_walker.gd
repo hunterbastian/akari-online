@@ -21,7 +21,12 @@ var foot_down := false
 var boot_clank := false
 ## Extra wish from a walk demo. Zero in normal play.
 var script_wish := Vector2.ZERO
+## The rear wall drops while the bay is open, and the clamp follows.
+var rear_open := false
+var limit_z_open := 0.0
+var exit_z := 100.0
 
+const _PASSAGE := preload("res://scripts/flight/eva_motion.gd")
 const LOOK_YAW := 0.0028
 const LOOK_PITCH := 0.0022
 const PITCH_LIMIT := 1.15
@@ -100,18 +105,34 @@ func _process(delta: float) -> void:
 	if not _blocked(trial):
 		position.z = trial.z
 	position.x = clampf(position.x, limit_min.x, limit_max.x)
-	position.z = clampf(position.z, limit_min.z, limit_max.z)
+	var max_z := limit_max.z
+	if limit_z_open > limit_max.z and (rear_open or position.z > limit_max.z):
+		max_z = limit_z_open
+	position.z = clampf(position.z, limit_min.z, max_z)
 	position.y = floor_y
 	_apply_bob(delta, step.length())
 
 
+func park_inside(at: Vector3, look_yaw: float) -> void:
+	active_walk = true
+	locked = false
+	if eye == null:
+		return
+	eye.current = true
+	position = Vector3(at.x, floor_y, at.z)
+	rotation.y = look_yaw
+	pitch = 0.05
+	eye.rotation = Vector3(pitch, 0.0, 0.0)
+	eye.position = Vector3(0.0, eye_height, 0.0)
+
+
 func _blocked(at: Vector3) -> bool:
 	for box in boxes:
-		var min_x: float = float(box["min_x"]) - radius
-		var max_x: float = float(box["max_x"]) + radius
-		var min_z: float = float(box["min_z"]) - radius
-		var max_z: float = float(box["max_z"]) + radius
-		if at.x > min_x and at.x < max_x and at.z > min_z and at.z < max_z:
+		var min_x: float = float(box["min_x"])
+		var max_x: float = float(box["max_x"])
+		var min_z: float = float(box["min_z"])
+		var max_z: float = float(box["max_z"])
+		if _PASSAGE.wall_blocks(rear_open, bool(box.get("rear", false)), at.x, at.z, min_x, max_x, min_z, max_z, radius):
 			return true
 	return false
 

@@ -72,6 +72,9 @@ func _process(_delta: float) -> void:
 	if _hide_shot:
 		visible = false
 		return
+	if _ship != null and bool(_ship.get("eva_overlay")):
+		visible = false
+		return
 	var flying := _ship != null and bool(_ship.get("active"))
 	visible = flying
 	if not flying:
