@@ -17,6 +17,8 @@ uniform sampler2D decal_tex : filter_nearest, repeat_disable;
 uniform float decal_side = 0.0;
 uniform vec3 lamp_tint = vec3(1.0);
 uniform float lamp_gain = 1.0;
+uniform vec3 sun_dir = vec3(0.9, 0.16, 0.3);
+uniform float sun_rim = 0.2;
 
 const mat4 BAYER = mat4(
 	vec4(0.0, 12.0, 3.0, 15.0),
@@ -88,5 +90,10 @@ void fragment() {
 	RIM = 0.18 + fresnel * 0.22;
 
 	float under = clamp(dot(world_normal, bounce_dir), 0.0, 1.0);
-	EMISSION = bounce_color.rgb * under * under * bounce_strength * lamp_tint * lamp_gain;
+	vec3 sun = normalize(sun_dir);
+	float sun_face = smoothstep(-0.05, 0.4, dot(world_normal, sun));
+	float shade = smoothstep(0.15, -0.4, dot(world_normal, sun));
+	vec3 warm_edge = vec3(1.0, 0.55, 0.2) * fresnel * sun_face * sun_rim;
+	vec3 cool_edge = vec3(0.2, 0.46, 0.55) * shade * sun_rim * 0.45;
+	EMISSION = (bounce_color.rgb * under * under * bounce_strength + warm_edge + cool_edge) * lamp_tint * lamp_gain;
 }

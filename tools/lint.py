@@ -40,6 +40,8 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("golden-sun", "scripts/data/flight_profile.gd", "const SUN_OFFSET := Vector3(54, 10, 18)", "the sun stays low for a long rim"),
+    ("golden-fill", "scripts/data/flight_profile.gd", "const FILL_COLOR", "the far side stays cool teal"),
 ]
 
 

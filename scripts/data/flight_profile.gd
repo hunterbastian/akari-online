@@ -55,8 +55,16 @@ const JUMPSHIP_SCALE := 0.466
 const STAR_CLEARANCE := 12.0
 const PLANET_CLEARANCE := 3.0
 const SPAWN := Vector3(0, 6, 48)
-## Directional key from the space scene, aimed at the origin.
-const SUN_OFFSET := Vector3(28, 46, 18)
+## Low sun, about 10 degrees up, so the hull and Mina take a long rim.
+const SUN_OFFSET := Vector3(54, 10, 18)
+const SUN_COLOR := Color(1.0, 0.56, 0.24)
+const FILL_COLOR := Color(0.28, 0.55, 0.68)
+const SHADE_COLOR := Color(0.20, 0.36, 0.46)
+const SHAFT_COLOR := Color(1.0, 0.62, 0.30)
+const SUN_ENERGY := 2.15
+const SUN_ENERGY_LOW := 1.5
+const FILL_ENERGY := 0.28
+const FILL_ENERGY_LOW := 0.14
 
 ## Nozzle centers in glTF space. From the ship entry in model meta.
 ## Fallback nozzle mouths in jumpship.glb space. Dress code measures the real cores.
@@ -76,3 +84,14 @@ static func for_speed_stat(speed_stat: float = 1.0) -> Dictionary:
 
 static func damp(current: float, target: float, lambda: float, delta: float) -> float:
 	return lerpf(current, target, 1.0 - exp(-lambda * delta))
+
+
+static func sun_elevation() -> float:
+	var flat := Vector2(SUN_OFFSET.x, SUN_OFFSET.z).length()
+	return atan2(SUN_OFFSET.y, flat)
+
+
+## How hard the cabin shaft is. ray_z is the photon direction in cabin space:
+## positive travels in through the nose glass.
+static func shaft_gain(ray_z: float) -> float:
+	return smoothstep(0.08, 0.55, ray_z)

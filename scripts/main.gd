@@ -19,6 +19,7 @@ var _cli_door := ""
 var _tour := false
 var _world: SubViewport
 var _bounce: DirectionalLight3D
+var _low_sun := false
 var _ship: Node3D
 var _dither_layer: CanvasLayer
 var _planet: Dictionary = {}
@@ -350,7 +351,9 @@ func _update_bounce() -> void:
 	var distance := maxf(offset.length(), 0.001)
 	_bounce.look_at_from_position(Vector3.ZERO, offset / distance, Vector3.UP if absf(offset.normalized().y) < 0.98 else Vector3.RIGHT)
 	var near := clampf(1.0 - (distance - _planet_radius) / (_planet_radius * 8.0), 0.0, 1.0)
-	_bounce.light_energy = 0.08 + 0.32 * near * near
+	var lift := 0.05 if _low_sun else 0.1
+	var span := 0.18 if _low_sun else 0.34
+	_bounce.light_energy = lift + span * near * near
 
 
 # hot
@@ -816,22 +819,22 @@ func _run_cli_shot() -> void:
 func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	var high := _PostProfile.high_quality()
 	var med := _PostProfile.detailed()
+	var low := not med
 	var world := WorldEnvironment.new()
 	world.name = "WorldEnvironment"
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	environment.background_energy_multiplier = 1.0
-	# Cold, low ambient: shadow sides fall to near black instead of grey.
+	# Cool teal in the shade. The amber key does the lit side.
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.36, 0.5, 0.72)
-	environment.ambient_light_energy = 0.045
+	environment.ambient_light_color = FlightProfile.SHADE_COLOR
+	environment.ambient_light_energy = 0.035 if low else 0.055
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	environment.tonemap_exposure = 1.04
 	environment.tonemap_white = 8.5
 
 	# Halation on the sun and bright highlights. Low quality skips it.
-	var low := not med and not high
 	environment.glow_enabled = not low
 	environment.glow_normalized = false
 	environment.glow_intensity = 0.85 if high else 0.38
@@ -899,11 +902,13 @@ func _build_environment(sky_colors: Dictionary, sun_dir: Vector3) -> void:
 
 func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	var high := _PostProfile.high_quality()
-	# One hard sun: small angular size and little blur, so terminators and hull shadows are crisp.
+	var low := not _PostProfile.detailed()
+	_low_sun = low
+	# One hard sun, low and amber: long rims, crisp terminator, no soft PBR wrap.
 	var key := DirectionalLight3D.new()
 	key.name = "SunLight"
-	key.light_color = Color(1.0, 0.95, 0.86)
-	key.light_energy = 2.4
+	key.light_color = FlightProfile.SUN_COLOR
+	key.light_energy = FlightProfile.SUN_ENERGY_LOW if low else FlightProfile.SUN_ENERGY
 	key.light_specular = 1.0
 	key.shadow_enabled = true
 	key.shadow_blur = 0.6
@@ -919,12 +924,12 @@ func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	key.look_at_from_position(sun_dir, Vector3.ZERO, Vector3.UP)
 	_world.add_child(key)
 
-	# Thin cool rim on the shadow side: almost no diffuse, mostly a specular edge.
+	# Cool teal on the far side. Low energy so it stays a flat fill, not a second sun.
 	var rim := DirectionalLight3D.new()
 	rim.name = "CoolRim"
-	rim.light_color = Color(0.5, 0.68, 1.0)
-	rim.light_energy = 0.12
-	rim.light_specular = 1.6
+	rim.light_color = FlightProfile.FILL_COLOR
+	rim.light_energy = FlightProfile.FILL_ENERGY_LOW if low else FlightProfile.FILL_ENERGY
+	rim.light_specular = 0.35
 	rim.shadow_enabled = false
 	rim.look_at_from_position(-sun_dir + Vector3(0.0, -0.25, 0.0), Vector3.ZERO, Vector3.UP)
 	_world.add_child(rim)
@@ -932,7 +937,7 @@ func _build_key_light(_sky_colors: Dictionary, sun_dir: Vector3) -> void:
 	# Mina-blue bounce: a weak fill aimed from the planet at the ship, updated each frame.
 	_bounce = DirectionalLight3D.new()
 	_bounce.name = "PlanetBounce"
-	_bounce.light_color = Color(0.42, 0.64, 0.95)
+	_bounce.light_color = FlightProfile.FILL_COLOR
 	_bounce.light_energy = 0.0
 	_bounce.light_specular = 0.6
 	_bounce.shadow_enabled = false
@@ -956,7 +961,7 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 	core.mesh = core_mesh
 	var core_mat := StandardMaterial3D.new()
 	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_mat.albedo_color = Color(8.0, 7.4, 6.2, 1.0)
+	core_mat.albedo_color = Color(12.0, 5.2, 1.35, 1.0)
 	core.material_override = core_mat
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	star.add_child(core)
@@ -973,7 +978,7 @@ func _build_sun(_sky_colors: Dictionary) -> void:
 	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	glow_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	glow_mat.albedo_color = Color(0.85, 0.95, 1.15, 0.14)
+	glow_mat.albedo_color = Color(1.0, 0.48, 0.16, 0.16)
 	glow.material_override = glow_mat
 	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	star.add_child(glow)

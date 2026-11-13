@@ -38,9 +38,9 @@ func setup(view: SubViewport, sun_position: Vector3, planet_center: Vector3, pla
 	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	var high := _PostProfile.high_quality()
 
-	_core = _sprite(_radial(Color(1.0, 0.94, 0.84, 0.5), Color(0.55, 0.7, 1.0, 0.0), 0.0), additive)
+	_core = _sprite(_radial(Color(1.0, 0.62, 0.28, 0.55), Color(0.85, 0.32, 0.08, 0.0), 0.0), additive)
 	if high:
-		_streak = _sprite(_radial(Color(0.78, 0.88, 1.0, 0.55), Color(0.4, 0.6, 1.0, 0.0), 0.0), additive)
+		_streak = _sprite(_radial(Color(1.0, 0.55, 0.22, 0.5), Color(0.7, 0.28, 0.08, 0.0), 0.0), additive)
 		_dirt = _sprite(_dirt_map(), additive)
 		for i in 6:
 			var shaft := _sprite(_linear_fade(Color(1.0, 0.95, 0.85, 0.07)), additive)
