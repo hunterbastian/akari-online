@@ -1,7 +1,8 @@
 extends Node
 
 ## Screensaver orbit. After a quiet half-minute in flight the camera dollies
-## through three framings and the HUD fades. Any input snaps back.
+## through three framings and the HUD fades. Held flight controls keep the
+## chase view. Any new input snaps back.
 
 const IDLE_SEC := 30.0
 const APPROACH := 2.8
@@ -37,8 +38,18 @@ var _has_moon := false
 var _has_moon2 := false
 
 
-static func should_start(idle: float, flying: bool) -> bool:
-	return flying and idle >= IDLE_SEC
+static func should_start(idle: float, flying: bool, steering := false) -> bool:
+	return flying and not steering and idle >= IDLE_SEC
+
+
+static func advance_idle(idle: float, step: float, steering: bool) -> float:
+	if steering:
+		return 0.0
+	return idle + step
+
+
+static func piloting(throttle: bool, turn: bool, lift: bool, boost: bool, scripted: bool) -> bool:
+	return throttle or turn or lift or boost or scripted
 
 
 static func blend(u: float) -> float:
@@ -49,7 +60,8 @@ static func blend(u: float) -> float:
 func setup(ship: Node3D, camera: Camera3D) -> void:
 	_ship = ship
 	_cam = camera
-	process_priority = -50
+	# After ThrustKick (priority 20), so this shot keeps the fov it just set.
+	process_priority = 40
 	_planet = ship.planet_position
 	_look = ship.global_position + Vector3.UP * 0.4
 	var world := ship.get_parent()
@@ -94,9 +106,10 @@ func _process(delta: float) -> void:
 		_run(step)
 		_fade(step, 0.0)
 		return
-	_idle += step
+	var steering := _hands_on()
+	_idle = advance_idle(_idle, step, steering)
 	_fade(step, 1.0)
-	if should_start(_idle, true):
+	if should_start(_idle, true, steering):
 		_start()
 
 
@@ -260,6 +273,20 @@ func _paint(alpha: float) -> void:
 	while i < _item_count:
 		_items[i].modulate.a = alpha
 		i += 1
+
+
+# hot
+func _hands_on() -> bool:
+	var throttle := Input.is_action_pressed("throttle_forward") or Input.is_action_pressed("throttle_back")
+	var turn := Input.is_action_pressed("yaw_left") or Input.is_action_pressed("yaw_right")
+	var lift := Input.is_action_pressed("lift") or Input.is_action_pressed("drop")
+	var boost := Input.is_action_pressed("boost")
+	var scripted := float(_ship.get("script_throttle")) >= 0.0
+	if absf(float(_ship.get("script_yaw"))) > 0.0:
+		scripted = true
+	if bool(_ship.get("demo_fly")):
+		scripted = true
+	return piloting(throttle, turn, lift, boost, scripted)
 
 
 # hot

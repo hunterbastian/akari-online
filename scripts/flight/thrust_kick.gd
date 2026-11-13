@@ -91,10 +91,19 @@ func lag_amount() -> float:
 	return _feel.lag
 
 
+## Title hold and the idle orbit own the chase camera. The kick must not
+## write fov or sway on top of either one.
+static func skips_chase(held: bool, drifting: bool) -> bool:
+	return held or drifting
+
+
 func _apply_view() -> void:
 	var sway: Vector3 = _feel.shake_offset(FlightProfile.SHAKE)
 	var inside := _eye != null and _eye.current
-	if _chase != null and _chase.current and not _chase.held:
+	var drifting := false
+	if _chase != null:
+		drifting = bool(_chase.get("drift_hold"))
+	if _chase != null and _chase.current and not skips_chase(_chase.held, drifting):
 		_chase.fov = FlightProfile.FOV + _feel.fov_extra
 		_chase.h_offset = sway.y * 0.35
 		_chase.v_offset = sway.x * 0.25
