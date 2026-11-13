@@ -81,8 +81,8 @@ void sky() {
 	float mu = max(dot(dir, sun), 0.0);
 	float corona = pow(mu, 64.0);
 	float wide = pow(mu, 18.0);
-	col += vec3(0.5, 0.64, 0.86) * corona * 0.35;
-	col += vec3(0.05, 0.08, 0.14) * wide * 0.04;
+	col += vec3(1.0, 0.52, 0.18) * corona * 0.55;
+	col += vec3(0.55, 0.24, 0.08) * wide * 0.1;
 	}
 	col = mix(col, air_sky(dir, sun), clamp(ground_mix, 0.0, 1.0));
 

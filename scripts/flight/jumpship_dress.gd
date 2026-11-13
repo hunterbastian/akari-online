@@ -163,6 +163,8 @@ static func paint_material(color: Color, roughness: float, metallic: float, high
 	material.set_shader_parameter("metallic_base", metallic)
 	material.set_shader_parameter("dither_strength", 0.016 if high_quality else 0.012)
 	material.set_shader_parameter("panel_shift", shift)
+	material.set_shader_parameter("sun_dir", FlightProfile.SUN_OFFSET)
+	material.set_shader_parameter("sun_rim", 0.2 if not high_quality else 0.42)
 	if high_quality:
 		material.set_shader_parameter("clearcoat_amount", 0.84 if metallic < 0.2 else 0.55)
 		material.set_shader_parameter("clearcoat_gloss", 0.065)

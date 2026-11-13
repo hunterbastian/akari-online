@@ -113,6 +113,7 @@ func _add_atmosphere(shell_radius: float, color: Color, sun: Vector3, power: flo
 	material.set_shader_parameter("u_power", power)
 	material.set_shader_parameter("u_falloff", falloff)
 	material.set_shader_parameter("u_strength", strength)
+	material.set_shader_parameter("u_cheap", 0.0 if _PostProfile.detailed() else 1.0)
 	atmo.material_override = material
 	atmo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(atmo)

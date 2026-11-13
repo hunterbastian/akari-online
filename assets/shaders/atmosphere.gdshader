@@ -9,6 +9,7 @@ uniform vec3 u_sun_dir = vec3(0.48, 0.79, 0.31);
 uniform float u_power = 2.2;
 uniform float u_falloff = 1.8;
 uniform float u_strength = 1.0;
+uniform float u_cheap = 0.0;
 
 void vertex() {
 	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -34,8 +35,15 @@ void fragment() {
 	col *= mix(0.22, 1.0, day);
 	float back = pow(max(dot(-view_dir, sun), 0.0), 6.0);
 	col += warm * term * rim * 0.55;
-	col += vec3(0.62, 0.8, 1.0) * back * rim * 0.8;
+	col += vec3(0.45, 0.68, 0.78) * back * rim * 0.45;
+	// Soft amber belt on the limb where the low sun grazes the horizon.
+	float band = smoothstep(0.22, 0.7, rim) * (1.0 - smoothstep(0.78, 0.97, rim));
+	float sun_band = smoothstep(-0.25, 0.5, ndl);
+	float belt = band * sun_band * (0.7 - 0.4 * u_cheap);
+	col = mix(col, warm, clamp(belt, 0.0, 0.85));
+	col += warm * rim * sun_band * 0.16 * (1.0 - u_cheap);
 	float alpha = rim * scatter * mix(0.1, 0.72, max(day, back * 0.7)) * u_strength;
+	alpha += belt * 0.34 * u_strength;
 	ALBEDO = col;
 	ALPHA = clamp(alpha, 0.0, 1.0);
 }

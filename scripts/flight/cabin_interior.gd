@@ -26,6 +26,10 @@ var sit_reach := 0.26
 
 var _scale := 1.0
 var _high := true
+var _shaft: Node3D
+var _shaft_light: SpotLight3D
+var _shaft_mesh: MeshInstance3D
+var _shaft_energy := 1.6
 var _shadowers: Array[MeshInstance3D] = []
 var _lines := {}
 var _font: FontFile
@@ -120,6 +124,7 @@ func build(scale: float, high_quality: bool) -> void:
 	add_child(bay_door)
 	bay_door.setup(self)
 	_setup_audio()
+	_build_shaft()
 	_collect_lamps()
 
 
@@ -206,6 +211,7 @@ func snap_view(mode: String) -> void:
 
 # hot
 func _process(delta: float) -> void:
+	_aim_shaft()
 	if _lamps != null:
 		_lamps.advance(delta)
 		_push_lamps()
@@ -665,6 +671,66 @@ func _glow(node_name: String, pos: Vector3, size: Vector3, color: Color) -> void
 	mesh_instance.layers = INTERIOR_LAYER
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mesh_instance)
+
+
+func _build_shaft() -> void:
+	var pivot := Node3D.new()
+	pivot.name = "SunShaft"
+	pivot.position = _v(0.0, 1.05, -4.05)
+	add_child(pivot)
+	_shaft = pivot
+	var light := SpotLight3D.new()
+	light.name = "ShaftLight"
+	light.light_color = FlightProfile.SHAFT_COLOR
+	light.light_energy = 0.0
+	light.spot_range = 7.0
+	light.spot_angle = 26.0
+	light.spot_attenuation = 0.8
+	light.shadow_enabled = false
+	light.light_specular = 0.2
+	light.light_cull_mask = INTERIOR_LAYER
+	pivot.add_child(light)
+	_shaft_light = light
+	_shaft_energy = 0.85 if not _high else 1.8
+	if not _high:
+		return
+	var mesh := MeshInstance3D.new()
+	mesh.name = "ShaftHaze"
+	var box := BoxMesh.new()
+	box.size = Vector3(0.62, 0.42, 3.1)
+	mesh.mesh = box
+	mesh.position = Vector3(0.0, 0.0, -1.55)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.albedo_color = Color(1.0, 0.62, 0.28, 0.11)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mesh.material_override = mat
+	mesh.layers = INTERIOR_LAYER
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pivot.add_child(mesh)
+	_shaft_mesh = mesh
+
+
+# hot
+func _aim_shaft() -> void:
+	if _shaft == null:
+		return
+	var sun := FlightProfile.SUN_OFFSET
+	var ray := (global_basis.inverse() * (-sun.normalized()))
+	var gain := FlightProfile.shaft_gain(ray.z)
+	var aim := _shaft.global_position + global_basis * ray
+	if aim.distance_squared_to(_shaft.global_position) > 0.0004:
+		var up := global_basis.y
+		if absf(ray.normalized().dot(up)) > 0.96:
+			up = global_basis.x
+		_shaft.look_at(aim, up)
+	if _shaft_light:
+		_shaft_light.light_energy = _shaft_energy * gain
+	if _shaft_mesh:
+		_shaft_mesh.visible = gain > 0.15
 
 
 func _glass(pos: Vector3, size: Vector2, tilt: float) -> void:

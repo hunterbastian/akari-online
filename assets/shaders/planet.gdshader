@@ -146,8 +146,8 @@ void fragment() {
 	vec3 lit = albedo * (0.05 + 0.6 * lambert);
 	vec3 night = albedo * vec3(0.012, 0.02, 0.04);
 	vec3 color = mix(night, lit, day);
-	float term = exp(-ndl_geo * ndl_geo * 160.0);
-	color += vec3(1.0, 0.72, 0.42) * term * 0.08 * (0.3 + albedo);
+	float term = exp(-ndl_geo * ndl_geo * 28.0);
+	color += vec3(1.0, 0.58, 0.24) * term * 0.28 * (0.35 + albedo);
 	color += vec3(1.0, 0.42, 0.16) * crack * 0.16 * day;
 
 	vec3 half_dir = normalize(light_dir + view_dir);
@@ -164,7 +164,7 @@ void fragment() {
 	color = mix(color, cloud_col * mix(0.02, 1.0, day) * mix(0.7, 1.0, lambert), clamp(cloud * cloud_amt, 0.0, 0.42) * cloud_vis);
 
 	float fres = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 2.4);
-	vec3 rim_col = mix(vec3(0.35, 0.6, 0.95), vec3(0.75, 0.88, 1.0), smoothstep(0.0, 0.35, ndl_geo));
+	vec3 rim_col = mix(vec3(0.22, 0.48, 0.58), vec3(1.0, 0.68, 0.36), smoothstep(-0.2, 0.45, ndl_geo));
 	// Thin cool rim on the night limb, brighter haze on the day limb.
 	float thin = pow(1.0 - clamp(dot(world_n, view_dir), 0.0, 1.0), 6.0);
 	color += rim_col * (fres * 0.32 * day + thin * 0.22 * (1.0 - day));
