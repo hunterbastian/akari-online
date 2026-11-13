@@ -8,6 +8,7 @@ var _ship: Node3D
 var _kick: Node
 var _ready_cam := false
 var held := false
+var drift_hold := false
 var _planet_bias := Vector3.ZERO
 
 const PLANET_LOOK_BIAS := 0.2
@@ -37,9 +38,17 @@ func release_from_title() -> void:
 	_apply(0.0, true)
 
 
+func release_drift() -> void:
+	drift_hold = false
+	if _ship == null:
+		return
+	current = true
+	_apply(0.0, true)
+
+
 # hot
 func _process(delta: float) -> void:
-	if held or _ship == null:
+	if held or drift_hold or _ship == null:
 		return
 	_apply(minf(delta, FlightProfile.DT_CAP), false)
 

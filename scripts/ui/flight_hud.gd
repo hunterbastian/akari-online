@@ -69,7 +69,12 @@ func _set_hint(text: String, show: bool) -> void:
 
 # hot
 func _process(_delta: float) -> void:
-	if _hide_shot:
+	var fade := 1.0
+	if _ship != null:
+		fade = float(_ship.get("hud_alpha"))
+	_speed.modulate.a = fade
+	_hint.modulate.a = fade
+	if _hide_shot or fade < 0.04:
 		visible = false
 		return
 	var flying := _ship != null and bool(_ship.get("active"))
