@@ -40,6 +40,8 @@ RULES = [
     ("autopilot-command", "scripts/flight/cabin_terminal.gd", "AUTOPILOT", "HELP can list AUTOPILOT"),
     ("ship-save", "scripts/flight/cabin_terminal.gd", "SAVE", "HELP can list the SAVE command"),
     ("ship-save-flight", "scripts/flight/ship_controller.gd", "capture_flight", "the ship can be written into the save"),
+    ("photo-command", "scripts/flight/cabin_terminal.gd", "PHOTO", "HELP can list the PHOTO command"),
+    ("idle-seconds", "scripts/flight/idle_drift.gd", "const IDLE_SEC := 30.0", "the screensaver waits half a minute"),
 ]
 
 

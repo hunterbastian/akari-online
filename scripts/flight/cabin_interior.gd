@@ -296,6 +296,12 @@ func terminal_submit() -> void:
 		pilot.engage_orbit()
 	elif pilot != null and reply == "AUTOPILOT OFF":
 		pilot.request_orbit_stop()
+	elif reply == "PHOTO":
+		if pilot != null and pilot.has_method("begin_photo") and pilot.begin_photo():
+			if _session_log != null:
+				_session_log.note("Photo mode")
+		else:
+			reply = "PHOTO BUSY"
 	if not reply.is_empty():
 		_reply = reply
 	_refresh_prompt()

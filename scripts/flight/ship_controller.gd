@@ -24,6 +24,9 @@ var _shell: Array[GeometryInstance3D] = []
 var _paints: Array[ShaderMaterial] = []
 var _engine_anchors: Array[Vector3] = []
 var walking := false
+## 1 while flying, eased to 0 by the idle orbit and by PHOTO.
+var hud_alpha := 1.0
+var _drift: Node
 var dev_speed_mult := 1.0
 var _orbit = preload("res://scripts/flight/orbit_pilot.gd").new()
 var _stop_orbit := false
@@ -201,6 +204,28 @@ func set_demo_fly(on: bool) -> void:
 
 func set_chase_camera(camera: Camera3D) -> void:
 	_chase = camera
+	var drift := Node.new()
+	drift.set_script(load("res://scripts/flight/idle_drift.gd"))
+	drift.name = "IdleDrift"
+	add_child(drift)
+	drift.setup(self, camera)
+	_drift = drift
+
+
+func begin_photo() -> bool:
+	if not active or _spacewalk():
+		return false
+	if walking:
+		_exit_cabin()
+	if _drift and _drift.has_method("start_photo"):
+		_drift.call("start_photo")
+		return true
+	return false
+
+
+func _spacewalk() -> bool:
+	var eva: Variant = get("_eva")
+	return eva != null and eva.has_method("holds_ship") and bool(eva.call("holds_ship"))
 
 
 func set_cabin_controls(controls: Node) -> void:
